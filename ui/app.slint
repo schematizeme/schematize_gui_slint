@@ -166,6 +166,21 @@ export global L {
     in-out property <string> g-export-obsidian;    // "exportar Obsidian"
     in-out property <string> g-open-editor;        // "abrir no editor"
     in-out property <string> g-no-loc;             // "sem arquivo:linha no índice"
+    // ---- Home + navegação (Fase 1 do redesenho) ----
+    in-out property <string> home;                   // breadcrumb de volta ("Início")
+    in-out property <string> home-title;             // "O que você quer fazer?"
+    in-out property <string> home-market;            // card + breadcrumb "Mercado de Skills"
+    in-out property <string> home-overdev-desc;      // descrição do card Overdev
+    in-out property <string> home-market-desc;       // descrição do card Mercado
+    in-out property <string> home-graph-desc;        // descrição do card Grafo
+    in-out property <string> home-environments;      // card "Environments" (avulso, futuro)
+    in-out property <string> home-environments-desc;
+    in-out property <string> home-ssh;               // card "SSH" (futuro)
+    in-out property <string> home-ssh-desc;
+    in-out property <string> home-settings;          // card "Configurações" (futuro)
+    in-out property <string> home-settings-desc;
+    in-out property <string> open-vscode;            // "Abrir no VSCode"
+    in-out property <string> open-loose-project;     // "Abrir projeto avulso…" (no modal)
 }
 
 // Paleta central — um único ponto de verdade para claro/escuro.
@@ -530,6 +545,241 @@ component AuthorCell inherits Rectangle {
     }
 }
 
+// Card grande de navegação da Home. O ÍCONE é injetado como `@children` (um Path
+// SVG por card — nunca emoji). `soon` marca destinos ainda não implementados
+// (desabilitado + selo "em breve"). Emite `clicked` só quando ativo.
+component HomeCard inherits Rectangle {
+    in property <string> title;
+    in property <string> desc;
+    in property <bool> soon: false;
+    callback clicked();
+    height: 158px;
+    border-radius: 16px;
+    background: (ha.has-hover && !root.soon) ? Theme.surface-2 : Theme.surface;
+    border-width: 1px;
+    border-color: (ha.has-hover && !root.soon) ? Theme.accent.transparentize(0.45) : Theme.border;
+    opacity: root.soon ? 0.5 : 1.0;
+    animate background, border-color { duration: 140ms; }
+    VerticalLayout {
+        padding: 20px;
+        spacing: 9px;
+        // slot do ícone (28px) — cada uso do card passa seu Path aqui.
+        HorizontalLayout { alignment: start; @children }
+        Text {
+            text: root.title;
+            font-size: 16.5px;
+            font-weight: 800;
+            color: Theme.text;
+        }
+        Text {
+            text: root.desc;
+            font-size: 12.5px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+        Rectangle {}  // empurra o selo pra base
+        if root.soon: Rectangle {
+            height: 20px;
+            width: sb.preferred-width + 14px;
+            border-radius: 10px;
+            background: Theme.warn.transparentize(0.85);
+            border-width: 1px;
+            border-color: Theme.warn.transparentize(0.55);
+            sb := Text {
+                text: L.coming-soon;
+                color: Theme.warn;
+                font-size: 10px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    ha := TouchArea {
+        enabled: !root.soon;
+        mouse-cursor: root.soon ? default : pointer;
+        clicked => { if (!root.soon) { root.clicked(); } }
+    }
+}
+
+// Ícone-botão de reload (seta circular SVG). O texto "reload" só aparece no HOVER
+// (tooltip flutuante), como pede o redesenho. Emite `clicked`.
+component ReloadIcon inherits Rectangle {
+    callback clicked();
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: ra.has-hover ? Theme.surface-2 : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    animate background { duration: 120ms; }
+    Path {
+        width: 18px;
+        height: 18px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        // arco quase-completo + cabeça de seta (estilo "atualizar").
+        commands: "M20 12a8 8 0 1 1-2.34-5.66 M20 4v4h-4";
+        fill: transparent;
+        stroke: ra.has-hover ? Theme.text : Theme.text-dim;
+        stroke-width: 2px;
+    }
+    ra := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    if ra.has-hover: Rectangle {
+        y: parent.height + 4px;
+        x: (parent.width - self.width) / 2;
+        height: 22px;
+        width: rtt.preferred-width + 16px;
+        border-radius: 6px;
+        background: Theme.surface-2;
+        border-width: 1px;
+        border-color: Theme.border;
+        rtt := Text {
+            text: L.reload;
+            color: Theme.text;
+            font-size: 11px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Barra de projeto ENXUTA — uma linha idêntica em Overdev e Grafo:
+//   Projeto: [dropdown] · [Abrir pasta] · [Abrir no VSCode] · [⟳] · [Diretórios de dev]
+// Recebe o modelo/projeto atual e emite callbacks; a gestão de dev_dirs mora num
+// MODAL (fora daqui) — esta barra só ABRE o modal via `manage-dirs`.
+component ProjectBar inherits Rectangle {
+    in property <[ProjItem]> projects;
+    in property <string> current;
+    callback pick(string);
+    callback open-folder();
+    callback open-vscode();
+    callback reload();
+    callback manage-dirs();
+    height: 58px;
+    background: Theme.bg;
+    HorizontalLayout {
+        padding-left: 24px;
+        padding-right: 24px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: center;
+            Text { text: L.project; font-size: 13px; font-weight: 600; color: Theme.text-dim; }
+        }
+        // dropdown de projeto (recentes + detectados por projects::scan)
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 300px;
+                height: 34px;
+                border-radius: 8px;
+                background: sela.has-hover ? Theme.surface-2 : Theme.surface;
+                border-width: 1px;
+                border-color: Theme.border;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 8px;
+                    Text {
+                        text: root.current != "" ? root.current : "—";
+                        color: root.current != "" ? Theme.text : Theme.text-dim;
+                        font-size: 13.5px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Rectangle {}
+                    Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                }
+                sela := TouchArea { mouse-cursor: pointer; clicked => { selpop.show(); } }
+                selpop := PopupWindow {
+                    x: 0;
+                    y: parent.height + 4px;
+                    width: 300px;
+                    Rectangle {
+                        background: Theme.surface;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        border-radius: 10px;
+                        VerticalLayout {
+                            padding: 6px;
+                            spacing: 1px;
+                            if root.projects.length == 0: Text {
+                                text: L.no-project;
+                                font-size: 12px;
+                                color: Theme.text-dim;
+                                wrap: word-wrap;
+                            }
+                            for pit[pi] in root.projects: Rectangle {
+                                height: pit.is-header ? 26px : 32px;
+                                border-radius: 6px;
+                                background: (!pit.is-header && sita.has-hover) ? Theme.surface-2 : transparent;
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
+                                    spacing: 8px;
+                                    if pit.is-header: Text {
+                                        text: pit.label;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        color: Theme.text-dim;
+                                        vertical-alignment: center;
+                                    }
+                                    if !pit.is-header: Text {
+                                        text: pit.name;
+                                        font-size: 13px;
+                                        font-weight: 600;
+                                        color: Theme.text;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    Rectangle {}
+                                    if !pit.is-header && pit.marker != "": Text {
+                                        text: pit.marker;
+                                        font-size: 11px;
+                                        color: Theme.text-dim;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                sita := TouchArea {
+                                    enabled: !pit.is-header;
+                                    mouse-cursor: pointer;
+                                    clicked => { root.pick(pit.path); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Text { text: "·"; color: Theme.text-dim; vertical-alignment: center; }
+        VerticalLayout {
+            alignment: center;
+            Btn { label: L.open-folder; small: true; enabled: root.current != ""; clicked => { root.open-folder(); } }
+        }
+        VerticalLayout {
+            alignment: center;
+            Btn { label: L.open-vscode; small: true; enabled: root.current != ""; clicked => { root.open-vscode(); } }
+        }
+        VerticalLayout {
+            alignment: center;
+            ReloadIcon { clicked => { root.reload(); } }
+        }
+        Text { text: "·"; color: Theme.text-dim; vertical-alignment: center; }
+        VerticalLayout {
+            alignment: center;
+            Btn { label: L.dev-dirs; small: true; clicked => { root.manage-dirs(); } }
+        }
+        Rectangle {}
+    }
+}
+
 export component AppWindow inherits Window {
     title: L.window-title;
     icon: root.app-icon;
@@ -547,8 +797,13 @@ export component AppWindow inherits Window {
     in property <[SkillRow]> rows;
     in-out property <string> status: "";
     in-out property <bool> busy: false;
-    // 0 = Instaladas, 1 = Marketplace, 2 = Environments, 3 = Overdev, 4 = Grafo (soon).
+    // Tela de topo (navegação principal do redesenho):
+    //   0 = Home | 1 = Mercado (usa active-tab p/ sub-abas) | 2 = Overdev | 3 = Grafo.
+    in-out property <int> screen: 0;
+    // Sub-aba do Mercado: 0 = Instaladas, 1 = Marketplace, 2 = Environments.
     in-out property <int> active-tab: 0;
+    // Modal de gestão dos diretórios de dev (aberto pela ProjectBar em Overdev/Grafo).
+    in-out property <bool> dev-modal-open: false;
 
     // ---- aba Overdev ----
     in property <[ProjItem]> od-projects;      // seletor de projeto (detectados + recentes)
@@ -604,11 +859,15 @@ export component AppWindow inherits Window {
 
     // ---- aba Overdev ----
     callback od-pick-project(string);  // escolhe um projeto (caminho) do seletor
-    callback od-open-folder();          // abre pasta avulsa (picker nativo)
+    callback od-open-folder();          // abre pasta avulsa como projeto (picker nativo)
+    callback od-open-project-folder();  // abre a pasta do projeto atual no gerenciador de arquivos
+    callback od-open-vscode();          // abre o projeto atual no VSCode (code <root> / vscode://)
     callback od-reload();               // re-sonda dev_dirs + recarrega o projeto
     callback od-add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
     callback od-remove-dev-dir(string); // remove um diretório de desenvolvimento
     callback od-open-browser();         // abre o painel HTML do projeto no navegador
+    // ---- app ----
+    callback restart();                 // relança o app (janela nova) — usado pós self-update
 
     // ---- aba Grafo (força-dirigida nativa) ----
     // Estado da transformação (dono no Rust; o Slint só lê pra renderizar).
@@ -651,19 +910,54 @@ export component AppWindow inherits Window {
             HorizontalLayout {
                 padding-left: 24px;
                 padding-right: 24px;
-                spacing: 12px;
-                VerticalLayout {
-                    alignment: center;
-                    Text {
-                        text: "schematize";
-                        font-size: 24px;
-                        font-weight: 800;
-                        color: Theme.text;
+                spacing: 14px;
+                // logo clicável — sempre volta pra Home.
+                Rectangle {
+                    width: logobox.preferred-width;
+                    VerticalLayout {
+                        alignment: center;
+                        logobox := VerticalLayout {
+                            Text {
+                                text: "schematize";
+                                font-size: 24px;
+                                font-weight: 800;
+                                color: logota.has-hover ? Theme.header-fg : Theme.text;
+                                animate color { duration: 120ms; }
+                            }
+                            Text {
+                                text: L.subtitle;
+                                font-size: 12.5px;
+                                color: Theme.text-dim;
+                            }
+                        }
                     }
-                    Text {
-                        text: L.subtitle;
-                        font-size: 12.5px;
-                        color: Theme.text-dim;
+                    logota := TouchArea { mouse-cursor: pointer; clicked => { root.screen = 0; } }
+                }
+                // breadcrumb: aparece fora da Home (clicável = voltar pra Home).
+                if root.screen != 0: VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        height: 30px;
+                        width: crumb.preferred-width + 22px;
+                        border-radius: 8px;
+                        background: crumbta.has-hover ? Theme.surface-2 : transparent;
+                        animate background { duration: 120ms; }
+                        crumb := HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 12px;
+                            spacing: 6px;
+                            Text { text: "‹"; font-size: 16px; color: Theme.text-dim; vertical-alignment: center; }
+                            Text {
+                                text: root.screen == 1 ? L.home-market
+                                    : root.screen == 2 ? L.tab-overdev
+                                    : root.screen == 3 ? L.tab-graph : "";
+                                font-size: 14px;
+                                font-weight: 700;
+                                color: Theme.header-fg;
+                                vertical-alignment: center;
+                            }
+                        }
+                        crumbta := TouchArea { mouse-cursor: pointer; clicked => { root.screen = 0; } }
                     }
                 }
                 Rectangle {}  // espaçador elástico
@@ -677,8 +971,94 @@ export component AppWindow inherits Window {
         }
         Rectangle { height: 1px; background: Theme.border; }
 
-        // ---- barra de abas --------------------------------------------
-        Rectangle {
+        // ---- HOME (0) — escolha do que fazer (cards grandes) ----------
+        // A cara do app deixa de ser "atualizar skills": abre aqui e o usuário
+        // escolhe Overdev / Mercado / Grafo. Futuros ficam como placeholders.
+        if root.screen == 0: VerticalLayout {
+            padding-left: 32px;
+            padding-right: 32px;
+            padding-top: 28px;
+            padding-bottom: 28px;
+            spacing: 22px;
+            Text {
+                text: L.home-title;
+                font-size: 22px;
+                font-weight: 800;
+                color: Theme.text;
+            }
+            // linha 1 — destinos ativos
+            HorizontalLayout {
+                spacing: 18px;
+                HomeCard {
+                    title: L.tab-overdev;
+                    desc: L.home-overdev-desc;
+                    clicked => { root.screen = 2; }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M3 6h9 M3 12h9 M3 18h6 M15 6l2.2 2.2 4.3-4.3 M15 15l2.2 2.2 4.3-4.3";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 2px;
+                    }
+                }
+                HomeCard {
+                    title: L.home-market;
+                    desc: L.home-market-desc;
+                    clicked => { root.screen = 1; }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M5 8h14l-1.3 12H6.3z M9 8a3 3 0 0 1 6 0";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 2px;
+                    }
+                }
+                HomeCard {
+                    title: L.tab-graph;
+                    desc: L.home-graph-desc;
+                    clicked => { root.screen = 3; }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M7 7 L17 9 M7 7 L10 17 M17 9 L10 17 M4.8 7a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0 M14.8 9a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0 M7.8 17a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
+                    }
+                }
+            }
+            // linha 2 — futuros (placeholders "em breve")
+            HorizontalLayout {
+                spacing: 18px;
+                HomeCard {
+                    title: L.home-environments;
+                    desc: L.home-environments-desc;
+                    soon: true;
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M12 3l8 4.6v8.8L12 21l-8-4.6V7.6z M4.2 7.8L12 12l7.8-4.2 M12 12v9";
+                        fill: transparent; stroke: Theme.text-dim; stroke-width: 1.8px;
+                    }
+                }
+                HomeCard {
+                    title: L.home-ssh;
+                    desc: L.home-ssh-desc;
+                    soon: true;
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M3 5h18v14H3z M7 10l3 2.5-3 2.5 M13 15.5h5";
+                        fill: transparent; stroke: Theme.text-dim; stroke-width: 1.8px;
+                    }
+                }
+                HomeCard {
+                    title: L.home-settings;
+                    desc: L.home-settings-desc;
+                    soon: true;
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0";
+                        fill: transparent; stroke: Theme.text-dim; stroke-width: 1.8px;
+                    }
+                }
+            }
+            Rectangle {}  // empurra os cards pro topo
+        }
+
+        // ---- barra de sub-abas do MERCADO (só na tela Mercado) --------
+        if root.screen == 1: Rectangle {
             height: 50px;
             background: Theme.bg;
             HorizontalLayout {
@@ -703,130 +1083,39 @@ export component AppWindow inherits Window {
                     active: root.active-tab == 2;
                     clicked => { root.active-tab = 2; }
                 }
-                TabBtn {
-                    label: L.tab-overdev;
-                    active: root.active-tab == 3;
-                    clicked => { root.active-tab = 3; }
-                }
-                TabBtn {
-                    label: L.tab-graph;
-                    soon: true;
-                    active: root.active-tab == 4;
-                    clicked => { root.active-tab = 4; }
-                }
             }
         }
-        Rectangle { height: 1px; background: Theme.border; }
+        if root.screen == 1: Rectangle { height: 1px; background: Theme.border; }
 
         // ---- aba GRAFO (4) — força-dirigida nativa ---------------------
         // Porta o graph_view + step_graph do egui: física em Rust num Timer, e o
         // Slint renderiza arestas (Path) e nós (Rectangle circular). Reusa o MESMO
         // seletor de projeto da aba Overdev (od-projects/od-current/od-pick-project)
         // — o projeto escolhido alimenta as DUAS abas.
-        if root.active-tab == 4: VerticalLayout {
-            // ---- barra: seletor de projeto + busca + ações ----
+        if root.screen == 3: VerticalLayout {
+            // ---- barra de projeto ENXUTA (idêntica à do Overdev) ----
+            ProjectBar {
+                projects: root.od-projects;
+                current: root.od-current;
+                pick(p) => { root.od-pick-project(p); }
+                open-folder => { root.od-open-project-folder(); }
+                open-vscode => { root.od-open-vscode(); }
+                reload => { root.od-reload(); }
+                manage-dirs => { root.dev-modal-open = true; }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+            // ---- linha de ferramentas do grafo (busca + nº nós + ações) ----
             Rectangle {
-                height: 58px;
+                height: 50px;
                 background: Theme.bg;
                 HorizontalLayout {
-                    padding-left: 16px;
-                    padding-right: 16px;
+                    padding-left: 24px;
+                    padding-right: 24px;
                     spacing: 10px;
                     VerticalLayout {
                         alignment: center;
-                        Text { text: L.project; font-size: 13px; font-weight: 600; color: Theme.text-dim; }
-                    }
-                    // dropdown de projeto (mesmo modelo/callback da aba Overdev)
-                    VerticalLayout {
-                        alignment: center;
-                        Rectangle {
-                            width: 260px;
-                            height: 34px;
-                            border-radius: 8px;
-                            background: gpta.has-hover ? Theme.surface-2 : Theme.surface;
-                            border-width: 1px;
-                            border-color: Theme.border;
-                            HorizontalLayout {
-                                padding-left: 12px;
-                                padding-right: 12px;
-                                spacing: 8px;
-                                Text {
-                                    text: root.od-current != "" ? root.od-current : "—";
-                                    color: root.od-current != "" ? Theme.text : Theme.text-dim;
-                                    font-size: 13.5px;
-                                    font-weight: 600;
-                                    vertical-alignment: center;
-                                    overflow: elide;
-                                }
-                                Rectangle {}
-                                Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
-                            }
-                            gpta := TouchArea { mouse-cursor: pointer; clicked => { gprojpop.show(); } }
-                            gprojpop := PopupWindow {
-                                x: 0;
-                                y: parent.height + 4px;
-                                width: 260px;
-                                Rectangle {
-                                    background: Theme.surface;
-                                    border-width: 1px;
-                                    border-color: Theme.border;
-                                    border-radius: 10px;
-                                    VerticalLayout {
-                                        padding: 6px;
-                                        spacing: 1px;
-                                        if root.od-projects.length == 0: Text {
-                                            text: L.no-project;
-                                            font-size: 12px;
-                                            color: Theme.text-dim;
-                                            wrap: word-wrap;
-                                        }
-                                        for pit[pi] in root.od-projects: Rectangle {
-                                            height: pit.is-header ? 26px : 32px;
-                                            border-radius: 6px;
-                                            background: (!pit.is-header && gita.has-hover) ? Theme.surface-2 : transparent;
-                                            HorizontalLayout {
-                                                padding-left: 8px;
-                                                padding-right: 8px;
-                                                spacing: 8px;
-                                                if pit.is-header: Text {
-                                                    text: pit.label;
-                                                    font-size: 11px;
-                                                    font-weight: 700;
-                                                    color: Theme.text-dim;
-                                                    vertical-alignment: center;
-                                                }
-                                                if !pit.is-header: Text {
-                                                    text: pit.name;
-                                                    font-size: 13px;
-                                                    font-weight: 600;
-                                                    color: Theme.text;
-                                                    vertical-alignment: center;
-                                                    overflow: elide;
-                                                }
-                                                Rectangle {}
-                                                if !pit.is-header && pit.marker != "": Text {
-                                                    text: pit.marker;
-                                                    font-size: 11px;
-                                                    color: Theme.text-dim;
-                                                    vertical-alignment: center;
-                                                }
-                                            }
-                                            gita := TouchArea {
-                                                enabled: !pit.is-header;
-                                                mouse-cursor: pointer;
-                                                clicked => { root.od-pick-project(pit.path); }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // busca (realça/filtra nós por nome)
-                    VerticalLayout {
-                        alignment: center;
                         gsearch := LineEdit {
-                            width: 170px;
+                            width: 190px;
                             placeholder-text: L.g-search-hint;
                             text: root.g-search;
                             edited(s) => { root.graph-search-changed(s); }
@@ -1005,158 +1294,17 @@ export component AppWindow inherits Window {
         // pelos marcadores + recentes + pasta avulsa via picker nativo), gere os
         // dev_dirs, e renderiza o estado do overdev (objetivo, progresso, checklist
         // colorido, e as seções Decisões/Plano/Perguntas colapsáveis).
-        if root.active-tab == 3: VerticalLayout {
-            // ---- barra do seletor de projeto + dev_dirs ----
-            Rectangle {
-                background: Theme.bg;
-                VerticalLayout {
-                    padding-left: 24px;
-                    padding-right: 24px;
-                    padding-top: 12px;
-                    padding-bottom: 10px;
-                    spacing: 8px;
-                    // linha 1: Projeto: [dropdown] [Abrir pasta…] [recarregar]
-                    HorizontalLayout {
-                        spacing: 10px;
-                        VerticalLayout {
-                            alignment: center;
-                            Text { text: L.project; font-size: 13px; font-weight: 600; color: Theme.text-dim; }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Rectangle {
-                                width: 340px;
-                                height: 34px;
-                                border-radius: 8px;
-                                background: pta.has-hover ? Theme.surface-2 : Theme.surface;
-                                border-width: 1px;
-                                border-color: Theme.border;
-                                HorizontalLayout {
-                                    padding-left: 12px;
-                                    padding-right: 12px;
-                                    spacing: 8px;
-                                    Text {
-                                        text: root.od-current != "" ? root.od-current : "—";
-                                        color: root.od-current != "" ? Theme.text : Theme.text-dim;
-                                        font-size: 13.5px;
-                                        font-weight: 600;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-                                    Rectangle {}
-                                    Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
-                                }
-                                pta := TouchArea { mouse-cursor: pointer; clicked => { projpop.show(); } }
-                                projpop := PopupWindow {
-                                    x: 0;
-                                    y: parent.height + 4px;
-                                    width: 340px;
-                                    Rectangle {
-                                        background: Theme.surface;
-                                        border-width: 1px;
-                                        border-color: Theme.border;
-                                        border-radius: 10px;
-                                        VerticalLayout {
-                                            padding: 6px;
-                                            spacing: 1px;
-                                            if root.od-projects.length == 0: Text {
-                                                text: L.no-project;
-                                                font-size: 12px;
-                                                color: Theme.text-dim;
-                                                wrap: word-wrap;
-                                            }
-                                            for pit[pi] in root.od-projects: Rectangle {
-                                                height: pit.is-header ? 26px : 32px;
-                                                border-radius: 6px;
-                                                background: (!pit.is-header && ita.has-hover) ? Theme.surface-2 : transparent;
-                                                HorizontalLayout {
-                                                    padding-left: 8px;
-                                                    padding-right: 8px;
-                                                    spacing: 8px;
-                                                    if pit.is-header: Text {
-                                                        text: pit.label;
-                                                        font-size: 11px;
-                                                        font-weight: 700;
-                                                        color: Theme.text-dim;
-                                                        vertical-alignment: center;
-                                                    }
-                                                    if !pit.is-header: Text {
-                                                        text: pit.name;
-                                                        font-size: 13px;
-                                                        font-weight: 600;
-                                                        color: Theme.text;
-                                                        vertical-alignment: center;
-                                                        overflow: elide;
-                                                    }
-                                                    Rectangle {}
-                                                    if !pit.is-header && pit.marker != "": Text {
-                                                        text: pit.marker;
-                                                        font-size: 11px;
-                                                        color: Theme.text-dim;
-                                                        vertical-alignment: center;
-                                                    }
-                                                }
-                                                ita := TouchArea {
-                                                    enabled: !pit.is-header;
-                                                    mouse-cursor: pointer;
-                                                    clicked => { root.od-pick-project(pit.path); }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Btn { label: L.open-folder; small: true; clicked => { root.od-open-folder(); } }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Btn { label: L.reload; small: true; clicked => { root.od-reload(); } }
-                        }
-                        Rectangle {}
-                    }
-                    // linha 2: gestão dos diretórios de desenvolvimento
-                    HorizontalLayout {
-                        spacing: 10px;
-                        VerticalLayout {
-                            alignment: center;
-                            Text { text: L.dev-dirs; font-size: 12.5px; font-weight: 700; color: Theme.text; }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Btn { label: L.add-dev-dir; small: true; clicked => { root.od-add-dev-dir(); } }
-                        }
-                        Rectangle {}
-                    }
-                    if root.od-dev-dirs.length == 0: Text {
-                        text: L.dev-dirs-empty;
-                        font-size: 11.5px;
-                        color: Theme.text-dim;
-                        wrap: word-wrap;
-                    }
-                    for dd[ddi] in root.od-dev-dirs: HorizontalLayout {
-                        spacing: 8px;
-                        VerticalLayout {
-                            alignment: center;
-                            Rectangle {
-                                width: 22px;
-                                height: 22px;
-                                border-radius: 6px;
-                                background: xta.has-hover ? Theme.warn.transparentize(0.85) : transparent;
-                                border-width: 1px;
-                                border-color: Theme.border;
-                                Text { text: "✕"; font-size: 11px; color: Theme.text-dim; }
-                                xta := TouchArea { mouse-cursor: pointer; clicked => { root.od-remove-dev-dir(dd); } }
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Text { text: dd; font-size: 12px; color: Theme.text-dim; overflow: elide; }
-                        }
-                    }
-                }
+        if root.screen == 2: VerticalLayout {
+            // ---- barra de projeto ENXUTA (idêntica à do Grafo) ----
+            // Toda a gestão de dev_dirs saiu daqui e foi pro MODAL (manage-dirs).
+            ProjectBar {
+                projects: root.od-projects;
+                current: root.od-current;
+                pick(p) => { root.od-pick-project(p); }
+                open-folder => { root.od-open-project-folder(); }
+                open-vscode => { root.od-open-vscode(); }
+                reload => { root.od-reload(); }
+                manage-dirs => { root.dev-modal-open = true; }
             }
             Rectangle { height: 1px; background: Theme.border; }
 
@@ -1275,7 +1423,7 @@ export component AppWindow inherits Window {
         // Cada linha: linguagem, status, escolha de MÉTODO (chips) e botões
         // Instalar/Desinstalar. As ações NÃO mexem na máquina de dentro da GUI:
         // abrem um TERMINAL rodando `schematize env …` (plano + consentimento lá).
-        if root.active-tab == 2: VerticalLayout {
+        if root.screen == 1 && root.active-tab == 2: VerticalLayout {
             // texto-guia + botão recarregar
             Rectangle {
                 height: 58px;
@@ -1412,7 +1560,7 @@ export component AppWindow inherits Window {
         }
 
         // ---- páginas Instaladas (0) e Marketplace (1) -----------------
-        if root.active-tab <= 1: VerticalLayout {
+        if root.screen == 1 && root.active-tab <= 1: VerticalLayout {
             // ---- barra de ações (difere por página) -----------------------
             Rectangle {
                 height: 62px;
@@ -1828,6 +1976,93 @@ export component AppWindow inherits Window {
                         // se marcou instalar o environment, exige um método escolhido
                         enabled: !root.mp-env-check || root.mp-method-sel != "";
                         clicked => { root.mp-confirm(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- MODAL de diretórios de dev (aberto pela ProjectBar) ----------
+    // TODA a gestão de dev_dirs vive AQUI (fora da tela principal): listar,
+    // adicionar (rfd::pick_folder → config::add_dev_dir), remover. Fechar o
+    // modal re-scaneia os projetos (via od-reload). Também oferece abrir um
+    // projeto avulso (fora dos dev_dirs) sem poluir a barra.
+    if root.dev-modal-open: Rectangle {
+        background: #000000.transparentize(0.45);
+        // clique fora = fechar + re-scan.
+        TouchArea { clicked => { root.dev-modal-open = false; root.od-reload(); } }
+
+        Rectangle {
+            width: Math.min(root.width - 64px, 560px);
+            height: Math.min(root.height - 96px, 520px);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}  // absorve cliques (não fecha ao clicar dentro)
+            VerticalLayout {
+                padding: 22px;
+                spacing: 14px;
+                // título + adicionar
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.dev-dirs; font-size: 18px; font-weight: 800; color: Theme.text; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.add-dev-dir; primary: true; small: true; clicked => { root.od-add-dev-dir(); } }
+                    }
+                }
+                Rectangle { height: 1px; background: Theme.border; }
+                // lista dos dev_dirs (rolável)
+                if root.od-dev-dirs.length == 0: Text {
+                    text: L.dev-dirs-empty;
+                    font-size: 12px;
+                    color: Theme.text-dim;
+                    wrap: word-wrap;
+                }
+                ScrollView {
+                    VerticalLayout {
+                        spacing: 6px;
+                        for dd[ddi] in root.od-dev-dirs: HorizontalLayout {
+                            spacing: 8px;
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 24px;
+                                    height: 24px;
+                                    border-radius: 6px;
+                                    background: dxta.has-hover ? Theme.warn.transparentize(0.85) : transparent;
+                                    border-width: 1px;
+                                    border-color: Theme.border;
+                                    Text { text: "✕"; font-size: 11px; color: Theme.text-dim; }
+                                    dxta := TouchArea { mouse-cursor: pointer; clicked => { root.od-remove-dev-dir(dd); } }
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: dd; font-size: 12.5px; color: Theme.text-dim; overflow: elide; }
+                            }
+                        }
+                    }
+                }
+                Rectangle {}  // empurra o rodapé pra base
+                // rodapé: abrir projeto avulso + fechar
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.open-loose-project; small: true; clicked => { root.od-open-folder(); } }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.mp-cancel; small: true; clicked => { root.dev-modal-open = false; root.od-reload(); } }
                     }
                 }
             }

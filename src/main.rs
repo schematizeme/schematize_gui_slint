@@ -20,7 +20,9 @@ use schematize::{config, environments, panel, projects, skills, util};
 use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::os::unix::process::CommandExt; // process_group: desacopla o restart
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -49,6 +51,20 @@ fn detect_display_env() {
     eprintln!("[env] backend Slint    : winit (default) — cobre Wayland E X11; renderer femtovg (OpenGL/GLES)");
     if wayland.is_none() && x11.is_none() {
         eprintln!("[env] AVISO: sem display, a janela não abre. Este incremento valida COMPILAÇÃO; a exibição precisa de um servidor Wayland/X11.");
+    }
+}
+
+/// Traduz uma chave; se ela AINDA não existe no lib (o `t()` do lib devolve a
+/// própria chave quando não acha), cai no `fallback` embutido. Usado só para as
+/// chaves NOVAS desta fase (Home/navegação) — assim a UI já mostra texto decente
+/// e, quando o lib ganhar essas chaves, passa a usar a tradução automaticamente.
+/// As chaves novas estão listadas no relatório de entrega.
+fn tor(key: &str, fallback: &str) -> String {
+    let v = t(key);
+    if v == key {
+        fallback.to_string()
+    } else {
+        v
     }
 }
 
@@ -122,6 +138,22 @@ fn install_i18n(app: &AppWindow) {
     l.set_g_export_obsidian(t("gui.export_obsidian").into());
     l.set_g_open_editor(t("gui.open_editor").into());
     l.set_g_no_loc(t("gui.no_loc").into());
+    // Home + navegação (Fase 1) — chaves NOVAS, com fallback embutido via `tor`
+    // até serem adicionadas ao lib. Ver lista no relatório de entrega.
+    l.set_home(tor("gui.home", "Início").into());
+    l.set_home_title(tor("gui.home_title", "O que você quer fazer?").into());
+    l.set_home_market(tor("gui.home_market", "Mercado de Skills").into());
+    l.set_home_overdev_desc(tor("gui.home_overdev_desc", "Acompanhe o desenvolvimento contínuo do projeto.").into());
+    l.set_home_market_desc(tor("gui.home_market_desc", "Instale, atualize e descubra skills e environments.").into());
+    l.set_home_graph_desc(tor("gui.home_graph_desc", "Explore o grafo de microfunções do projeto.").into());
+    l.set_home_environments(tor("gui.home_environments", "Environments").into());
+    l.set_home_environments_desc(tor("gui.home_environments_desc", "Gerencie os runtimes de linguagem.").into());
+    l.set_home_ssh(tor("gui.home_ssh", "SSH").into());
+    l.set_home_ssh_desc(tor("gui.home_ssh_desc", "Chaves e acesso remoto.").into());
+    l.set_home_settings(tor("gui.home_settings", "Configurações").into());
+    l.set_home_settings_desc(tor("gui.home_settings_desc", "Idioma, tema e preferências.").into());
+    l.set_open_vscode(tor("gui.open_vscode", "Abrir no VSCode").into());
+    l.set_open_loose_project(tor("gui.open_loose_project", "Abrir projeto avulso…").into());
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +165,49 @@ fn make_app_icon() -> slint::Image {
     // clone_from_slice reinterpreta os bytes RGBA (u8) como pixels Rgba8.
     let buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(&rgba, w, h);
     slint::Image::from_rgba8(buf)
+}
+
+// ---------------------------------------------------------------------------
+// Relança o app numa janela NOVA e encerra este processo. CONSERTO do bug do
+// "reiniciar" (pós self-update) que só fechava e não reabria: fazemos um spawn
+// DESACOPLADO do binário atual (nova sessão de processos via `process_group(0)`
+// + stdio em /dev/null) ANTES do `exit(0)`, então a janela nova sobe sozinha e
+// sobrevive à saída deste. Chamado pelo callback `restart` do Slint.
+// ---------------------------------------------------------------------------
+fn restart_app() -> ! {
+    if let Ok(exe) = std::env::current_exe() {
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        cmd.process_group(0); // grupo próprio → não morre com o processo atual
+        let _ = cmd.spawn(); // best-effort: se falhar, ainda saímos limpo
+    }
+    std::process::exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// Abre um caminho no gerenciador de arquivos do sistema (xdg-open <path>).
+// ---------------------------------------------------------------------------
+fn open_path_in_files(root: &Path) {
+    util::open_url(&root.to_string_lossy());
+}
+
+// ---------------------------------------------------------------------------
+// Abre o projeto no VSCode: `code <root>` se o binário existe; senão cai no
+// esquema `vscode://file/<root>` (best-effort via xdg-open).
+// ---------------------------------------------------------------------------
+fn open_in_vscode(root: &Path) {
+    let root_s = root.to_string_lossy().into_owned();
+    if which_bin("code")
+        && std::process::Command::new("code")
+            .arg(&root_s)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .is_ok()
+    {
+        return;
+    }
+    util::open_url(&format!("vscode://file/{root_s}"));
 }
 
 // ---------------------------------------------------------------------------
@@ -1152,6 +1227,13 @@ fn main() -> Result<(), slint::PlatformError> {
     // estado do modal de instalação (lado Rust).
     let modal = Rc::new(RefCell::new(ModalState::default()));
 
+    // ---- relançar o app (janela nova) — conserto do restart pós self-update ----
+    // O callback existe e está ligado ao helper CORRETO (spawn desacoplado antes
+    // de sair). Hoje o self-update NÃO está fiado nesta GUI Slint (mora no módulo
+    // egui do lib, fora do alcance daqui), então nada dispara `restart()` ainda;
+    // quando o self-update for portado pra cá, é só invocar `root.restart()`.
+    app.on_restart(move || restart_app());
+
     // ---- toggle de seleção de uma linha ----
     {
         let model = model.clone();
@@ -1582,6 +1664,24 @@ fn main() -> Result<(), slint::PlatformError> {
                     let p = cur.borrow().clone();
                     graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
                 }
+            }
+        });
+    }
+    // abrir a pasta do projeto ATUAL no gerenciador de arquivos (xdg-open <root>).
+    {
+        let cur = od_current.clone();
+        app.on_od_open_project_folder(move || {
+            if let Some(p) = cur.borrow().as_ref() {
+                open_path_in_files(p);
+            }
+        });
+    }
+    // abrir o projeto ATUAL no VSCode (`code <root>` / vscode://file/<root>).
+    {
+        let cur = od_current.clone();
+        app.on_od_open_vscode(move || {
+            if let Some(p) = cur.borrow().as_ref() {
+                open_in_vscode(p);
             }
         });
     }
