@@ -56,6 +56,24 @@ export struct EnvRow {
     op-label: string,       // mensagem transitória da linha (terminal aberto / erro)
 }
 
+// Uma entrada do seletor de projeto da aba Overdev: um CABEÇALHO de grupo
+// (Detectados/Recentes) ou um PROJETO clicável. Preenchida pelo Rust a partir de
+// `schematize::projects::scan()` (detectados) + `config::recent_projects()`.
+export struct ProjItem {
+    is-header: bool,
+    label: string,    // cabeçalho: rótulo do grupo
+    name: string,     // projeto: nome de exibição (basename)
+    path: string,     // projeto: caminho absoluto (arg das ações)
+    marker: string,   // projeto: marcador que o identificou (.git/.overdev/…)
+}
+
+// Um item do checklist do overdev: o tipo (done/open/hold) + o texto.
+// `kind` decide a cor no Slint (done=verde, open=normal, hold=amarelo).
+export struct OverItem {
+    kind: string,   // "done" | "open" | "hold"
+    text: string,
+}
+
 // Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.
 export global L {
     in-out property <string> window-title: "schematize";
@@ -97,6 +115,22 @@ export global L {
     in-out property <string> mp-env-note;         // "o environment mexe na máquina / roda em terminal"
     in-out property <string> mp-confirm;          // "Instalar"
     in-out property <string> mp-cancel;           // "Cancelar"
+    // aba Overdev (seletor de projeto + view)
+    in-out property <string> project;            // "Projeto:"
+    in-out property <string> no-project;          // empty-state: nenhum projeto
+    in-out property <string> detected-projects;   // cabeçalho do grupo detectados
+    in-out property <string> recent-projects;     // cabeçalho do grupo recentes
+    in-out property <string> open-folder;         // "Abrir pasta…"
+    in-out property <string> reload;              // "recarregar"
+    in-out property <string> dev-dirs;            // "Diretórios de desenvolvimento"
+    in-out property <string> add-dev-dir;         // "Adicionar diretório…"
+    in-out property <string> dev-dirs-empty;      // empty-state dos dev_dirs
+    in-out property <string> remove;              // tooltip "remover"
+    in-out property <string> no-overdev;          // empty-state: sem run de overdev
+    in-out property <string> od-decisions;        // "Decisões"
+    in-out property <string> od-plan;             // "Plano"
+    in-out property <string> od-questions;        // "Perguntas parkeadas"
+    in-out property <string> open-browser;        // "abrir no navegador"
 }
 
 // Paleta central — um único ponto de verdade para claro/escuro.
@@ -214,6 +248,114 @@ component Btn inherits Rectangle {
     ta := TouchArea {
         enabled: root.enabled;
         clicked => { if (root.enabled) { root.clicked(); } }
+    }
+}
+
+// Toggle de tema discreto estilo sol/lua — botão-ícone pequeno, sem texto.
+// Mostra a LUA quando está no claro (clica → escuro) e o SOL quando está no
+// escuro (clica → claro). Ícones desenhados por Path (SVG inline), tema-aware.
+component ThemeToggle inherits Rectangle {
+    callback clicked();
+    width: 38px;
+    height: 38px;
+    border-radius: 19px;
+    background: ta.has-hover ? Theme.surface-2 : transparent;
+    border-width: 1px;
+    border-color: ta.has-hover ? Theme.border : transparent;
+    animate background, border-color { duration: 160ms; }
+
+    // LUA (crescente) — visível no tema CLARO; clicar leva ao escuro.
+    if !Theme.dark: Path {
+        width: 19px;
+        height: 19px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z";
+        fill: Theme.text-dim;
+    }
+
+    // SOL (disco + raios) — visível no tema ESCURO; clicar leva ao claro.
+    if Theme.dark: Rectangle {
+        width: 22px;
+        height: 22px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        // raios (traço)
+        Path {
+            width: 22px;
+            height: 22px;
+            viewbox-width: 24;
+            viewbox-height: 24;
+            commands: "M12 2.2v2.6 M12 19.2v2.6 M2.2 12h2.6 M19.2 12h2.6 M4.8 4.8l1.9 1.9 M17.3 17.3l1.9 1.9 M4.8 19.2l1.9-1.9 M17.3 6.7l1.9-1.9";
+            stroke: Theme.warn;
+            stroke-width: 2px;
+        }
+        // disco central
+        Rectangle {
+            width: 11px;
+            height: 11px;
+            border-radius: 5.5px;
+            background: Theme.warn;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Painel colapsável (título clicável + corpo mono). Usado nas seções do overdev
+// (Decisões / Plano / Perguntas). Começa fechado.
+component Collapse inherits VerticalLayout {
+    in property <string> title;
+    in property <string> body;
+    property <bool> open: false;
+    spacing: 4px;
+    Rectangle {
+        height: 30px;
+        border-radius: 7px;
+        background: hta.has-hover ? Theme.surface-2 : transparent;
+        animate background { duration: 120ms; }
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+            Text {
+                text: root.open ? "▾" : "▸";
+                font-size: 12px;
+                color: Theme.text-dim;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.title;
+                font-size: 13.5px;
+                font-weight: 700;
+                color: Theme.text;
+                vertical-alignment: center;
+            }
+        }
+        hta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.open = !root.open; }
+        }
+    }
+    if root.open: Rectangle {
+        border-radius: 8px;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.border;
+        HorizontalLayout {
+            padding: 12px;
+            Text {
+                text: root.body;
+                font-size: 12.5px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+        }
     }
 }
 
@@ -355,6 +497,7 @@ component AuthorCell inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: L.window-title;
+    icon: root.app-icon;
     preferred-width: 1040px;
     preferred-height: 680px;
     min-width: 820px;
@@ -362,11 +505,31 @@ export component AppWindow inherits Window {
     background: Theme.bg;
     default-font-size: 14px;
 
+    // Logo da janela (barra de título/taskbar). Setada pelo Rust a partir de
+    // `schematize::appicon::rgba(256)` (mesma marca do egui).
+    in property <image> app-icon;
+
     in property <[SkillRow]> rows;
     in-out property <string> status: "";
     in-out property <bool> busy: false;
-    // 0 = Instaladas, 1 = Marketplace, 2 = Environments, 3 = Overdev (soon), 4 = Grafo (soon).
+    // 0 = Instaladas, 1 = Marketplace, 2 = Environments, 3 = Overdev, 4 = Grafo (soon).
     in-out property <int> active-tab: 0;
+
+    // ---- aba Overdev ----
+    in property <[ProjItem]> od-projects;      // seletor de projeto (detectados + recentes)
+    in property <[string]> od-dev-dirs;         // diretórios de desenvolvimento cadastrados
+    in-out property <string> od-current;         // nome do projeto atual ("" = nenhum)
+    in-out property <bool> od-has-project: false;
+    in-out property <bool> od-has-overdev: false;
+    in-out property <string> od-objetivo;
+    in-out property <string> od-mode;
+    in-out property <int> od-done;
+    in-out property <int> od-open;
+    in-out property <int> od-hold;
+    in property <[OverItem]> od-items;
+    in-out property <string> od-decisoes;
+    in-out property <string> od-plano;
+    in-out property <string> od-perguntas;
 
     // ---- aba Environments ----
     in property <[EnvRow]> env-rows;
@@ -404,6 +567,14 @@ export component AppWindow inherits Window {
     callback env-pick-method(int, string); // escolhe o método de instalação da linha i
     callback env-refresh();           // re-sonda a máquina e recarrega o status
 
+    // ---- aba Overdev ----
+    callback od-pick-project(string);  // escolhe um projeto (caminho) do seletor
+    callback od-open-folder();          // abre pasta avulsa (picker nativo)
+    callback od-reload();               // re-sonda dev_dirs + recarrega o projeto
+    callback od-add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
+    callback od-remove-dev-dir(string); // remove um diretório de desenvolvimento
+    callback od-open-browser();         // abre o painel HTML do projeto no navegador
+
     // ---- modal de instalação do Marketplace ----
     callback mp-confirm();            // aplica: instala skill (+ base marcada) + (env em terminal se marcado)
     callback mp-cancel();             // fecha sem fazer nada
@@ -437,8 +608,7 @@ export component AppWindow inherits Window {
                 Rectangle {}  // espaçador elástico
                 VerticalLayout {
                     alignment: center;
-                    Btn {
-                        label: Theme.dark ? L.theme-light : L.theme-dark;
+                    ThemeToggle {
                         clicked => { Theme.dark = !Theme.dark; }
                     }
                 }
@@ -474,7 +644,6 @@ export component AppWindow inherits Window {
                 }
                 TabBtn {
                     label: L.tab-overdev;
-                    soon: true;
                     active: root.active-tab == 3;
                     clicked => { root.active-tab = 3; }
                 }
@@ -488,8 +657,8 @@ export component AppWindow inherits Window {
         }
         Rectangle { height: 1px; background: Theme.border; }
 
-        // ---- placeholder das abas em breve (Overdev=3, Grafo=4) -------
-        if root.active-tab >= 3: Rectangle {
+        // ---- placeholder do Grafo (4) — próximo incremento -------------
+        if root.active-tab == 4: Rectangle {
             background: Theme.bg;
             VerticalLayout {
                 alignment: center;
@@ -501,6 +670,277 @@ export component AppWindow inherits Window {
                         font-weight: 700;
                         color: Theme.text-dim;
                     }
+                }
+            }
+        }
+
+        // ---- aba OVERDEV (3) — seletor de projeto + view nativa --------
+        // Porta o project_bar + overdev_view do egui: escolhe um projeto (detectados
+        // pelos marcadores + recentes + pasta avulsa via picker nativo), gere os
+        // dev_dirs, e renderiza o estado do overdev (objetivo, progresso, checklist
+        // colorido, e as seções Decisões/Plano/Perguntas colapsáveis).
+        if root.active-tab == 3: VerticalLayout {
+            // ---- barra do seletor de projeto + dev_dirs ----
+            Rectangle {
+                background: Theme.bg;
+                VerticalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    padding-top: 12px;
+                    padding-bottom: 10px;
+                    spacing: 8px;
+                    // linha 1: Projeto: [dropdown] [Abrir pasta…] [recarregar]
+                    HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            alignment: center;
+                            Text { text: L.project; font-size: 13px; font-weight: 600; color: Theme.text-dim; }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Rectangle {
+                                width: 340px;
+                                height: 34px;
+                                border-radius: 8px;
+                                background: pta.has-hover ? Theme.surface-2 : Theme.surface;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                HorizontalLayout {
+                                    padding-left: 12px;
+                                    padding-right: 12px;
+                                    spacing: 8px;
+                                    Text {
+                                        text: root.od-current != "" ? root.od-current : "—";
+                                        color: root.od-current != "" ? Theme.text : Theme.text-dim;
+                                        font-size: 13.5px;
+                                        font-weight: 600;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    Rectangle {}
+                                    Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                                }
+                                pta := TouchArea { mouse-cursor: pointer; clicked => { projpop.show(); } }
+                                projpop := PopupWindow {
+                                    x: 0;
+                                    y: parent.height + 4px;
+                                    width: 340px;
+                                    Rectangle {
+                                        background: Theme.surface;
+                                        border-width: 1px;
+                                        border-color: Theme.border;
+                                        border-radius: 10px;
+                                        VerticalLayout {
+                                            padding: 6px;
+                                            spacing: 1px;
+                                            if root.od-projects.length == 0: Text {
+                                                text: L.no-project;
+                                                font-size: 12px;
+                                                color: Theme.text-dim;
+                                                wrap: word-wrap;
+                                            }
+                                            for pit[pi] in root.od-projects: Rectangle {
+                                                height: pit.is-header ? 26px : 32px;
+                                                border-radius: 6px;
+                                                background: (!pit.is-header && ita.has-hover) ? Theme.surface-2 : transparent;
+                                                HorizontalLayout {
+                                                    padding-left: 8px;
+                                                    padding-right: 8px;
+                                                    spacing: 8px;
+                                                    if pit.is-header: Text {
+                                                        text: pit.label;
+                                                        font-size: 11px;
+                                                        font-weight: 700;
+                                                        color: Theme.text-dim;
+                                                        vertical-alignment: center;
+                                                    }
+                                                    if !pit.is-header: Text {
+                                                        text: pit.name;
+                                                        font-size: 13px;
+                                                        font-weight: 600;
+                                                        color: Theme.text;
+                                                        vertical-alignment: center;
+                                                        overflow: elide;
+                                                    }
+                                                    Rectangle {}
+                                                    if !pit.is-header && pit.marker != "": Text {
+                                                        text: pit.marker;
+                                                        font-size: 11px;
+                                                        color: Theme.text-dim;
+                                                        vertical-alignment: center;
+                                                    }
+                                                }
+                                                ita := TouchArea {
+                                                    enabled: !pit.is-header;
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.od-pick-project(pit.path); }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Btn { label: L.open-folder; small: true; clicked => { root.od-open-folder(); } }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Btn { label: L.reload; small: true; clicked => { root.od-reload(); } }
+                        }
+                        Rectangle {}
+                    }
+                    // linha 2: gestão dos diretórios de desenvolvimento
+                    HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            alignment: center;
+                            Text { text: L.dev-dirs; font-size: 12.5px; font-weight: 700; color: Theme.text; }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Btn { label: L.add-dev-dir; small: true; clicked => { root.od-add-dev-dir(); } }
+                        }
+                        Rectangle {}
+                    }
+                    if root.od-dev-dirs.length == 0: Text {
+                        text: L.dev-dirs-empty;
+                        font-size: 11.5px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                    }
+                    for dd[ddi] in root.od-dev-dirs: HorizontalLayout {
+                        spacing: 8px;
+                        VerticalLayout {
+                            alignment: center;
+                            Rectangle {
+                                width: 22px;
+                                height: 22px;
+                                border-radius: 6px;
+                                background: xta.has-hover ? Theme.warn.transparentize(0.85) : transparent;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                Text { text: "✕"; font-size: 11px; color: Theme.text-dim; }
+                                xta := TouchArea { mouse-cursor: pointer; clicked => { root.od-remove-dev-dir(dd); } }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text { text: dd; font-size: 12px; color: Theme.text-dim; overflow: elide; }
+                        }
+                    }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+
+            // ---- conteúdo do overdev ----
+            // Empty-state: nenhum projeto escolhido.
+            if !root.od-has-project: VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    alignment: center;
+                    padding: 24px;
+                    Text {
+                        text: L.no-project;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+            // Empty-state: projeto sem run de overdev.
+            if root.od-has-project && !root.od-has-overdev: VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    alignment: center;
+                    padding: 24px;
+                    Text {
+                        text: L.no-overdev;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+            // Estado do overdev: objetivo + progresso + checklist + seções.
+            if root.od-has-project && root.od-has-overdev: ScrollView {
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 12px;
+                    // objetivo + pill de mode
+                    HorizontalLayout {
+                        spacing: 12px;
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: root.od-objetivo;
+                                font-size: 18px;
+                                font-weight: 800;
+                                color: Theme.text;
+                                wrap: word-wrap;
+                            }
+                        }
+                        Rectangle {}
+                        VerticalLayout {
+                            alignment: center;
+                            Rectangle {
+                                height: 24px;
+                                width: modetxt.preferred-width + 20px;
+                                border-radius: 12px;
+                                property <color> tone: root.od-mode == "active" ? Theme.good : Theme.text-dim;
+                                background: tone.transparentize(0.85);
+                                border-width: 1px;
+                                border-color: tone.transparentize(0.5);
+                                modetxt := Text {
+                                    text: root.od-mode;
+                                    color: parent.tone;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                    // progresso: feitos / abertos / on-hold
+                    HorizontalLayout {
+                        spacing: 20px;
+                        alignment: start;
+                        Text { text: "✓ \{root.od-done}"; font-size: 13.5px; font-weight: 700; color: Theme.good; }
+                        Text { text: "○ \{root.od-open}"; font-size: 13.5px; font-weight: 700; color: Theme.text-dim; }
+                        Text { text: "~ \{root.od-hold}"; font-size: 13.5px; font-weight: 700; color: Theme.warn; }
+                        Rectangle {}
+                        Btn { label: L.open-browser; small: true; clicked => { root.od-open-browser(); } }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // checklist colorido (verde feito, normal aberto, amarelo on-hold)
+                    for it[ii] in root.od-items: HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        VerticalLayout {
+                            alignment: start;
+                            Text {
+                                text: it.kind == "done" ? "✓" : it.kind == "hold" ? "~" : "○";
+                                font-size: 13px;
+                                font-weight: 800;
+                                color: it.kind == "done" ? Theme.good : it.kind == "hold" ? Theme.warn : Theme.text-dim;
+                            }
+                        }
+                        Text {
+                            text: it.text;
+                            font-size: 13px;
+                            color: it.kind == "done" ? Theme.good : Theme.text;
+                            wrap: word-wrap;
+                        }
+                    }
+                    Rectangle { height: 6px; }
+                    // seções colapsáveis (só quando há conteúdo)
+                    if root.od-decisoes != "": Collapse { title: L.od-decisions; body: root.od-decisoes; }
+                    if root.od-plano != "": Collapse { title: L.od-plan; body: root.od-plano; }
+                    if root.od-perguntas != "": Collapse { title: L.od-questions; body: root.od-perguntas; }
                 }
             }
         }

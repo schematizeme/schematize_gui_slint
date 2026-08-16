@@ -16,9 +16,10 @@
 
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
-use schematize::{environments, skills, util};
+use schematize::{config, environments, panel, projects, skills, util};
 use slint::{Model, ModelRc, SharedString, VecModel, Weak};
 use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -95,6 +96,33 @@ fn install_i18n(app: &AppWindow) {
     l.set_mp_env_note(t("gui.mp_env_note").into());
     l.set_mp_confirm(t("gui.mp_confirm").into());
     l.set_mp_cancel(t("gui.mp_cancel").into());
+    // aba Overdev (seletor de projeto + view) — reusa as chaves do egui.
+    l.set_project(t("gui.project").into());
+    l.set_no_project(t("gui.no_project").into());
+    l.set_detected_projects(t("gui.detected_projects").into());
+    l.set_recent_projects(t("gui.recent_projects").into());
+    l.set_open_folder(t("gui.open_folder").into());
+    l.set_reload(t("gui.reload").into());
+    l.set_dev_dirs(t("gui.dev_dirs").into());
+    l.set_add_dev_dir(t("gui.add_dev_dir").into());
+    l.set_dev_dirs_empty(t("gui.dev_dirs_empty").into());
+    l.set_remove(t("gui.remove").into());
+    l.set_no_overdev(t("gui.no_overdev").into());
+    l.set_od_decisions(t("gui.od_decisions").into());
+    l.set_od_plan(t("gui.od_plan").into());
+    l.set_od_questions(t("gui.od_questions").into());
+    l.set_open_browser(t("gui.open_browser").into());
+}
+
+// ---------------------------------------------------------------------------
+// Logo da janela — MESMA marca do egui (`schematize::appicon::rgba(256)`),
+// convertida num `slint::Image` pra alimentar a propriedade `icon` do Window.
+// ---------------------------------------------------------------------------
+fn make_app_icon() -> slint::Image {
+    let (rgba, w, h) = schematize::appicon::rgba(256);
+    // clone_from_slice reinterpreta os bytes RGBA (u8) como pixels Rgba8.
+    let buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(&rgba, w, h);
+    slint::Image::from_rgba8(buf)
 }
 
 // ---------------------------------------------------------------------------
@@ -607,6 +635,133 @@ struct ModalState {
     env_lang: String,   // linguagem do environment a oferecer ("" = nenhum)
 }
 
+// ===========================================================================
+// OVERDEV — seletor de projeto (porte do project_bar do egui) + view nativa
+// (porte do overdev_view). Lê `schematize::projects::scan()` + `config` p/ o
+// seletor e `schematize::panel::load_overdev()` p/ o estado. Persiste a escolha
+// via `config::add_recent_project`.
+// ===========================================================================
+
+/// Basename de um caminho como String (fallback: o caminho inteiro).
+fn basename_of(p: &Path) -> String {
+    p.file_name()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| p.to_string_lossy().into_owned())
+}
+
+/// Cabeçalho de grupo do seletor (Detectados / Recentes).
+fn proj_header(label: &str) -> ProjItem {
+    ProjItem {
+        is_header: true,
+        label: label.into(),
+        name: SharedString::new(),
+        path: SharedString::new(),
+        marker: SharedString::new(),
+    }
+}
+
+/// Monta o modelo do seletor: grupo "detectados" (marcadores) + grupo "recentes"
+/// (os que não estão já entre os detectados). Espelha o combo do project_bar egui.
+fn build_proj_items(projects: &[projects::Project], recent: &[String]) -> Vec<ProjItem> {
+    let mut out = Vec::new();
+    if !projects.is_empty() {
+        out.push(proj_header(&t("gui.detected_projects")));
+        for pr in projects {
+            out.push(ProjItem {
+                is_header: false,
+                label: SharedString::new(),
+                name: pr.name.clone().into(),
+                path: pr.path.clone().into(),
+                marker: pr.marker.clone().into(),
+            });
+        }
+    }
+    let known: std::collections::HashSet<&str> = projects.iter().map(|p| p.path.as_str()).collect();
+    let recents: Vec<&String> = recent.iter().filter(|r| !known.contains(r.as_str())).collect();
+    if !recents.is_empty() {
+        out.push(proj_header(&t("gui.recent_projects")));
+        for r in recents {
+            out.push(ProjItem {
+                is_header: false,
+                label: SharedString::new(),
+                name: basename_of(&PathBuf::from(r)).into(),
+                path: r.clone().into(),
+                marker: SharedString::new(),
+            });
+        }
+    }
+    out
+}
+
+/// Item do checklist: mapeia o marcador (' '|'x'|'~') no `kind` que o Slint colore.
+fn over_item(mark: char, text: &str) -> OverItem {
+    let kind = match mark {
+        'x' => "done",
+        '~' => "hold",
+        _ => "open",
+    };
+    OverItem { kind: kind.into(), text: text.into() }
+}
+
+/// Re-sonda dev_dirs + projetos e reconstrói os modelos do seletor e da lista de dev_dirs.
+fn refresh_proj_models(proj_model: &VecModel<ProjItem>, dev_model: &VecModel<SharedString>) {
+    let dev = config::dev_dirs();
+    let projs = projects::scan(&dev);
+    let recent = config::recent_projects();
+    proj_model.set_vec(build_proj_items(&projs, &recent));
+    dev_model.set_vec(dev.into_iter().map(SharedString::from).collect::<Vec<SharedString>>());
+}
+
+/// Carrega o estado do overdev do `proj` (ou limpa se None) nas propriedades do app.
+/// Espelha o overdev_view do egui: objetivo, mode, progresso, checklist e seções.
+fn load_overdev_into(app: &AppWindow, items: &VecModel<OverItem>, proj: Option<&Path>) {
+    let Some(p) = proj else {
+        app.set_od_has_project(false);
+        app.set_od_has_overdev(false);
+        app.set_od_current(SharedString::new());
+        items.set_vec(Vec::new());
+        return;
+    };
+    app.set_od_has_project(true);
+    app.set_od_current(basename_of(p).into());
+    let ov = panel::load_overdev(p);
+    // Sem run: objetivo vazio E sem itens (mesma regra do egui).
+    let has = !(ov.objetivo.trim().is_empty() && ov.items.is_empty());
+    app.set_od_has_overdev(has);
+    if !has {
+        items.set_vec(Vec::new());
+        return;
+    }
+    let (o, d, h) = ov.counts();
+    app.set_od_objetivo(ov.objetivo.clone().into());
+    app.set_od_mode(ov.mode.clone().into());
+    app.set_od_done(d as i32);
+    app.set_od_open(o as i32);
+    app.set_od_hold(h as i32);
+    app.set_od_decisoes(ov.decisoes.clone().into());
+    app.set_od_plano(ov.plano.clone().into());
+    app.set_od_perguntas(ov.perguntas.clone().into());
+    items.set_vec(ov.items.iter().map(|(s, txt)| over_item(*s, txt)).collect::<Vec<OverItem>>());
+}
+
+/// Escolhe um projeto: canoniza, persiste como recente e carrega o overdev.
+fn select_project(
+    app: &AppWindow,
+    items: &VecModel<OverItem>,
+    proj_model: &VecModel<ProjItem>,
+    dev_model: &VecModel<SharedString>,
+    cur: &RefCell<Option<PathBuf>>,
+    path: PathBuf,
+) {
+    let abs = std::fs::canonicalize(&path).unwrap_or(path);
+    config::add_recent_project(&abs.to_string_lossy());
+    *cur.borrow_mut() = Some(abs.clone());
+    load_overdev_into(app, items, Some(&abs));
+    // reflete o novo recente no seletor.
+    refresh_proj_models(proj_model, dev_model);
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     detect_display_env();
 
@@ -618,6 +773,8 @@ fn main() -> Result<(), slint::PlatformError> {
 
     let app = AppWindow::new()?;
     install_i18n(&app);
+    // Logo da janela (título/taskbar) — mesma marca do egui.
+    app.set_app_icon(make_app_icon());
     app.set_rows(ModelRc::from(model.clone()));
     update_status(&app);
     recompute_headers(&app); // esconde cabeçalhos de página sem itens
@@ -1008,6 +1165,104 @@ fn main() -> Result<(), slint::PlatformError> {
                         }
                     }
                 }
+            }
+        });
+    }
+
+    // ==================== aba Overdev ====================
+    // Modelos: seletor de projeto (detectados + recentes), dev_dirs, e checklist.
+    let od_proj_model = Rc::new(VecModel::<ProjItem>::from(Vec::new()));
+    let od_dev_model = Rc::new(VecModel::<SharedString>::from(Vec::new()));
+    let od_items_model = Rc::new(VecModel::<OverItem>::from(Vec::new()));
+    app.set_od_projects(ModelRc::from(od_proj_model.clone()));
+    app.set_od_dev_dirs(ModelRc::from(od_dev_model.clone()));
+    app.set_od_items(ModelRc::from(od_items_model.clone()));
+    refresh_proj_models(&od_proj_model, &od_dev_model);
+    // Projeto atual (lado Rust) — persiste entre execuções via recent_projects.
+    let od_current: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
+    // Restaura a última escolha (mais recente), senão empty-state.
+    match config::recent_projects().into_iter().next() {
+        Some(p) => {
+            let abs = std::fs::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(&p));
+            *od_current.borrow_mut() = Some(abs.clone());
+            load_overdev_into(&app, &od_items_model, Some(&abs));
+        }
+        None => load_overdev_into(&app, &od_items_model, None),
+    }
+
+    // escolher um projeto do seletor.
+    {
+        let weak = app.as_weak();
+        let items = od_items_model.clone();
+        let pm = od_proj_model.clone();
+        let dm = od_dev_model.clone();
+        let cur = od_current.clone();
+        app.on_od_pick_project(move |path| {
+            if path.is_empty() {
+                return;
+            }
+            if let Some(app) = weak.upgrade() {
+                select_project(&app, &items, &pm, &dm, &cur, PathBuf::from(path.to_string()));
+            }
+        });
+    }
+    // abrir uma pasta avulsa (picker NATIVO do sistema).
+    {
+        let weak = app.as_weak();
+        let items = od_items_model.clone();
+        let pm = od_proj_model.clone();
+        let dm = od_dev_model.clone();
+        let cur = od_current.clone();
+        app.on_od_open_folder(move || {
+            if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_folder() {
+                if let Some(app) = weak.upgrade() {
+                    select_project(&app, &items, &pm, &dm, &cur, dir);
+                }
+            }
+        });
+    }
+    // recarregar: re-sonda dev_dirs/projetos e recarrega o projeto atual.
+    {
+        let weak = app.as_weak();
+        let items = od_items_model.clone();
+        let pm = od_proj_model.clone();
+        let dm = od_dev_model.clone();
+        let cur = od_current.clone();
+        app.on_od_reload(move || {
+            refresh_proj_models(&pm, &dm);
+            if let Some(app) = weak.upgrade() {
+                let p = cur.borrow().clone();
+                load_overdev_into(&app, &items, p.as_deref());
+            }
+        });
+    }
+    // cadastrar um diretório de desenvolvimento (picker nativo).
+    {
+        let pm = od_proj_model.clone();
+        let dm = od_dev_model.clone();
+        app.on_od_add_dev_dir(move || {
+            if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.add_dev_dir")).pick_folder() {
+                let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
+                config::add_dev_dir(&abs.to_string_lossy());
+                refresh_proj_models(&pm, &dm);
+            }
+        });
+    }
+    // remover um diretório de desenvolvimento.
+    {
+        let pm = od_proj_model.clone();
+        let dm = od_dev_model.clone();
+        app.on_od_remove_dev_dir(move |path| {
+            config::remove_dev_dir(&path.to_string());
+            refresh_proj_models(&pm, &dm);
+        });
+    }
+    // abrir o painel HTML do projeto atual no navegador.
+    {
+        let cur = od_current.clone();
+        app.on_od_open_browser(move || {
+            if let Some(p) = cur.borrow().as_ref() {
+                let _ = panel::open_in_browser(p);
             }
         });
     }
