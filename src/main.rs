@@ -16,8 +16,9 @@
 
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
-use schematize::{skills, util};
+use schematize::{environments, skills, util};
 use slint::{Model, ModelRc, SharedString, VecModel, Weak};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -84,6 +85,16 @@ fn install_i18n(app: &AppWindow) {
     l.set_act_install(t("gui.install").into());
     l.set_act_update(t("gui.update").into());
     l.set_act_remove(t("gui.uninstall").into());
+    // aba Environments
+    l.set_tab_environments(t("gui.tab_environments").into());
+    l.set_env_intro(t("gui.env_intro").into());
+    l.set_env_method(t("gui.env_method").into());
+    l.set_env_no_methods(t("gui.env_no_methods").into());
+    // modal de instalação do Marketplace
+    l.set_mp_recommends_note(t("gui.mp_recommends_note").into());
+    l.set_mp_env_note(t("gui.mp_env_note").into());
+    l.set_mp_confirm(t("gui.mp_confirm").into());
+    l.set_mp_cancel(t("gui.mp_cancel").into());
 }
 
 // ---------------------------------------------------------------------------
@@ -448,6 +459,154 @@ fn is_outdated(r: &SkillRow) -> bool {
     r.state == "outdated"
 }
 
+// ===========================================================================
+// ENVIRONMENTS — gestão dos runtimes de linguagem (aba 2).
+// A GUI só MONTA o comando e ABRE UM TERMINAL rodando `schematize env …`; o plano
+// exato + consentimento (e o sudo) acontecem no terminal (honesto). NUNCA executa
+// o instalador de environment de dentro do processo da GUI.
+// ===========================================================================
+
+/// Rótulo de status de um environment — mesmas chaves i18n que o `list()` do CLI usa.
+fn env_status_label(le: &environments::LangEnv) -> String {
+    if let Some(m) = le.installed {
+        tf("env.installed_via", &[("method", m.slug())])
+    } else if le.runtime_present {
+        t("env.installed")
+    } else {
+        t("env.not_installed")
+    }
+}
+
+/// Constrói uma linha da aba Environments a partir do status do lib.
+fn env_row(le: &environments::LangEnv) -> EnvRow {
+    let methods: Vec<SharedString> = le.methods_available.iter().map(|m| m.slug().into()).collect();
+    let method_sel = methods.first().cloned().unwrap_or_default();
+    EnvRow {
+        lang: le.lang.into(),
+        display: le.display.into(),
+        methods: ModelRc::from(Rc::new(VecModel::from(methods))),
+        method_sel,
+        installed: le.is_installed(),
+        status_label: env_status_label(le).into(),
+        op_label: SharedString::new(),
+    }
+}
+
+/// Constrói o modelo inteiro da aba Environments a partir de `environments::status()`.
+fn build_env_rows() -> Vec<EnvRow> {
+    environments::status().iter().map(env_row).collect()
+}
+
+/// Localiza o binário `schematize` (CLI) pra montar o comando do terminal:
+/// primeiro um irmão do executável atual; senão o do PATH.
+fn schematize_bin() -> String {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let cand = dir.join("schematize");
+            if cand.is_file() {
+                return cand.to_string_lossy().into_owned();
+            }
+        }
+    }
+    "schematize".into()
+}
+
+/// Um binário existe no PATH?
+fn which_bin(cmd: &str) -> bool {
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("command -v {cmd}"))
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Abre um terminal gráfico rodando `inner` (bash -c). Mesmo padrão do gui.rs (egui):
+/// cobre konsole/gnome-terminal/xfce4-terminal/x-terminal-emulator/kitty/alacritty/tilix/xterm.
+fn launch_terminal(inner: &str) -> bool {
+    let cands: &[(&str, &[&str])] = &[
+        ("x-terminal-emulator", &["-e"]),
+        ("konsole", &["-e"]),
+        ("gnome-terminal", &["--"]),
+        ("xfce4-terminal", &["-x"]),
+        ("tilix", &["-e"]),
+        ("kitty", &[]),
+        ("alacritty", &["-e"]),
+        ("xterm", &["-e"]),
+    ];
+    for (term, pre) in cands {
+        if which_bin(term)
+            && std::process::Command::new(term)
+                .args(*pre)
+                .arg("bash")
+                .arg("-c")
+                .arg(inner)
+                .spawn()
+                .is_ok()
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Monta o comando do terminal p/ `schematize env <action> <lang> --method <m>`.
+/// SEM `--yes`: o CLI mostra o plano e PEDE confirmação ali dentro (consentimento honesto).
+fn env_terminal_inner(bin: &str, action: &str, lang: &str, method: &str) -> String {
+    format!(
+        "echo '── schematize env {action} {lang} ({method}) ──'; echo; \
+         {bin} env {action} {lang} --method {method}; \
+         echo; read -n1 -s -r -p '…'",
+        action = action,
+        lang = lang,
+        method = method,
+        bin = bin
+    )
+}
+
+/// Dispara o terminal p/ uma ação de environment e devolve o rótulo transitório a exibir
+/// na linha (terminal aberto, ou instrução manual quando nenhum terminal foi encontrado).
+fn run_env_action(action: &str, lang: &str, method: &str) -> String {
+    let bin = schematize_bin();
+    let inner = env_terminal_inner(&bin, action, lang, method);
+    if launch_terminal(&inner) {
+        t("gui.env_terminal_opened")
+    } else {
+        let cmd = format!("{bin} env {action} {lang} --method {method}");
+        tf("gui.env_no_terminal", &[("cmd", &cmd)])
+    }
+}
+
+/// Uma skill (por slug) está instalada AGORA? (lê o modelo de linhas de skills.)
+fn slug_installed(model: &VecModel<SkillRow>, slug: &str) -> bool {
+    for i in 0..model.row_count() {
+        if let Some(r) = model.row_data(i) {
+            if !r.is_header && r.slug == slug {
+                return r.state != "missing";
+            }
+        }
+    }
+    false
+}
+
+/// Índice da linha de uma skill (por slug) no vetor de itens alinhado ao modelo.
+fn row_idx_of_slug(row_items: &[Option<Item>], slug: &str) -> Option<usize> {
+    row_items
+        .iter()
+        .position(|m| m.as_ref().map(|it| it.slug == slug).unwrap_or(false))
+}
+
+/// Estado do modal de instalação do Marketplace, guardado no lado Rust (o Slint
+/// carrega só o visual). Preenchido ao abrir; lido no confirmar.
+#[derive(Default, Clone)]
+struct ModalState {
+    skill_idx: usize,   // linha da skill sendo instalada
+    rec_slug: String,   // slug da recomendada a oferecer ("" = nenhuma)
+    env_lang: String,   // linguagem do environment a oferecer ("" = nenhum)
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     detect_display_env();
 
@@ -471,6 +630,31 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // Resolve o latest de todas as skills assim que a janela sobe (não bloqueia).
     kick_resolve_all(&app.as_weak(), &row_items);
+
+    // ---- aba Environments: modelo + índices auxiliares p/ o modal ----
+    // Sonda a máquina UMA vez (local, rápido pra command -v). O refresh re-sonda.
+    let env_status = environments::status();
+    let env_model = Rc::new(VecModel::from(
+        env_status.iter().map(env_row).collect::<Vec<EnvRow>>(),
+    ));
+    app.set_env_rows(ModelRc::from(env_model.clone()));
+    // lang → métodos disponíveis (slugs), pra o modal montar os chips sem re-sondar.
+    let env_methods: Rc<std::collections::HashMap<String, Vec<String>>> = Rc::new(
+        env_status
+            .iter()
+            .map(|le| {
+                (
+                    le.lang.to_string(),
+                    le.methods_available.iter().map(|m| m.slug().to_string()).collect(),
+                )
+            })
+            .collect(),
+    );
+    // conjunto das 7 linguagens que TÊM environment (pra decidir a oferta no modal).
+    let env_langs: Rc<std::collections::HashSet<String>> =
+        Rc::new(env_status.iter().map(|le| le.lang.to_string()).collect());
+    // estado do modal de instalação (lado Rust).
+    let modal = Rc::new(RefCell::new(ModalState::default()));
 
     // ---- toggle de seleção de uma linha ----
     {
@@ -547,14 +731,72 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ---- Marketplace: ação por-linha INSTALAR ----
+    // Skill de linguagem (ou skill com recommends) → abre o MODAL: oferece instalar
+    // a recomendada (base) junto E, opcionalmente, o environment da linguagem (via
+    // terminal). Skill sem nada a oferecer → instala direto (um clique).
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
+        let model = model.clone();
+        let env_langs = env_langs.clone();
+        let env_methods = env_methods.clone();
+        let modal = modal.clone();
         app.on_row_install(move |idx| {
             let i = idx as usize;
-            if let Some(Some(it)) = row_items.get(i) {
+            let Some(Some(it)) = row_items.get(i) else {
+                return;
+            };
+            // recomendada a oferecer: 1ª recomendada que NÃO está instalada.
+            let rec_slug = it
+                .recommends
+                .iter()
+                .find(|s| !slug_installed(&model, s.as_str()))
+                .cloned()
+                .unwrap_or_default();
+            // environment a oferecer: se o slug da skill é uma das 7 linguagens.
+            let env_lang = if env_langs.contains(it.slug.as_str()) {
+                it.slug.clone()
+            } else {
+                String::new()
+            };
+            // Nada a oferecer → instala direto, sem modal.
+            if rec_slug.is_empty() && env_lang.is_empty() {
                 run_batch(weak.clone(), vec![(i, true, it.clone())]);
+                return;
             }
+            let Some(app) = weak.upgrade() else { return };
+            *modal.borrow_mut() = ModalState {
+                skill_idx: i,
+                rec_slug: rec_slug.clone(),
+                env_lang: env_lang.clone(),
+            };
+            app.set_mp_title(tf("gui.mp_install_title", &[("slug", &it.slug)]).into());
+            app.set_mp_idx(i as i32);
+            // dependência opcional (base recomendada) — NUNCA marcada por padrão.
+            let rec_show = !rec_slug.is_empty();
+            app.set_mp_rec_show(rec_show);
+            app.set_mp_rec_check(false);
+            if rec_show {
+                app.set_mp_rec_label(tf("gui.mp_with_recommended", &[("slug", &rec_slug)]).into());
+            }
+            // environment opcional — NUNCA marcado por padrão.
+            let env_show = !env_lang.is_empty();
+            app.set_mp_env_show(env_show);
+            app.set_mp_env_check(false);
+            if env_show {
+                app.set_mp_env_label(tf("gui.mp_with_env", &[("lang", &env_lang)]).into());
+                let methods: Vec<SharedString> = env_methods
+                    .get(&env_lang)
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|m| m.into())
+                    .collect();
+                let sel = methods.first().cloned().unwrap_or_default();
+                app.set_mp_methods(ModelRc::from(Rc::new(VecModel::from(methods))));
+                app.set_mp_method_sel(sel);
+            }
+            app.set_mp_open(true);
         });
     }
 
@@ -638,6 +880,135 @@ fn main() -> Result<(), slint::PlatformError> {
         let row_items = row_items.clone();
         app.on_check(move || {
             kick_resolve_all(&weak, &row_items);
+        });
+    }
+
+    // ==================== aba Environments ====================
+
+    // escolher o método (chip) de uma linha de environment.
+    {
+        let env_model = env_model.clone();
+        app.on_env_pick_method(move |idx, method| {
+            let i = idx as usize;
+            if let Some(mut r) = env_model.row_data(i) {
+                r.method_sel = method;
+                env_model.set_row_data(i, r);
+            }
+        });
+    }
+    // instalar o environment da linha → abre TERMINAL com `schematize env install`.
+    {
+        let env_model = env_model.clone();
+        app.on_env_install(move |idx| {
+            let i = idx as usize;
+            if let Some(mut r) = env_model.row_data(i) {
+                if r.method_sel.is_empty() {
+                    return;
+                }
+                let label = run_env_action("install", &r.lang.to_string(), &r.method_sel.to_string());
+                r.op_label = label.into();
+                env_model.set_row_data(i, r);
+            }
+        });
+    }
+    // desinstalar o environment da linha → abre TERMINAL com `schematize env remove`.
+    {
+        let env_model = env_model.clone();
+        app.on_env_remove(move |idx| {
+            let i = idx as usize;
+            if let Some(mut r) = env_model.row_data(i) {
+                if r.method_sel.is_empty() {
+                    return;
+                }
+                let label = run_env_action("remove", &r.lang.to_string(), &r.method_sel.to_string());
+                r.op_label = label.into();
+                env_model.set_row_data(i, r);
+            }
+        });
+    }
+    // recarregar o status (re-sonda a máquina). Síncrono (local/rápido; evita !Send).
+    {
+        let env_model = env_model.clone();
+        app.on_env_refresh(move || {
+            env_model.set_vec(build_env_rows());
+        });
+    }
+
+    // ==================== modal de instalação (Marketplace) ====================
+
+    {
+        let weak = app.as_weak();
+        app.on_mp_toggle_rec(move || {
+            if let Some(a) = weak.upgrade() {
+                a.set_mp_rec_check(!a.get_mp_rec_check());
+            }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.on_mp_toggle_env(move || {
+            if let Some(a) = weak.upgrade() {
+                a.set_mp_env_check(!a.get_mp_env_check());
+            }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.on_mp_pick_method(move |m| {
+            if let Some(a) = weak.upgrade() {
+                a.set_mp_method_sel(m);
+            }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.on_mp_cancel(move || {
+            if let Some(a) = weak.upgrade() {
+                a.set_mp_open(false);
+            }
+        });
+    }
+    // confirmar: instala a skill in-process (+ a base marcada, no MESMO lote paralelo)
+    // e, se marcado, dispara o environment num TERMINAL (fora do processo).
+    {
+        let weak = app.as_weak();
+        let row_items = row_items.clone();
+        let modal = modal.clone();
+        let env_model = env_model.clone();
+        app.on_mp_confirm(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let st = modal.borrow().clone();
+            // lote in-process: a skill + (recomendada SÓ se o usuário marcou).
+            let mut ops: Vec<(usize, bool, Item)> = Vec::new();
+            if let Some(Some(it)) = row_items.get(st.skill_idx) {
+                ops.push((st.skill_idx, true, it.clone()));
+            }
+            if app.get_mp_rec_check() && !st.rec_slug.is_empty() {
+                if let Some(ridx) = row_idx_of_slug(&row_items, &st.rec_slug) {
+                    if let Some(Some(rit)) = row_items.get(ridx) {
+                        ops.push((ridx, true, rit.clone()));
+                    }
+                }
+            }
+            // environment opcional → terminal (só se marcado + método escolhido).
+            let do_env = app.get_mp_env_check() && !st.env_lang.is_empty();
+            let env_method = app.get_mp_method_sel().to_string();
+            app.set_mp_open(false);
+            run_batch(weak.clone(), ops);
+            if do_env && !env_method.is_empty() {
+                let label = run_env_action("install", &st.env_lang, &env_method);
+                app.set_status(SharedString::from(label.clone()));
+                // reflete a msg no card correspondente da aba Environments.
+                for i in 0..env_model.row_count() {
+                    if let Some(mut r) = env_model.row_data(i) {
+                        if r.lang == st.env_lang {
+                            r.op_label = label.clone().into();
+                            env_model.set_row_data(i, r);
+                            break;
+                        }
+                    }
+                }
+            }
         });
     }
 
