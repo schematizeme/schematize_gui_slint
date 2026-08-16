@@ -16,7 +16,7 @@
 
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
-use schematize::{config, environments, panel, projects, skilledit, skills, util};
+use schematize::{config, environments, overdev, panel, projects, skilledit, skills, util};
 use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -130,6 +130,18 @@ fn install_i18n(app: &AppWindow) {
     l.set_od_plan(t("gui.od_plan").into());
     l.set_od_questions(t("gui.od_questions").into());
     l.set_open_browser(t("gui.open_browser").into());
+    // aba Overdev — Fase 3 (editor + tasks + checklist 2-níveis). Chaves NOVAS com
+    // fallback embutido via `tor` até serem adicionadas ao lib (ver relatório).
+    l.set_od_human(tor("gui.od_human", "humano").into());
+    l.set_od_machine(tor("gui.od_machine", "máquina").into());
+    l.set_od_mark_human(tor("gui.od_mark_human", "marcar como feito").into());
+    l.set_od_editor(tor("gui.od_editor", "Editor").into());
+    l.set_od_save_plan(tor("gui.od_save_plan", "Salvar").into());
+    l.set_od_tasks(tor("gui.od_tasks", "Tarefas e notas").into());
+    l.set_od_add_note(tor("gui.od_add_note", "Adicionar nota").into());
+    l.set_od_note(tor("gui.od_note", "Nota para esta tarefa…").into());
+    l.set_od_correction(tor("gui.od_correction", "Prompt de correção do overdev").into());
+    l.set_od_notes_title(tor("gui.od_notes", "Notas e correções").into());
     // aba Grafo — reusa as chaves do egui (todas já nos 11 locales do lib).
     l.set_g_search_hint(t("gui.search").into());
     l.set_g_nodes_suffix(t("gui.graph_nodes").into());
@@ -831,14 +843,80 @@ fn build_proj_items(projects: &[projects::Project], recent: &[String]) -> Vec<Pr
     out
 }
 
-/// Item do checklist: mapeia o marcador (' '|'x'|'~') no `kind` que o Slint colore.
-fn over_item(mark: char, text: &str) -> OverItem {
-    let kind = match mark {
-        'x' => "done",
-        '~' => "hold",
-        _ => "open",
-    };
-    OverItem { kind: kind.into(), text: text.into() }
+/// Caminho do CHECKLIST de `<root>/.overdev`.
+fn checklist_path(root: &Path) -> PathBuf {
+    root.join(".overdev").join("CHECKLIST.md")
+}
+
+/// Caminho de um arquivo do editor (`PLAN.md`/`CHECKLIST.md`) sob `<root>/.overdev`.
+/// Sanitiza `target` a um basename simples pra a GUI nunca escrever fora do `.overdev`.
+fn overdev_file_path(root: &Path, target: &str) -> PathBuf {
+    let name = Path::new(target).file_name().and_then(|s| s.to_str()).unwrap_or("PLAN.md");
+    root.join(".overdev").join(name)
+}
+
+/// Parseia o CHECKLIST 2-níveis de `<root>` em `OverItem`s (kind + origem + índice).
+/// Casa `- [H ...]` ANTES de `- [ ]`/`- [x]` (senão o humano cai no ramo de máquina).
+/// `hindex` numera 1-based só os HUMANOS ABERTOS (- [H ]) — é o arg de `od-mark-human`.
+fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
+    let cl = std::fs::read_to_string(checklist_path(root)).unwrap_or_default();
+    let mut out = Vec::new();
+    let mut hopen = 0i32; // contador de humanos abertos (1-based)
+    for line in cl.lines() {
+        let t = line.trim_start();
+        let (kind, machine, hidx, rest): (&str, bool, i32, &str) =
+            if let Some(r) = t.strip_prefix("- [H ]") {
+                hopen += 1;
+                ("hopen", false, hopen, r)
+            } else if let Some(r) = t.strip_prefix("- [H x]").or_else(|| t.strip_prefix("- [H X]")) {
+                ("hdone", false, -1, r)
+            } else if let Some(r) = t.strip_prefix("- [ ]") {
+                ("open", true, -1, r)
+            } else if let Some(r) = t.strip_prefix("- [x]").or_else(|| t.strip_prefix("- [X]")) {
+                ("done", true, -1, r)
+            } else if let Some(r) = t.strip_prefix("- [~]") {
+                ("hold", true, -1, r)
+            } else {
+                continue;
+            };
+        out.push(OverItem {
+            kind: kind.into(),
+            text: rest.trim().into(),
+            machine,
+            hindex: hidx,
+        });
+    }
+    out
+}
+
+/// Fecha o `index`-ésimo (1-based) item HUMANO ABERTO de `<root>`: `- [H ]`→`- [H x]`.
+/// Path-aware (o `overdev::human_done` do lib opera no cwd, não serve à GUI que
+/// monitora outro projeto) — replica a regra do lib editando o arquivo direto.
+fn mark_human_done_at(root: &Path, index: i32) -> Result<(), String> {
+    if index < 1 {
+        return Err("índice humano inválido".into());
+    }
+    let path = checklist_path(root);
+    let s = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut seen = 0i32;
+    let mut hit = false;
+    let out: Vec<String> = s
+        .lines()
+        .map(|l| {
+            if !hit && l.trim_start().starts_with("- [H ]") {
+                seen += 1;
+                if seen == index {
+                    hit = true;
+                    return l.replacen("- [H ]", "- [H x]", 1);
+                }
+            }
+            l.to_string()
+        })
+        .collect();
+    if !hit {
+        return Err(format!("não há {index}º item humano aberto"));
+    }
+    std::fs::write(&path, out.join("\n")).map_err(|e| e.to_string())
 }
 
 /// Re-sonda dev_dirs + projetos e reconstrói os modelos do seletor e da lista de dev_dirs.
@@ -857,29 +935,64 @@ fn load_overdev_into(app: &AppWindow, items: &VecModel<OverItem>, proj: Option<&
         app.set_od_has_project(false);
         app.set_od_has_overdev(false);
         app.set_od_current(SharedString::new());
+        app.set_od_editor_content(SharedString::new());
+        app.set_od_editor_status(SharedString::new());
+        app.set_od_notes(SharedString::new());
         items.set_vec(Vec::new());
         return;
     };
     app.set_od_has_project(true);
     app.set_od_current(basename_of(p).into());
     let ov = panel::load_overdev(p);
+    // Checklist 2-níveis parseado direto (o panel::load_overdev do lib ignora os
+    // marcadores humanos `- [H ]`/`- [H x]`; aqui a GUI precisa deles).
+    let its = parse_checklist_items(p);
     // Sem run: objetivo vazio E sem itens (mesma regra do egui).
-    let has = !(ov.objetivo.trim().is_empty() && ov.items.is_empty());
+    let has = !(ov.objetivo.trim().is_empty() && its.is_empty());
     app.set_od_has_overdev(has);
     if !has {
         items.set_vec(Vec::new());
+        app.set_od_editor_content(SharedString::new());
+        app.set_od_editor_status(SharedString::new());
+        app.set_od_notes(SharedString::new());
         return;
     }
-    let (o, d, h) = ov.counts();
+    // Contagem 4-categorias derivada do MESMO parse 2-níveis (máquina-abertos/feitos/
+    // on-hold/humanos-abertos). `done` = feitos totais (máquina `- [x]` + humano
+    // `- [H x]`), como o `Counts::done()` do engine do lib.
+    let (mut done, mut open, mut hold, mut human) = (0i32, 0i32, 0i32, 0i32);
+    for it in &its {
+        match it.kind.as_str() {
+            "done" | "hdone" => done += 1,
+            "open" => open += 1,
+            "hold" => hold += 1,
+            "hopen" => human += 1,
+            _ => {}
+        }
+    }
     app.set_od_objetivo(ov.objetivo.clone().into());
     app.set_od_mode(ov.mode.clone().into());
-    app.set_od_done(d as i32);
-    app.set_od_open(o as i32);
-    app.set_od_hold(h as i32);
+    app.set_od_done(done);
+    app.set_od_open(open);
+    app.set_od_hold(hold);
+    app.set_od_human_open(human);
     app.set_od_decisoes(ov.decisoes.clone().into());
     app.set_od_plano(ov.plano.clone().into());
     app.set_od_perguntas(ov.perguntas.clone().into());
-    items.set_vec(ov.items.iter().map(|(s, txt)| over_item(*s, txt)).collect::<Vec<OverItem>>());
+    items.set_vec(its);
+    // Editor (arquivo atualmente escolhido) + notas do humano.
+    load_editor_content(app, p);
+    app.set_od_notes(overdev::read_notes(p).into());
+}
+
+/// Carrega no editor o conteúdo do arquivo escolhido (`od-editor-target`) de `<root>/.overdev`.
+/// Limpa o feedback de status. Arquivo ausente → editor vazio (o Salvar cria).
+fn load_editor_content(app: &AppWindow, root: &Path) {
+    let target = app.get_od_editor_target().to_string();
+    let content = std::fs::read_to_string(overdev_file_path(root, &target)).unwrap_or_default();
+    app.set_od_editor_content(content.into());
+    app.set_od_editor_status(SharedString::new());
+    app.set_od_editor_error(false);
 }
 
 /// Escolhe um projeto: canoniza, persiste como recente e carrega o overdev.
@@ -1983,6 +2096,91 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
+    // ---- Fase 3: marcar item HUMANO aberto como feito (- [H ]→- [H x]) ----
+    // Edita o CHECKLIST.md do projeto e recarrega a view (contagem + itens).
+    {
+        let weak = app.as_weak();
+        let items = od_items_model.clone();
+        let cur = od_current.clone();
+        app.on_od_mark_human(move |idx| {
+            let root = cur.borrow().clone();
+            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
+                let _ = mark_human_done_at(&p, idx);
+                load_overdev_into(&app, &items, Some(&p));
+            }
+        });
+    }
+    // ---- Fase 3: trocar o arquivo do editor (PLAN.md/CHECKLIST.md) ----
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.on_od_editor_pick(move |target| {
+            let root = cur.borrow().clone();
+            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
+                app.set_od_editor_target(target);
+                load_editor_content(&app, &p);
+            }
+        });
+    }
+    // ---- Fase 3: salvar o arquivo do editor (regrava no .overdev/) ----
+    // Reflete no checklist/itens se o arquivo salvo for o CHECKLIST.md.
+    {
+        let weak = app.as_weak();
+        let items = od_items_model.clone();
+        let cur = od_current.clone();
+        app.on_od_editor_save(move || {
+            let root = cur.borrow().clone();
+            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
+                let target = app.get_od_editor_target().to_string();
+                let content = app.get_od_editor_content().to_string();
+                let path = overdev_file_path(&p, &target);
+                match std::fs::write(&path, content) {
+                    Ok(()) => {
+                        app.set_od_editor_error(false);
+                        app.set_od_editor_status(tor("gui.saved", "Salvo").into());
+                        // salvar o CHECKLIST.md muda o estado 2-níveis: recarrega.
+                        if target == "CHECKLIST.md" {
+                            load_overdev_into(&app, &items, Some(&p));
+                            app.set_od_editor_error(false);
+                            app.set_od_editor_status(tor("gui.saved", "Salvo").into());
+                        }
+                    }
+                    Err(e) => {
+                        app.set_od_editor_error(true);
+                        app.set_od_editor_status(e.to_string().into());
+                    }
+                }
+            }
+        });
+    }
+    // ---- Fase 3: adicionar ponto/nota por task (add_note kind="task") ----
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.on_od_add_note(move |texto| {
+            let root = cur.borrow().clone();
+            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
+                if !texto.trim().is_empty() {
+                    let _ = overdev::add_note(&p, "task", &texto);
+                    app.set_od_notes(overdev::read_notes(&p).into());
+                }
+            }
+        });
+    }
+    // ---- Fase 3: prompt de correção do overdev (add_note kind="correcao") ----
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.on_od_add_correction(move |texto| {
+            let root = cur.borrow().clone();
+            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
+                if !texto.trim().is_empty() {
+                    let _ = overdev::add_note(&p, "correcao", &texto);
+                    app.set_od_notes(overdev::read_notes(&p).into());
+                }
+            }
+        });
+    }
 
     // ==================== aba Grafo — interação ====================
     // Ponteiro/roda chegam crus do Slint (coords relativas ao canvas, em px). O
@@ -2184,4 +2382,78 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     app.run()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Cria um `.overdev/CHECKLIST.md` temporário e ÚNICO (testes rodam em paralelo).
+    fn scratch(checklist: &str) -> std::path::PathBuf {
+        static SEQ: AtomicUsize = AtomicUsize::new(0);
+        let uniq = SEQ.fetch_add(1, Ordering::SeqCst);
+        let base = std::env::temp_dir().join(format!("gui-od-test-{}-{}", std::process::id(), uniq));
+        let od = base.join(".overdev");
+        std::fs::create_dir_all(&od).unwrap();
+        std::fs::write(od.join("CHECKLIST.md"), checklist).unwrap();
+        base
+    }
+
+    const FIX: &str = "\
+# OVERDEV
+- [ ] item máquina aberto A
+- [x] item máquina feito B
+- [~] item on-hold C
+- [H ] item humano aberto D
+- [H x] item humano feito E
+- [H ] item humano aberto F
+não é item
+  - [ ] item indentado aberto G
+";
+
+    #[test]
+    fn parse_2niveis_classifica_e_indexa_humanos() {
+        let root = scratch(FIX);
+        let its = parse_checklist_items(&root);
+        // 7 itens de checklist (a linha "não é item" é ignorada).
+        assert_eq!(its.len(), 7);
+        let by_kind = |k: &str| its.iter().filter(|i| i.kind == k).count();
+        assert_eq!(by_kind("open"), 2, "máquina abertos (inclui indentado)");
+        assert_eq!(by_kind("done"), 1, "máquina feito");
+        assert_eq!(by_kind("hold"), 1, "on-hold");
+        assert_eq!(by_kind("hopen"), 2, "humanos abertos");
+        assert_eq!(by_kind("hdone"), 1, "humano feito");
+        // hindex numera só os humanos abertos, 1-based, na ordem do arquivo.
+        let hopen: Vec<i32> = its.iter().filter(|i| i.kind == "hopen").map(|i| i.hindex).collect();
+        assert_eq!(hopen, vec![1, 2]);
+        // itens de máquina não têm origem-humano nem índice.
+        let mo = its.iter().find(|i| i.kind == "open").unwrap();
+        assert!(mo.machine && mo.hindex == -1);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn marca_humano_por_indice_so_o_que_casa() {
+        let root = scratch(FIX);
+        // fecha o 2º humano aberto (F) → vira - [H x]; D segue aberto.
+        mark_human_done_at(&root, 2).unwrap();
+        let its = parse_checklist_items(&root);
+        assert_eq!(its.iter().filter(|i| i.kind == "hopen").count(), 1, "sobra 1 humano aberto");
+        assert!(its.iter().any(|i| i.kind == "hopen" && i.text.contains("aberto D")));
+        assert!(its.iter().any(|i| i.kind == "hdone" && i.text.contains("aberto F")));
+        // não toca itens de máquina.
+        assert_eq!(its.iter().filter(|i| i.kind == "open").count(), 2);
+        // índice fora de faixa → erro, arquivo intacto.
+        assert!(mark_human_done_at(&root, 9).is_err());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn editor_path_nunca_escapa_do_overdev() {
+        let root = std::path::Path::new("/proj");
+        assert_eq!(overdev_file_path(root, "PLAN.md"), root.join(".overdev").join("PLAN.md"));
+        assert_eq!(overdev_file_path(root, "CHECKLIST.md"), root.join(".overdev").join("CHECKLIST.md"));
+        // tentativa de path traversal é reduzida ao basename.
+        assert_eq!(overdev_file_path(root, "../../etc/passwd"), root.join(".overdev").join("passwd"));
+    }
 }

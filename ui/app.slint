@@ -94,11 +94,16 @@ export struct ProjItem {
     marker: string,   // projeto: marcador que o identificou (.git/.overdev/…)
 }
 
-// Um item do checklist do overdev: o tipo (done/open/hold) + o texto.
-// `kind` decide a cor no Slint (done=verde, open=normal, hold=amarelo).
+// Um item do checklist 2-níveis do overdev: tipo + texto + origem + índice humano.
+// `kind` decide cor/ícone: máquina "done"=✓verde / "open"=○ / "hold"=~amarelo;
+// humano "hdone"=✓ / "hopen"=○ (marcável pela pessoa). `machine`=🤖 vs 👤.
+// `hindex` = posição 1-based do item entre os HUMANOS ABERTOS (arg de od-mark-human);
+// -1 para itens não-marcáveis.
 export struct OverItem {
-    kind: string,   // "done" | "open" | "hold"
+    kind: string,     // "done" | "open" | "hold" | "hopen" | "hdone"
     text: string,
+    machine: bool,    // true = item de MÁQUINA (agente) · false = item HUMANO
+    hindex: int,      // hopen: 1-based entre humanos abertos · senão -1
 }
 
 // Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.
@@ -158,6 +163,17 @@ export global L {
     in-out property <string> od-plan;             // "Plano"
     in-out property <string> od-questions;        // "Perguntas parkeadas"
     in-out property <string> open-browser;        // "abrir no navegador"
+    // ---- aba Overdev — Fase 3 (editor + tasks + checklist 2-níveis) ----
+    in-out property <string> od-human;             // etiqueta "humano"
+    in-out property <string> od-machine;           // etiqueta "máquina"
+    in-out property <string> od-mark-human;        // botão "marcar como feito"
+    in-out property <string> od-editor;            // título "Editor"
+    in-out property <string> od-save-plan;         // botão "Salvar"
+    in-out property <string> od-tasks;             // título "Tarefas e notas"
+    in-out property <string> od-add-note;          // botão "Adicionar nota"
+    in-out property <string> od-note;              // rótulo/hint "Nota para esta tarefa…"
+    in-out property <string> od-correction;        // título/hint "Prompt de correção…"
+    in-out property <string> od-notes-title;       // título "Notas e correções"
     // aba Grafo
     in-out property <string> g-search-hint;        // hint da busca ("procurar")
     in-out property <string> g-nodes-suffix;       // sufixo "nós"
@@ -834,10 +850,20 @@ export component AppWindow inherits Window {
     in-out property <int> od-done;
     in-out property <int> od-open;
     in-out property <int> od-hold;
+    in-out property <int> od-human-open;         // humanos abertos (- [H ])
     in property <[OverItem]> od-items;
     in-out property <string> od-decisoes;
     in-out property <string> od-plano;
     in-out property <string> od-perguntas;
+    // editor de PLAN/CHECKLIST (Fase 3)
+    in-out property <string> od-editor-target: "PLAN.md";  // arquivo em edição
+    in-out property <string> od-editor-content;             // conteúdo editável
+    in-out property <string> od-editor-status;              // feedback salvo/erro
+    in-out property <bool> od-editor-error: false;          // o status é erro?
+    // notas / correções (Fase 3)
+    in-out property <string> od-notes;                      // read_notes(root)
+    in-out property <string> od-note-input;                 // input de nota por task
+    in-out property <string> od-correction-input;           // input do prompt de correção
 
     // ---- aba Environments ----
     in property <[EnvRow]> env-rows;
@@ -911,6 +937,12 @@ export component AppWindow inherits Window {
     callback od-add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
     callback od-remove-dev-dir(string); // remove um diretório de desenvolvimento
     callback od-open-browser();         // abre o painel HTML do projeto no navegador
+    // ---- Fase 3: marcar-humano + editor + notas/correção ----
+    callback od-mark-human(int);        // fecha o i-ésimo humano aberto (- [H ]→- [H x])
+    callback od-editor-pick(string);    // troca o arquivo do editor (PLAN.md/CHECKLIST.md)
+    callback od-editor-save();          // regrava o arquivo do editor no .overdev/
+    callback od-add-note(string);       // add_note(root,"task",texto) — ponto por task
+    callback od-add-correction(string); // add_note(root,"correcao",texto) — prompt de correção
     // ---- app ----
     callback restart();                 // relança o app (janela nova) — usado pós self-update
 
@@ -1429,39 +1461,166 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
-                    // progresso: feitos / abertos / on-hold
+                    // progresso: feitos / máquina-abertos / on-hold / humanos-abertos
                     HorizontalLayout {
                         spacing: 20px;
                         alignment: start;
                         Text { text: "✓ \{root.od-done}"; font-size: 13.5px; font-weight: 700; color: Theme.good; }
                         Text { text: "○ \{root.od-open}"; font-size: 13.5px; font-weight: 700; color: Theme.text-dim; }
                         Text { text: "~ \{root.od-hold}"; font-size: 13.5px; font-weight: 700; color: Theme.warn; }
+                        Text { text: "\{L.od-human} \{root.od-human-open}"; font-size: 13.5px; font-weight: 700; color: Theme.accent; }
                         Rectangle {}
                         Btn { label: L.open-browser; small: true; clicked => { root.od-open-browser(); } }
                     }
                     Rectangle { height: 1px; background: Theme.border; }
-                    // checklist colorido (verde feito, normal aberto, amarelo on-hold)
+                    // checklist 2-níveis: ícone/cor por estado + etiqueta MÁQUINA vs HUMANO;
+                    // itens HUMANOS ABERTOS ganham o botão "marcar como feito".
                     for it[ii] in root.od-items: HorizontalLayout {
                         spacing: 8px;
                         alignment: start;
+                        // ícone de estado (✓ feito · ~ on-hold · ○ aberto)
                         VerticalLayout {
                             alignment: start;
                             Text {
-                                text: it.kind == "done" ? "✓" : it.kind == "hold" ? "~" : "○";
+                                text: (it.kind == "done" || it.kind == "hdone") ? "✓" : it.kind == "hold" ? "~" : "○";
                                 font-size: 13px;
                                 font-weight: 800;
-                                color: it.kind == "done" ? Theme.good : it.kind == "hold" ? Theme.warn : Theme.text-dim;
+                                color: (it.kind == "done" || it.kind == "hdone") ? Theme.good
+                                     : it.kind == "hold" ? Theme.warn
+                                     : it.machine ? Theme.text-dim : Theme.accent;
+                            }
+                        }
+                        // etiqueta de origem (MÁQUINA = agente · HUMANO = pessoa)
+                        Rectangle {
+                            y: 1px;
+                            height: 18px;
+                            width: tagtxt.preferred-width + 12px;
+                            border-radius: 5px;
+                            property <color> ttone: it.machine ? Theme.text-dim : Theme.accent;
+                            background: ttone.transparentize(0.86);
+                            border-width: 1px;
+                            border-color: ttone.transparentize(0.6);
+                            tagtxt := Text {
+                                text: it.machine ? L.od-machine : L.od-human;
+                                color: parent.ttone;
+                                font-size: 10px;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
                             }
                         }
                         Text {
                             text: it.text;
                             font-size: 13px;
-                            color: it.kind == "done" ? Theme.good : Theme.text;
+                            color: (it.kind == "done" || it.kind == "hdone") ? Theme.good : Theme.text;
                             wrap: word-wrap;
+                            horizontal-stretch: 1;
+                        }
+                        // só o HUMANO ABERTO é marcável pela GUI (máquina é do agente)
+                        if it.kind == "hopen": Btn {
+                            label: L.od-mark-human;
+                            small: true;
+                            clicked => { root.od-mark-human(it.hindex); }
+                        }
+                    }
+                    Rectangle { height: 6px; }
+                    // ---- editor acoplado de PLAN.md / CHECKLIST.md ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text { text: L.od-editor; font-size: 14px; font-weight: 800; color: Theme.text; vertical-alignment: center; }
+                            Rectangle {}
+                            Btn {
+                                label: "PLAN.md"; small: true;
+                                primary: root.od-editor-target == "PLAN.md";
+                                clicked => { root.od-editor-pick("PLAN.md"); }
+                            }
+                            Btn {
+                                label: "CHECKLIST.md"; small: true;
+                                primary: root.od-editor-target == "CHECKLIST.md";
+                                clicked => { root.od-editor-pick("CHECKLIST.md"); }
+                            }
+                        }
+                        Rectangle {
+                            height: 220px;
+                            border-radius: 8px;
+                            background: Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            TextEdit {
+                                width: 100%;
+                                height: 100%;
+                                text: root.od-editor-content;
+                                wrap: word-wrap;
+                                edited(s) => { root.od-editor-content = s; }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 12px;
+                            alignment: start;
+                            Btn { label: L.od-save-plan; primary: true; small: true; clicked => { root.od-editor-save(); } }
+                            if root.od-editor-status != "": Text {
+                                text: root.od-editor-status;
+                                font-size: 12.5px; font-weight: 600;
+                                color: root.od-editor-error ? Theme.warn : Theme.good;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                    // ---- tarefas: adicionar um ponto/nota específico ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.od-tasks; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        Text { text: L.od-note; font-size: 12px; color: Theme.text-dim; }
+                        Rectangle {
+                            height: 66px; border-radius: 8px; background: Theme.surface;
+                            border-width: 1px; border-color: Theme.border;
+                            TextEdit {
+                                width: 100%; height: 100%;
+                                text: root.od-note-input;
+                                wrap: word-wrap;
+                                edited(s) => { root.od-note-input = s; }
+                            }
+                        }
+                        HorizontalLayout {
+                            alignment: start;
+                            Btn {
+                                label: L.od-add-note; small: true;
+                                enabled: root.od-note-input != "";
+                                clicked => { root.od-add-note(root.od-note-input); root.od-note-input = ""; }
+                            }
+                        }
+                    }
+                    // ---- prompt de correção do overdev ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.od-correction; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        Rectangle {
+                            height: 66px; border-radius: 8px; background: Theme.surface;
+                            border-width: 1px; border-color: Theme.border;
+                            TextEdit {
+                                width: 100%; height: 100%;
+                                text: root.od-correction-input;
+                                wrap: word-wrap;
+                                edited(s) => { root.od-correction-input = s; }
+                            }
+                        }
+                        HorizontalLayout {
+                            alignment: start;
+                            Btn {
+                                label: L.od-add-note; small: true; primary: true;
+                                enabled: root.od-correction-input != "";
+                                clicked => { root.od-add-correction(root.od-correction-input); root.od-correction-input = ""; }
+                            }
                         }
                     }
                     Rectangle { height: 6px; }
                     // seções colapsáveis (só quando há conteúdo)
+                    if root.od-notes != "": Collapse { title: L.od-notes-title; body: root.od-notes; }
                     if root.od-decisoes != "": Collapse { title: L.od-decisions; body: root.od-decisoes; }
                     if root.od-plano != "": Collapse { title: L.od-plan; body: root.od-plano; }
                     if root.od-perguntas != "": Collapse { title: L.od-questions; body: root.od-perguntas; }
