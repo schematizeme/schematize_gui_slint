@@ -16,7 +16,7 @@
 
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
-use schematize::{config, environments, panel, projects, skills, util};
+use schematize::{config, environments, panel, projects, skilledit, skills, util};
 use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -154,6 +154,58 @@ fn install_i18n(app: &AppWindow) {
     l.set_home_settings_desc(tor("gui.home_settings_desc", "Idioma, tema e preferências.").into());
     l.set_open_vscode(tor("gui.open_vscode", "Abrir no VSCode").into());
     l.set_open_loose_project(tor("gui.open_loose_project", "Abrir projeto avulso…").into());
+    // aba Gerenciar (criar + editar skills) — chaves NOVAS via `tor`. Ver relatório.
+    l.set_manage(tor("gui.manage", "Gerenciar").into());
+    l.set_create_skill(tor("gui.create_skill", "Criar skill").into());
+    l.set_edit_skill(tor("gui.edit_skill", "Editar skill").into());
+    l.set_skill_slug(tor("gui.skill_slug", "Slug").into());
+    l.set_skill_name(tor("gui.skill_name", "Nome").into());
+    l.set_skill_desc(tor("gui.skill_desc", "Descrição").into());
+    l.set_create(tor("gui.create", "Criar").into());
+    l.set_save(tor("gui.save", "Salvar").into());
+    l.set_saved(tor("gui.saved", "Salvo").into());
+    l.set_slug_invalid(tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito").into());
+    l.set_skill_exists(tor("gui.skill_exists", "essa skill já existe").into());
+    l.set_pick_skill(tor("gui.pick_skill", "Escolha uma skill…").into());
+    l.set_pick_file(tor("gui.pick_file", "Arquivos").into());
+    l.set_skill_created(tor("gui.skill_created", "Skill criada em").into());
+    l.set_no_installed_skills(tor("gui.no_installed_skills", "Nenhuma skill instalada para editar").into());
+    l.set_edit_now(tor("gui.edit_now", "Editar agora").into());
+    l.set_pick_file_hint(tor("gui.pick_file_hint", "Selecione um arquivo na barra lateral para editar").into());
+}
+
+// ---------------------------------------------------------------------------
+// aba Gerenciar — lista os SLUGS das skills instaladas escaneando o diretório
+// de skills (`~/.claude/skills/schematize-<slug>/` com SKILL.md). Cobre tanto as
+// skills do catálogo quanto as criadas pelo usuário (que não estão no catálogo).
+// Retorna Vec<String> (Send) — seguro pra rodar em thread e postar via event loop.
+// ---------------------------------------------------------------------------
+fn installed_skill_slugs() -> Vec<String> {
+    let dir = util::skills_dir();
+    let mut out: Vec<String> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let Some(name) = p.file_name().and_then(|s| s.to_str()) else { continue };
+            if let Some(slug) = name.strip_prefix("schematize-") {
+                if p.join("SKILL.md").is_file() {
+                    out.push(slug.to_string());
+                }
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Monta um `ModelRc<SharedString>` a partir de uma lista de Strings (roda na UI).
+fn strings_model(v: Vec<String>) -> ModelRc<SharedString> {
+    ModelRc::from(Rc::new(VecModel::from(
+        v.into_iter().map(SharedString::from).collect::<Vec<SharedString>>(),
+    )))
 }
 
 // ---------------------------------------------------------------------------
@@ -1587,6 +1639,202 @@ fn main() -> Result<(), slint::PlatformError> {
                     }
                 }
             }
+        });
+    }
+
+    // ==================== aba Gerenciar (criar + editar skills) ====================
+    // Todas as chamadas ao `skilledit` (scaffold/list/read/write) rodam em thread e
+    // devolvem à UI via `invoke_from_event_loop` (padrão thread→UI do Slint). O
+    // estado do form/editor mora em propriedades do app (nada de Rc !Send cruzando
+    // a fronteira da thread — os modelos são REMONTADOS no event loop).
+    app.set_mg_skills(strings_model(installed_skill_slugs()));
+    app.set_mg_files(strings_model(Vec::new()));
+
+    // re-sondar as skills instaladas (dropdown do modo Editar).
+    {
+        let weak = app.as_weak();
+        app.on_mg_refresh_skills(move || {
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let slugs = installed_skill_slugs();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        app.set_mg_skills(strings_model(slugs));
+                    }
+                });
+            });
+        });
+    }
+
+    // validar o slug a cada tecla (puro/rápido — sem IO). Atualiza slug + erro inline.
+    {
+        let weak = app.as_weak();
+        app.on_mg_slug_edited(move |s| {
+            if let Some(app) = weak.upgrade() {
+                let slug = s.to_string();
+                app.set_mg_slug(s);
+                // vazio → sem erro (só desabilita o botão); inválido → mostra o hint.
+                let err = if slug.is_empty() || skilledit::validate_slug(&slug).is_ok() {
+                    String::new()
+                } else {
+                    tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito")
+                };
+                app.set_mg_slug_error(err.into());
+            }
+        });
+    }
+
+    // criar a skill → skilledit::scaffold(slug, nome, desc). Sucesso mostra o caminho
+    // e re-sonda o dropdown; erro (ex.: já existe) mostra a mensagem.
+    {
+        let weak = app.as_weak();
+        app.on_mg_create(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let slug = app.get_mg_slug().to_string();
+            let name = app.get_mg_name().to_string();
+            let desc = app.get_mg_desc().to_string();
+            // trava dupla: valida antes de spawnar (feedback imediato).
+            if skilledit::validate_slug(&slug).is_err() {
+                app.set_mg_slug_error(
+                    tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito").into(),
+                );
+                return;
+            }
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let res = skilledit::scaffold(&slug, &name, &desc);
+                // criou → já re-sonda a lista (passa a incluir a nova skill).
+                let slugs = if res.is_ok() { Some(installed_skill_slugs()) } else { None };
+                let created = slug.clone();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        match res {
+                            Ok(path) => {
+                                app.set_mg_create_error(false);
+                                app.set_mg_create_result(
+                                    format!(
+                                        "{} {}",
+                                        tor("gui.skill_created", "Skill criada em"),
+                                        path.display()
+                                    )
+                                    .into(),
+                                );
+                                app.set_mg_created_slug(created.into());
+                                if let Some(s) = slugs {
+                                    app.set_mg_skills(strings_model(s));
+                                }
+                            }
+                            Err(e) => {
+                                app.set_mg_create_error(true);
+                                // "já existe" ganha mensagem amigável; senão a msg do lib.
+                                let msg = if e.contains("já existe") {
+                                    tor("gui.skill_exists", "essa skill já existe")
+                                } else {
+                                    e
+                                };
+                                app.set_mg_create_result(msg.into());
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    }
+
+    // pós-criar: pula pro modo Editar já com a skill recém-criada carregada.
+    {
+        let weak = app.as_weak();
+        app.on_mg_edit_created(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let slug = app.get_mg_created_slug().to_string();
+            if slug.is_empty() {
+                return;
+            }
+            app.set_mg_mode(1);
+            app.invoke_mg_pick_skill(slug.into()); // reusa o pick p/ listar os arquivos
+        });
+    }
+
+    // escolher uma skill → lista os arquivos editáveis (skilledit::list_files).
+    {
+        let weak = app.as_weak();
+        app.on_mg_pick_skill(move |s| {
+            let Some(app) = weak.upgrade() else { return };
+            let slug = s.to_string();
+            app.set_mg_sel_skill(s);
+            // troca de skill zera a seleção de arquivo/editor/feedback.
+            app.set_mg_sel_file(SharedString::new());
+            app.set_mg_content(SharedString::new());
+            app.set_mg_save_result(SharedString::new());
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let files = skilledit::list_files(&slug).unwrap_or_default();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        app.set_mg_files(strings_model(files));
+                    }
+                });
+            });
+        });
+    }
+
+    // escolher um arquivo → carrega o conteúdo no editor (skilledit::read_file).
+    {
+        let weak = app.as_weak();
+        app.on_mg_pick_file(move |f| {
+            let Some(app) = weak.upgrade() else { return };
+            let slug = app.get_mg_sel_skill().to_string();
+            let rel = f.to_string();
+            app.set_mg_sel_file(f);
+            app.set_mg_save_result(SharedString::new());
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let res = skilledit::read_file(&slug, &rel);
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        match res {
+                            Ok(content) => app.set_mg_content(content.into()),
+                            Err(e) => {
+                                app.set_mg_content(SharedString::new());
+                                app.set_mg_save_error(true);
+                                app.set_mg_save_result(tf("err.prefix", &[("e", &e)]).into());
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    }
+
+    // salvar o editor → grava LOCAL em ~/.claude/skills (skilledit::write_file).
+    {
+        let weak = app.as_weak();
+        app.on_mg_save(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let slug = app.get_mg_sel_skill().to_string();
+            let rel = app.get_mg_sel_file().to_string();
+            let content = app.get_mg_content().to_string();
+            if slug.is_empty() || rel.is_empty() {
+                return;
+            }
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let res = skilledit::write_file(&slug, &rel, &content);
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        match res {
+                            Ok(()) => {
+                                app.set_mg_save_error(false);
+                                app.set_mg_save_result(tor("gui.saved", "Salvo").into());
+                            }
+                            Err(e) => {
+                                app.set_mg_save_error(true);
+                                app.set_mg_save_result(tf("err.prefix", &[("e", &e)]).into());
+                            }
+                        }
+                    }
+                });
+            });
         });
     }
 
