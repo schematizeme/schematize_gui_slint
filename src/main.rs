@@ -54,13 +54,15 @@ fn detect_display_env() {
 // ---------------------------------------------------------------------------
 fn install_i18n(app: &AppWindow) {
     let l = app.global::<L>();
-    l.set_window_title(format!("schematize — {}", t("gui.tab_skills")).into());
+    l.set_window_title("schematize".into());
     l.set_subtitle(t("app.tagline").into());
     l.set_theme_light(t("gui.theme_light").into());
     l.set_theme_dark(t("gui.theme_dark").into());
     l.set_check(t("gui.check").into());
     l.set_update_all(t("gui.update_all").into());
-    l.set_install_sel(t("gui.install_sel").into());
+    l.set_update_installed_only(t("gui.update_installed_only").into());
+    l.set_update_sel(t("gui.update_sel").into());
+    l.set_install_sel_market(t("gui.install_sel_market").into());
     l.set_remove_sel(t("gui.remove_sel").into());
     l.set_sel_label(t("gui.sel_label").into());
     l.set_sel_all(t("gui.sel_all").into());
@@ -72,14 +74,16 @@ fn install_i18n(app: &AppWindow) {
     l.set_col_latest(t("gui.col_latest").into());
     l.set_col_state(t("gui.col_state").into());
     l.set_col_actions(t("gui.col_actions").into());
+    // Tooltip do selo verificado (só o check + hover; sem texto ao lado).
     l.set_verified(t("gui.verified_badge").into());
-    l.set_tab_skills(t("gui.tab_skills").into());
+    l.set_tab_installed(t("gui.tab_installed").into());
+    l.set_tab_marketplace(t("gui.tab_marketplace").into());
     l.set_tab_overdev(t("gui.tab_overdev").into());
     l.set_tab_graph(t("gui.tab_graph").into());
     l.set_coming_soon(t("gui.coming_soon").into());
     l.set_act_install(t("gui.install").into());
     l.set_act_update(t("gui.update").into());
-    l.set_act_remove(t("gui.remove").into());
+    l.set_act_remove(t("gui.uninstall").into());
 }
 
 // ---------------------------------------------------------------------------
@@ -101,10 +105,20 @@ fn compute_state(installed: &Option<String>, latest: &Option<String>) -> (String
 // Montagem inicial do modelo (cabeçalhos de categoria + skills). Retorna as
 // linhas E o Item alinhado a cada linha (None nos cabeçalhos), pra as ações.
 // ---------------------------------------------------------------------------
-fn header_row(label: &str) -> SkillRow {
+/// Categoria normalizada de um item (vazio → "language").
+fn category_of(it: &Item) -> &str {
+    if it.category.is_empty() { "language" } else { it.category.as_str() }
+}
+
+/// Cabeçalho de categoria de UMA página (page 0 = Instaladas, 1 = Marketplace).
+/// `count` é preenchido/atualizado por `recompute_headers` (esconde vazios).
+fn header_row(label: &str, cat: &str, page: i32) -> SkillRow {
     SkillRow {
         is_header: true,
         header_label: label.into(),
+        page,
+        count: 0,
+        category: cat.into(),
         slug: SharedString::new(),
         author: SharedString::new(),
         author_url: SharedString::new(),
@@ -131,6 +145,9 @@ fn skill_row(it: &Item) -> SkillRow {
     SkillRow {
         is_header: false,
         header_label: SharedString::new(),
+        page: 0,
+        count: 0,
+        category: category_of(it).into(),
         slug: it.slug.clone().into(),
         author: author.into(),
         author_url: author_url.into(),
@@ -146,8 +163,10 @@ fn skill_row(it: &Item) -> SkillRow {
     }
 }
 
-/// Ordena os itens em grupos (base, language, external) com cabeçalhos e devolve
-/// o Item por linha (None nos cabeçalhos) pra as ações localizarem a skill.
+/// Ordena os itens em grupos (base, language, external). Por categoria emite
+/// DOIS cabeçalhos (Instaladas page=0 e Marketplace page=1) seguidos das skills;
+/// a página ativa mostra o cabeçalho certo e as skills cujo estado casa (o Slint
+/// filtra por `state`). Devolve o Item por linha (None nos cabeçalhos).
 fn build_rows(items: &[Item]) -> (Vec<SkillRow>, Vec<Option<Item>>) {
     let groups = [
         ("base", t("gui.cat_base")),
@@ -157,17 +176,14 @@ fn build_rows(items: &[Item]) -> (Vec<SkillRow>, Vec<Option<Item>>) {
     let mut rows = Vec::new();
     let mut row_items: Vec<Option<Item>> = Vec::new();
     for (cat, label) in groups {
-        let group: Vec<&Item> = items
-            .iter()
-            .filter(|it| {
-                let c = if it.category.is_empty() { "language" } else { it.category.as_str() };
-                c == cat
-            })
-            .collect();
+        let group: Vec<&Item> = items.iter().filter(|it| category_of(it) == cat).collect();
         if group.is_empty() {
             continue;
         }
-        rows.push(header_row(&label));
+        // page 0 = Instaladas, page 1 = Marketplace — só um aparece por vez.
+        rows.push(header_row(&label, cat, 0));
+        row_items.push(None);
+        rows.push(header_row(&label, cat, 1));
         row_items.push(None);
         for it in group {
             rows.push(skill_row(it));
@@ -175,6 +191,40 @@ fn build_rows(items: &[Item]) -> (Vec<SkillRow>, Vec<Option<Item>>) {
         }
     }
     (rows, row_items)
+}
+
+// ---------------------------------------------------------------------------
+// Reconta os cabeçalhos: cada cabeçalho (page, categoria) ganha o nº de skills
+// que estão AGORA na sua página (Instaladas = state != "missing"; Marketplace =
+// state == "missing"). count==0 → o Slint esconde o cabeçalho. Roda no event
+// loop (só usa o modelo do app; nada de dados !Send).
+// ---------------------------------------------------------------------------
+fn recompute_headers(app: &AppWindow) {
+    let rows = app.get_rows();
+    let n = rows.row_count();
+    for i in 0..n {
+        let Some(mut h) = rows.row_data(i) else { continue };
+        if !h.is_header {
+            continue;
+        }
+        let mut count = 0;
+        for j in 0..n {
+            if let Some(r) = rows.row_data(j) {
+                if r.is_header || r.category != h.category {
+                    continue;
+                }
+                let missing = r.state == "missing";
+                // page 0 = Instaladas (não-missing); page 1 = Marketplace (missing).
+                if (h.page == 1 && missing) || (h.page == 0 && !missing) {
+                    count += 1;
+                }
+            }
+        }
+        if h.count != count {
+            h.count = count;
+            rows.set_row_data(i, h);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +264,7 @@ fn post_versions(weak: Weak<AppWindow>, idx: usize, installed: Option<String>, l
                 rows.set_row_data(idx, r);
             }
             update_status(&app);
+            recompute_headers(&app);
         }
     });
 }
@@ -265,6 +316,7 @@ fn post_row_result(weak: Weak<AppWindow>, idx: usize, install: bool, res: Result
                 rows.set_row_data(idx, r);
             }
             update_status(&app);
+            recompute_headers(&app);
         }
     });
 }
@@ -276,6 +328,7 @@ fn post_batch_done(weak: Weak<AppWindow>, ok: usize, err: usize) {
             app.set_busy(false);
             let toast = tf("gui.batch_done", &[("ok", &ok.to_string()), ("err", &err.to_string())]);
             app.set_status(toast.into());
+            recompute_headers(&app);
         }
     });
 }
@@ -381,11 +434,18 @@ fn collect_ops(
     ops
 }
 
-fn is_pending(r: &SkillRow) -> bool {
-    r.state == "missing" || r.state == "outdated"
+/// NÃO instalada (pertence ao Marketplace).
+fn is_missing(r: &SkillRow) -> bool {
+    r.state == "missing"
 }
+/// Instalada (pertence a Instaladas) — qualquer estado que não seja "missing".
 fn is_installed(r: &SkillRow) -> bool {
     r.state != "missing"
+}
+/// Instalada E desatualizada (installed Some E latest > installed). É o ÚNICO
+/// alvo de "Atualizar tudo"/"Atualizar selecionadas": jamais instala nova.
+fn is_outdated(r: &SkillRow) -> bool {
+    r.state == "outdated"
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -401,6 +461,13 @@ fn main() -> Result<(), slint::PlatformError> {
     install_i18n(&app);
     app.set_rows(ModelRc::from(model.clone()));
     update_status(&app);
+    recompute_headers(&app); // esconde cabeçalhos de página sem itens
+
+    // Página inicial: Instaladas (0). Se NADA estiver instalado, abre no
+    // Marketplace (1) — senão o usuário cai numa lista vazia.
+    if !model.iter().any(|r| !r.is_header && is_installed(&r)) {
+        app.set_active_tab(1);
+    }
 
     // Resolve o latest de todas as skills assim que a janela sobe (não bloqueia).
     kick_resolve_all(&app.as_weak(), &row_items);
@@ -417,13 +484,21 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- selecionar todas / pendentes / nenhuma ----
+    // ---- selecionar todas (da PÁGINA ativa) ----
+    // Instaladas (tab 0) → todas as instaladas; Marketplace (tab 1) → todas as
+    // não-instaladas. Não toca em linhas da outra página.
     {
+        let weak = app.as_weak();
         let model = model.clone();
         app.on_select_all(move || {
+            let tab = weak.upgrade().map(|a| a.get_active_tab()).unwrap_or(0);
             for i in 0..model.row_count() {
                 if let Some(mut r) = model.row_data(i) {
-                    if !r.is_header {
+                    if r.is_header {
+                        continue;
+                    }
+                    let on_page = if tab == 1 { is_missing(&r) } else { is_installed(&r) };
+                    if on_page && !r.selected {
                         r.selected = true;
                         model.set_row_data(i, r);
                     }
@@ -431,13 +506,14 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
+    // ---- selecionar pendentes (só Instaladas): instaladas-DESATUALIZADAS ----
     {
         let model = model.clone();
         app.on_select_pending(move || {
             for i in 0..model.row_count() {
                 if let Some(mut r) = model.row_data(i) {
                     if !r.is_header {
-                        r.selected = is_pending(&r);
+                        r.selected = is_outdated(&r); // nunca marca uma não-instalada
                         model.set_row_data(i, r);
                     }
                 }
@@ -470,11 +546,11 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- ação por-linha: instalar/atualizar ----
+    // ---- Marketplace: ação por-linha INSTALAR ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
-        app.on_row_primary(move |idx| {
+        app.on_row_install(move |idx| {
             let i = idx as usize;
             if let Some(Some(it)) = row_items.get(i) {
                 run_batch(weak.clone(), vec![(i, true, it.clone())]);
@@ -482,7 +558,19 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- ação por-linha: remover ----
+    // ---- Instaladas: ação por-linha ATUALIZAR ----
+    {
+        let weak = app.as_weak();
+        let row_items = row_items.clone();
+        app.on_row_update(move |idx| {
+            let i = idx as usize;
+            if let Some(Some(it)) = row_items.get(i) {
+                run_batch(weak.clone(), vec![(i, true, it.clone())]);
+            }
+        });
+    }
+
+    // ---- Instaladas: ação por-linha DESINSTALAR ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -494,19 +582,31 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- instalar/atualizar selecionadas (pendentes) ----
+    // ---- Marketplace: INSTALAR selecionadas (só as não-instaladas) ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
         app.on_install_selected(move || {
             if let Some(app) = weak.upgrade() {
-                let ops = collect_ops(&app, &row_items, true, |r| r.selected && is_pending(r));
+                let ops = collect_ops(&app, &row_items, true, |r| r.selected && is_missing(r));
                 run_batch(weak.clone(), ops);
             }
         });
     }
 
-    // ---- remover selecionadas (instaladas) ----
+    // ---- Instaladas: ATUALIZAR selecionadas (só instaladas-desatualizadas) ----
+    {
+        let weak = app.as_weak();
+        let row_items = row_items.clone();
+        app.on_update_selected(move || {
+            if let Some(app) = weak.upgrade() {
+                let ops = collect_ops(&app, &row_items, true, |r| r.selected && is_outdated(r));
+                run_batch(weak.clone(), ops);
+            }
+        });
+    }
+
+    // ---- Instaladas: DESINSTALAR selecionadas (só instaladas) ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -518,13 +618,15 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- atualizar tudo que está pendente ----
+    // ---- Instaladas: ATUALIZAR TUDO ----
+    // GARANTIA: só instaladas-DESATUALIZADAS (is_outdated ⟺ installed Some E
+    // latest > installed). JAMAIS instala uma skill não instalada.
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
         app.on_update_all(move || {
             if let Some(app) = weak.upgrade() {
-                let ops = collect_ops(&app, &row_items, true, is_pending);
+                let ops = collect_ops(&app, &row_items, true, is_outdated);
                 run_batch(weak.clone(), ops);
             }
         });

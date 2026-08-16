@@ -1,8 +1,9 @@
 # schematize_gui_slint — schematize em Slint (migração incremental)
 
 Migração **incremental** da GUI do schematize de [egui](../schematize_cli_rs/src/gui.rs)
-para o toolkit [**Slint**](https://slint.dev). Este crate é a base da nova GUI; começa pela
-**aba _Skills_**, agora um **GESTOR funcional de verdade** (dados e ações reais).
+para o toolkit [**Slint**](https://slint.dev). Este crate é a base da nova GUI; a gestão de
+skills está dividida em **duas páginas de topo — _Instaladas_ e _Marketplace_** — como
+**GESTOR funcional de verdade** (dados e ações reais).
 
 > ⚠️ Enquanto o Slint não chega a paridade, **quem shippa é a GUI egui** em
 > `schematize_cli_rs/` (abas Skills + Overdev + Grafo). Este crate **não toca** em nada
@@ -11,21 +12,32 @@ para o toolkit [**Slint**](https://slint.dev). Este crate é a base da nova GUI;
 
 ---
 
-## O que já funciona (1º incremento: aba Skills)
+## O que já funciona (duas páginas: Instaladas + Marketplace)
 
-Uma janela única com a **aba Skills** como gestor real:
+Duas páginas de topo sobre o **mesmo modelo de linhas** (o estado da skill decide a
+página); a lista é **agrupada por categoria** — _Base & Arquitetura_ / _Linguagens_ /
+_Ferramentas externas_ (taxonomia `base|language|external` do catálogo).
 
-- **Lista agrupada por categoria** — _Base & Arquitetura_ / _Linguagens_ /
-  _Ferramentas externas_ (taxonomia `base|language|external` do catálogo).
-- Por linha: **checkbox de seleção** (custom, temático), **nome da skill**, **selo
-  `✓ Verificado`**, coluna **Autor** (`sponsor.name`, **clicável** → abre `sponsor.url`
-  via `xdg-open`), **versão instalada** e **latest** REAIS, e uma **pill de estado**
-  derivado (_Não instalada_ / _Atualizada_ / _Desatualizada (X→Y)_ / _…carregando_).
-- **Ações reais, em massa e em PARALELO**: botões _Instalar selecionadas_, _Remover
-  selecionadas_, _Atualizar tudo_, seleção rápida (_todas/pendentes/nenhuma_) e ações
-  **por-linha** (instalar/atualizar/remover). Cada operação roda numa thread própria
+- **Marketplace** = skills **NÃO instaladas** (`installed_version == None`, estado
+  `missing`). É a página de **descobrir/instalar**. Por linha: **nome**, **selo
+  verificado** (só um _check_ discreto + tooltip), **Autor** clicável, **latest** e um
+  botão **Instalar** grande/óbvio. Ação em massa: _Instalar selecionadas_.
+- **Instaladas** = skills **instaladas** (`installed_version == Some`). Por linha:
+  **nome + check**, **Autor**, **instalada** vs **latest**, **pill de estado** e os botões
+  **Atualizar** (habilitado só se _desatualizada_) e **Desinstalar**. Ações em massa:
+  **Atualizar tudo**, _Atualizar selecionadas_, _Desinstalar selecionadas_ e
+  _Selecionar pendentes_.
+- **"Atualizar tudo" NUNCA instala skill nova** — vive na página _Instaladas_ e filtra
+  por `is_outdated` (estado `outdated` ⟺ `installed Some` **E** `latest > installed`); uma
+  skill `missing` jamais entra no lote. O _Selecionar pendentes_ marca **só** as
+  instaladas-desatualizadas.
+- **Selo verificado** = um **check pequeno** (círculo de acento + ✓, estilo Instagram/X)
+  ao lado do nome, com **tooltip** no hover — **sem texto** no selo.
+- **Ações reais, em massa e em PARALELO**: cada operação roda numa thread própria
   (`std::thread::scope`) chamando `skills::install`/`skills::remove`; a linha mostra
   _instalando…_/_removendo…_ → _✓_/_erro_ e há um **toast final** com o placar do lote.
+  Ao instalar/desinstalar a skill **muda de página** sozinha (o estado muda; o Slint
+  refiltra e os cabeçalhos são recontados).
 - **Tema claro/escuro** caprichado, alternável em runtime (um clique repinta a janela
   inteira via a `global Theme`).
 - **i18n de verdade**: NADA de texto hardcoded no `.slint`. Todos os rótulos vêm de
@@ -111,12 +123,13 @@ libs `-dev` de janela (só das de fontconfig).
 | `cargo build` (debug) | ✅ **compila limpo, sem warnings** (com `pkg-config` presente; no sandbox, via shim) |
 | `cargo build --release` | ✅ compila (LTO + `opt-level="z"`) |
 | Dep de path `schematize` sem feature `gui` | ✅ confirmado — `eframe`/`egui`/`rfd` **ausentes** do `Cargo.lock` |
-| Sobe o event loop sem panic | ✅ rodou ~6s sob Wayland/KDE (SIGTERM ao fim, sem panic); catálogo lido com 18 skills via `registry::catalog()` |
-| Abre a janela / renderiza | ⚠️ **não verificado visualmente** — o agente de validação é headless (sem captura de tela). A janela foi **criada** no compositor Wayland e o processo permaneceu vivo, mas o acabamento é o descrito no código, **não confirmado a olho**. |
+| Sobe o event loop sem panic | ✅ rodou ~6s sob Wayland/KDE (timeout/SIGTERM ao fim, exit 124, sem panic); catálogo lido com 18 skills via `registry::catalog()` |
+| Abre a janela / renderiza | ⚠️ **não verificado visualmente** — o agente de validação é headless (sem captura de tela). A janela foi **criada** no compositor Wayland e o processo permaneceu vivo, mas o acabamento (as duas páginas, o check do selo, os botões) é o descrito no código, **não confirmado a olho**. |
 
-Assíncrono/ações também **não foram exercidos a olho** (sem interação de UI possível no
-headless); a lógica é a mesma do `run_batch` do egui, reusando `skills::install/remove` do
-lib. O locale detectado no ambiente foi `pt`.
+Assíncrono/ações (incluindo a **troca de página** ao instalar/desinstalar e a recontagem
+de cabeçalhos) **não foram exercidos a olho** (sem interação de UI possível no headless); a
+lógica é a mesma do `run_batch` do egui, reusando `skills::install/remove` do lib. O locale
+detectado no ambiente foi `pt`.
 
 ---
 
