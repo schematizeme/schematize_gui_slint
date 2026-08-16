@@ -158,6 +158,11 @@ export global L {
     in-out property <string> add-dev-dir;         // "Adicionar diretório…"
     in-out property <string> dev-dirs-empty;      // empty-state dos dev_dirs
     in-out property <string> remove;              // tooltip "remover"
+    // ---- Projetos fixados (pins) ----
+    in-out property <string> pinned-projects;     // título "Projetos fixados"
+    in-out property <string> pin-folder;          // botão "Fixar pasta…"
+    in-out property <string> unpin;               // tooltip/botão "Desafixar"
+    in-out property <string> pin-hint;            // texto de ajuda do pin
     in-out property <string> no-overdev;          // empty-state: sem run de overdev
     in-out property <string> od-decisions;        // "Decisões"
     in-out property <string> od-plan;             // "Plano"
@@ -850,6 +855,7 @@ export component AppWindow inherits Window {
     // ---- aba Overdev ----
     in property <[ProjItem]> od-projects;      // seletor de projeto (detectados + recentes)
     in property <[string]> od-dev-dirs;         // diretórios de desenvolvimento cadastrados
+    in property <[string]> od-pinned;           // pastas FIXADAS como projeto (pins)
     in-out property <string> od-current;         // nome do projeto atual ("" = nenhum)
     in-out property <bool> od-has-project: false;
     in-out property <bool> od-has-overdev: false;
@@ -952,6 +958,8 @@ export component AppWindow inherits Window {
     callback od-reload();               // re-sonda dev_dirs + recarrega o projeto
     callback od-add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
     callback od-remove-dev-dir(string); // remove um diretório de desenvolvimento
+    callback od-pin-folder();           // fixa uma pasta como projeto (picker nativo → pin_project)
+    callback od-unpin(string);          // desafixa uma pasta fixada (unpin_project)
     callback od-open-browser();         // abre o painel HTML do projeto no navegador
     // ---- Fase 3: marcar-humano + editor + notas/correção ----
     callback od-mark-human(int);        // fecha o i-ésimo humano aberto (- [H ]→- [H x])
@@ -2653,6 +2661,54 @@ export component AppWindow inherits Window {
                             VerticalLayout {
                                 alignment: center;
                                 Text { text: dd; font-size: 12.5px; color: Theme.text-dim; overflow: elide; }
+                            }
+                        }
+                    }
+                }
+                // ---- Projetos fixados (pins) ----
+                // Uma pasta fixada vira UM projeto no seletor mesmo sem marcador
+                // git — útil pra workspace/monorepo de microserviços.
+                Rectangle { height: 1px; background: Theme.border; }
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.pinned-projects; font-size: 15px; font-weight: 800; color: Theme.text; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.pin-folder; primary: true; small: true; clicked => { root.od-pin-folder(); } }
+                    }
+                }
+                Text {
+                    text: L.pin-hint;
+                    font-size: 11.5px;
+                    color: Theme.text-dim;
+                    wrap: word-wrap;
+                }
+                if root.od-pinned.length > 0: ScrollView {
+                    max-height: 130px;
+                    VerticalLayout {
+                        spacing: 6px;
+                        for pp[ppi] in root.od-pinned: HorizontalLayout {
+                            spacing: 8px;
+                            VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    width: 24px;
+                                    height: 24px;
+                                    border-radius: 6px;
+                                    background: pxta.has-hover ? Theme.warn.transparentize(0.85) : transparent;
+                                    border-width: 1px;
+                                    border-color: Theme.border;
+                                    Text { text: "✕"; font-size: 11px; color: Theme.text-dim; }
+                                    pxta := TouchArea { mouse-cursor: pointer; clicked => { root.od-unpin(pp); } }
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: pp; font-size: 12.5px; color: Theme.text-dim; overflow: elide; }
                             }
                         }
                     }

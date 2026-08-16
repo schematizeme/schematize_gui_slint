@@ -127,6 +127,14 @@ fn install_i18n(app: &AppWindow) {
     l.set_add_dev_dir(t("gui.add_dev_dir").into());
     l.set_dev_dirs_empty(t("gui.dev_dirs_empty").into());
     l.set_remove(t("gui.remove").into());
+    // Projetos fixados (pins) — chaves NOVAS com fallback embutido via `tor`.
+    l.set_pinned_projects(tor("gui.pinned_projects", "Projetos fixados").into());
+    l.set_pin_folder(tor("gui.pin_folder", "Fixar pasta…").into());
+    l.set_unpin(tor("gui.unpin", "Desafixar").into());
+    l.set_pin_hint(tor(
+        "gui.pin_hint",
+        "Uma pasta fixada vira UM projeto no selector — útil pra workspace de microserviços.",
+    ).into());
     l.set_no_overdev(t("gui.no_overdev").into());
     l.set_od_decisions(t("gui.od_decisions").into());
     l.set_od_plan(t("gui.od_plan").into());
@@ -933,13 +941,21 @@ fn mark_human_done_at(root: &Path, index: i32) -> Result<(), String> {
     std::fs::write(&path, out.join("\n")).map_err(|e| e.to_string())
 }
 
-/// Re-sonda dev_dirs + projetos e reconstrói os modelos do seletor e da lista de dev_dirs.
-fn refresh_proj_models(proj_model: &VecModel<ProjItem>, dev_model: &VecModel<SharedString>) {
+/// Re-sonda dev_dirs + pins + projetos e reconstrói os modelos do seletor, da lista
+/// de dev_dirs e da lista de pastas FIXADAS. O scan agora inclui os pins (pastas
+/// fixadas pelo usuário) — elas aparecem no seletor mesmo sem marcador git.
+fn refresh_proj_models(
+    proj_model: &VecModel<ProjItem>,
+    dev_model: &VecModel<SharedString>,
+    pin_model: &VecModel<SharedString>,
+) {
     let dev = config::dev_dirs();
-    let projs = projects::scan(&dev);
+    let pins = config::projects();
+    let projs = projects::scan_with_pins(&dev, &pins);
     let recent = config::recent_projects();
     proj_model.set_vec(build_proj_items(&projs, &recent));
     dev_model.set_vec(dev.into_iter().map(SharedString::from).collect::<Vec<SharedString>>());
+    pin_model.set_vec(pins.into_iter().map(SharedString::from).collect::<Vec<SharedString>>());
 }
 
 /// Carrega o estado do overdev do `proj` (ou limpa se None) nas propriedades do app.
@@ -1015,6 +1031,7 @@ fn select_project(
     items: &VecModel<OverItem>,
     proj_model: &VecModel<ProjItem>,
     dev_model: &VecModel<SharedString>,
+    pin_model: &VecModel<SharedString>,
     cur: &RefCell<Option<PathBuf>>,
     path: PathBuf,
 ) {
@@ -1023,7 +1040,7 @@ fn select_project(
     *cur.borrow_mut() = Some(abs.clone());
     load_overdev_into(app, items, Some(&abs));
     // reflete o novo recente no seletor.
-    refresh_proj_models(proj_model, dev_model);
+    refresh_proj_models(proj_model, dev_model, pin_model);
 }
 
 // ===========================================================================
@@ -2144,11 +2161,13 @@ fn main() -> Result<(), slint::PlatformError> {
     // Modelos: seletor de projeto (detectados + recentes), dev_dirs, e checklist.
     let od_proj_model = Rc::new(VecModel::<ProjItem>::from(Vec::new()));
     let od_dev_model = Rc::new(VecModel::<SharedString>::from(Vec::new()));
+    let od_pin_model = Rc::new(VecModel::<SharedString>::from(Vec::new()));
     let od_items_model = Rc::new(VecModel::<OverItem>::from(Vec::new()));
     app.set_od_projects(ModelRc::from(od_proj_model.clone()));
     app.set_od_dev_dirs(ModelRc::from(od_dev_model.clone()));
+    app.set_od_pinned(ModelRc::from(od_pin_model.clone()));
     app.set_od_items(ModelRc::from(od_items_model.clone()));
-    refresh_proj_models(&od_proj_model, &od_dev_model);
+    refresh_proj_models(&od_proj_model, &od_dev_model, &od_pin_model);
     // Projeto atual (lado Rust) — persiste entre execuções via recent_projects.
     let od_current: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
     // Fase 4: flag de parada da sessão acoplada (o botão Parar a levanta; o worker
@@ -2172,6 +2191,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let items = od_items_model.clone();
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
+        let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gt = graph_timer.clone();
         let gs = graph_state.clone();
@@ -2182,7 +2202,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 return;
             }
             if let Some(app) = weak.upgrade() {
-                select_project(&app, &items, &pm, &dm, &cur, PathBuf::from(path.to_string()));
+                select_project(&app, &items, &pm, &dm, &pnm, &cur, PathBuf::from(path.to_string()));
                 let p = cur.borrow().clone();
                 graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
             }
@@ -2194,6 +2214,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let items = od_items_model.clone();
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
+        let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gt = graph_timer.clone();
         let gs = graph_state.clone();
@@ -2202,7 +2223,7 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_od_open_folder(move || {
             if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_folder() {
                 if let Some(app) = weak.upgrade() {
-                    select_project(&app, &items, &pm, &dm, &cur, dir);
+                    select_project(&app, &items, &pm, &dm, &pnm, &cur, dir);
                     let p = cur.borrow().clone();
                     graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
                 }
@@ -2233,13 +2254,14 @@ fn main() -> Result<(), slint::PlatformError> {
         let items = od_items_model.clone();
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
+        let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gt = graph_timer.clone();
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
         app.on_od_reload(move || {
-            refresh_proj_models(&pm, &dm);
+            refresh_proj_models(&pm, &dm, &pnm);
             if let Some(app) = weak.upgrade() {
                 let p = cur.borrow().clone();
                 load_overdev_into(&app, &items, p.as_deref());
@@ -2251,11 +2273,12 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
+        let pnm = od_pin_model.clone();
         app.on_od_add_dev_dir(move || {
             if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.add_dev_dir")).pick_folder() {
                 let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
                 config::add_dev_dir(&abs.to_string_lossy());
-                refresh_proj_models(&pm, &dm);
+                refresh_proj_models(&pm, &dm, &pnm);
             }
         });
     }
@@ -2263,9 +2286,34 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
+        let pnm = od_pin_model.clone();
         app.on_od_remove_dev_dir(move |path| {
             config::remove_dev_dir(&path.to_string());
-            refresh_proj_models(&pm, &dm);
+            refresh_proj_models(&pm, &dm, &pnm);
+        });
+    }
+    // FIXAR uma pasta como projeto (picker nativo → config::pin_project). Uma pasta
+    // fixada vira UM projeto no seletor mesmo sem marcador git (workspace/monorepo).
+    {
+        let pm = od_proj_model.clone();
+        let dm = od_dev_model.clone();
+        let pnm = od_pin_model.clone();
+        app.on_od_pin_folder(move || {
+            if let Some(dir) = rfd::FileDialog::new().set_title(tor("gui.pin_folder", "Fixar pasta…")).pick_folder() {
+                let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
+                config::pin_project(&abs.to_string_lossy());
+                refresh_proj_models(&pm, &dm, &pnm);
+            }
+        });
+    }
+    // DESAFIXAR uma pasta fixada (config::unpin_project).
+    {
+        let pm = od_proj_model.clone();
+        let dm = od_dev_model.clone();
+        let pnm = od_pin_model.clone();
+        app.on_od_unpin(move |path| {
+            config::unpin_project(&path.to_string());
+            refresh_proj_models(&pm, &dm, &pnm);
         });
     }
     // abrir o painel HTML do projeto atual no navegador.
