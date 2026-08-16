@@ -1,0 +1,34 @@
+[package]
+name = "schematize-gui-slint"
+version = "0.1.0"
+edition = "2021"
+description = "SPIKE (prova de conceito) — aba Skills do schematize reimplementada em Slint, para avaliar salto visual sobre a GUI atual em egui. NÃO é o binário que shippa."
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "schematize-gui-slint"
+path = "src/main.rs"
+
+[dependencies]
+# GUI toolkit. Backend padrão em desktop Linux = winit (cobre Wayland E X11);
+# renderer padrão = femtovg (OpenGL/GLES). NÃO ativamos renderer-skia porque
+# skia exige cmake (ausente neste host). fontconfig é carregada por dlopen em
+# runtime, então o build NÃO precisa de pkg-config nem headers de fontconfig.
+slint = { version = "1.17", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit",
+    "renderer-femtovg",
+    "accessibility",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[build-dependencies]
+slint-build = "1.17"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
