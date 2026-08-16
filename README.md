@@ -1,42 +1,54 @@
-# schematize_gui_slint — SPIKE de UI em Slint
+# schematize_gui_slint — schematize em Slint (migração incremental)
 
-**Prova de conceito isolada.** Reimplementa **só a aba _Skills_** da GUI atual do
-schematize (hoje em [egui](../schematize_cli_rs/src/gui.rs)) usando o toolkit
-[**Slint**](https://slint.dev), para avaliarmos um **salto visual**.
+Migração **incremental** da GUI do schematize de [egui](../schematize_cli_rs/src/gui.rs)
+para o toolkit [**Slint**](https://slint.dev). Este crate é a base da nova GUI; começa pela
+**aba _Skills_**, agora um **GESTOR funcional de verdade** (dados e ações reais).
 
-> ⚠️ Isto **NÃO é o binário que shippa.** A GUI que vai pro usuário continua sendo a
-> de egui em `schematize_cli_rs/`. Este crate é descartável / avaliativo e **não toca**
-> em nada fora de `schematize_gui_slint/`.
+> ⚠️ Enquanto o Slint não chega a paridade, **quem shippa é a GUI egui** em
+> `schematize_cli_rs/` (abas Skills + Overdev + Grafo). Este crate **não toca** em nada
+> fora de `schematize_gui_slint/`, exceto **adicionar chaves i18n** em
+> `schematize_cli_rs/src/i18n/*.json` (única exceção; sem mexer em build/versão do CLI).
 
 ---
 
-## O que o spike mostra
+## O que já funciona (1º incremento: aba Skills)
 
-Uma janela única com a **aba Skills** bem acabada:
+Uma janela única com a **aba Skills** como gestor real:
 
 - **Lista agrupada por categoria** — _Base & Arquitetura_ / _Linguagens_ /
-  _Ferramentas externas_ (mesma taxonomia `base|language|external` do `catalog.json`).
+  _Ferramentas externas_ (taxonomia `base|language|external` do catálogo).
 - Por linha: **checkbox de seleção** (custom, temático), **nome da skill**, **selo
-  `✓ Verificado`**, coluna **Autor** (`sponsor.name`), **versão instalada** e **latest**
-  (placeholders `—` no spike), e uma **pill de estado** (_Instalar_ / _Atualizar_ / _Em dia_).
+  `✓ Verificado`**, coluna **Autor** (`sponsor.name`, **clicável** → abre `sponsor.url`
+  via `xdg-open`), **versão instalada** e **latest** REAIS, e uma **pill de estado**
+  derivado (_Não instalada_ / _Atualizada_ / _Desatualizada (X→Y)_ / _…carregando_).
+- **Ações reais, em massa e em PARALELO**: botões _Instalar selecionadas_, _Remover
+  selecionadas_, _Atualizar tudo_, seleção rápida (_todas/pendentes/nenhuma_) e ações
+  **por-linha** (instalar/atualizar/remover). Cada operação roda numa thread própria
+  (`std::thread::scope`) chamando `skills::install`/`skills::remove`; a linha mostra
+  _instalando…_/_removendo…_ → _✓_/_erro_ e há um **toast final** com o placar do lote.
 - **Tema claro/escuro** caprichado, alternável em runtime (um clique repinta a janela
-  inteira via a `global Theme`), com cor de acento, tipografia legível, respiro generoso,
-  linhas zebradas e cabeçalho/toolbar próprios.
-- Botões **"Instalar selecionadas"** e **"Atualizar tudo"** — **no-op** neste spike
-  (logam no stderr e atualizam o texto de status, tipo _toast_). O foco é o **visual**;
-  a mecânica real (download/instalação/versão) já existe no crate `schematize`.
+  inteira via a `global Theme`).
+- **i18n de verdade**: NADA de texto hardcoded no `.slint`. Todos os rótulos vêm de
+  `schematize::i18n` (11 locales) injetados no `global L`; o locale é detectado como na
+  GUI egui (`config → $SCHEMATIZE_LANG → $LANG/$LC_*` → `en`).
 
-### Dados
-Lê o **`catalog.json` do crate irmão** direto por `serde` (sem depender do crate
-`schematize` — evita ciclos de features e mantém o spike isolado). Ordem de resolução:
+### Dados e ações — reusam o crate `schematize`
+Depende do crate irmão por **path**, **sem a feature `gui`** (não puxa egui/rfd):
 
-1. `../schematize_cli_rs/catalog.json` (e mais dois candidatos) em disco;
-2. **fallback**: snapshot embutido em build-time via `include_str!` (read-only; não
-   altera o outro crate).
+```toml
+schematize = { path = "../schematize_cli_rs", default-features = false }
+```
 
-As **versões instalada/latest são placeholders** (`—`) e o estado é sempre _Instalar_ —
-não há acesso à instalação real (`skills::installed_version` / `resolve_latest` vivem no
-crate `schematize`, deliberadamente não linkado aqui).
+- Catálogo: `schematize::registry::catalog()` (índice remoto com fallback embutido);
+- Versão instalada: `skills::installed_version(&Item)` (lê `~/.claude/skills/<dir>/VERSION`);
+- Latest: `skills::resolve_latest(&Item)` — **rede**, resolvido **assíncrono** (uma thread
+  por skill; enquanto não volta, a coluna mostra `…`), entregue à UI por
+  `slint::invoke_from_event_loop` + `Weak<AppWindow>::upgrade` (padrão thread→UI do Slint);
+- Instalar/remover: `skills::install`/`skills::remove` (thread-safe no lib via `STATE_LOCK`).
+
+### Abas Overdev e Grafo
+Ficam na barra de abas com um selo **"em breve"** e um painel placeholder — a estrutura já
+existe, mas a implementação é dos **próximos incrementos** (não neste).
 
 ---
 
@@ -96,14 +108,15 @@ libs `-dev` de janela (só das de fontconfig).
 
 | Item | Estado |
 |---|---|
-| `cargo build` (debug) | ✅ **compila limpo** (com `pkg-config` presente; no sandbox, via shim) |
+| `cargo build` (debug) | ✅ **compila limpo, sem warnings** (com `pkg-config` presente; no sandbox, via shim) |
 | `cargo build --release` | ✅ compila (LTO + `opt-level="z"`) |
-| Abre a janela / renderiza | ⚠️ **não verificado visualmente** — o ambiente de validação é headless-equivalente (sem tooling de captura confiável). O processo **subiu e rodou o event loop sem panic** e a detecção de ambiente logou Wayland/KDE corretamente. |
+| Dep de path `schematize` sem feature `gui` | ✅ confirmado — `eframe`/`egui`/`rfd` **ausentes** do `Cargo.lock` |
+| Sobe o event loop sem panic | ✅ rodou ~6s sob Wayland/KDE (SIGTERM ao fim, sem panic); catálogo lido com 18 skills via `registry::catalog()` |
+| Abre a janela / renderiza | ⚠️ **não verificado visualmente** — o agente de validação é headless (sem captura de tela). A janela foi **criada** no compositor Wayland e o processo permaneceu vivo, mas o acabamento é o descrito no código, **não confirmado a olho**. |
 
-O `.slint` compila (checagem de tipos/layout do compilador do Slint passa no build), a
-detecção de ambiente funciona e o `catalog.json` é lido (18 skills). **Não foi possível
-ver a janela** — sem captura de tela, o acabamento visual é o descrito no código, não
-confirmado a olho.
+Assíncrono/ações também **não foram exercidos a olho** (sem interação de UI possível no
+headless); a lógica é a mesma do `run_batch` do egui, reusando `skills::install/remove` do
+lib. O locale detectado no ambiente foi `pt`.
 
 ---
 
@@ -151,21 +164,26 @@ egui já inclui as três abas). Com skia (não usado aqui) seria bem mais.
 
 ## Caminho para paridade com o hub egui
 
-Pra virar substituto do hub atual, faltaria portar (fora do escopo do spike):
+Pra virar substituto do hub atual, ainda falta portar:
 
 1. **Abas Overdev e Grafo** — Overdev é lista/seções (fácil no Slint); o **Grafo
    force-directed** (física + pan/zoom + hit-test + labels) precisaria de `Path`/canvas ou
-   uma textura renderizada por fora (o custo real da migração está aqui).
+   uma textura renderizada por fora (o custo real da migração está aqui). _Placeholders
+   "em breve" já na barra de abas._
 2. **Picker de pasta nativo** — hoje `rfd` (portal XDG). `rfd` é agnóstico de toolkit,
-   então integra com o event loop do Slint sem GTK.
-3. **Self-update + notificações de desktop** (`notify-rust`, `pkexec`, relançar binário) —
-   independentes do toolkit; portam quase 1:1.
-4. **i18n 11 locales** — migrar do `i18n::t()` caseiro para `@tr()`/gettext do Slint (ou
-   manter o `t()` e só injetar as strings via propriedades).
-5. **Instalação real** — reconectar `skills::install/remove`, `installed_version`,
-   `resolve_latest`, execução paralela e o modelo de progresso/estado.
+   então integra com o event loop do Slint sem GTK. (Usado só nas abas Overdev/Grafo.)
+3. **Self-update do CLI + notificações de desktop** (`notify-rust`, `pkexec`, relançar
+   binário) — independentes do toolkit; portam quase 1:1. _Ainda não portado: a linha
+   "schematize (CLI)" do gestor egui e o botão de self-update não estão nesta tela._
+4. **Troca de idioma em runtime** — o locale é **detectado** na subida (como a GUI egui) e
+   todas as strings vêm do `i18n` da casa via o `global L`, mas ainda **não há combo** pra
+   trocar de idioma sem reabrir (re-injetar o `L` num callback é o passo que falta).
 6. **Fontes CJK/árabe/etc.** — o egui injeta fallbacks à mão pra matar "tofu"; no Slint,
    via fontconfig, o sistema já resolve (com os pacotes de fonte instalados).
+
+✅ **Feito neste incremento (5. Instalação real):** `skills::install/remove`,
+`installed_version`, `resolve_latest`, execução **paralela** e o modelo de
+progresso/estado por linha + toast — tudo ligado na aba Skills.
 
 ## Veredito (resumido)
 

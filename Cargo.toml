@@ -2,7 +2,7 @@
 name = "schematize-gui-slint"
 version = "0.1.0"
 edition = "2021"
-description = "SPIKE (prova de conceito) — aba Skills do schematize reimplementada em Slint, para avaliar salto visual sobre a GUI atual em egui. NÃO é o binário que shippa."
+description = "schematize em Slint (migração incremental) — aba Skills como GESTOR funcional (dados/ações reais via o crate `schematize`). A GUI egui segue shippando até o Slint chegar a paridade."
 license = "MIT"
 publish = false
 
@@ -22,8 +22,10 @@ slint = { version = "1.17", default-features = false, features = [
     "renderer-femtovg",
     "accessibility",
 ] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# Reusa a LÓGICA do crate irmão (catálogo + install/remove/versões + i18n) SEM
+# a GUI egui: default-features=false NÃO ativa a feature `gui` (eframe/rfd ficam
+# de fora). Nada de reimplementar registry/skills/i18n aqui.
+schematize = { path = "../schematize_cli_rs", default-features = false }
 
 [build-dependencies]
 slint-build = "1.17"

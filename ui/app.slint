@@ -1,15 +1,20 @@
 // ---------------------------------------------------------------------------
-// SPIKE — aba Skills do schematize em Slint.
-// Objetivo: mostrar o salto visual sobre a GUI atual em egui. Uma tela só,
-// bem acabada: lista agrupada por categoria, checkbox, selo de verificado,
-// coluna de autor, versões, pill de estado, tema claro/escuro caprichado.
-// Dados vêm do Rust (lê catalog.json). Botões chamam callbacks no Rust.
+// schematize — aba Skills em Slint (1º incremento REAL: gestor de verdade).
+//
+// O quê: a aba Skills como GESTOR funcional — dados reais (instalada/latest via
+// o crate `schematize`), estado derivado, ações reais (instalar/atualizar/remover
+// em massa e em paralelo). Estrutura já com as abas Overdev/Grafo como
+// placeholders ("em breve") para os próximos incrementos.
+//
+// i18n: NADA de texto hardcoded aqui — toda string estática vem do `global L`,
+// preenchido pelo Rust a partir de `schematize::i18n` (11 locales). Os textos
+// dinâmicos (categorias, estado, versões, toasts) chegam nas SkillRow / status.
 // ---------------------------------------------------------------------------
 
 import { ScrollView } from "std-widgets.slint";
 
 // Uma linha do modelo. Pode ser um CABEÇALHO de categoria (is-header) ou uma
-// SKILL. Campos preenchidos pelo Rust a partir do catalog.json.
+// SKILL. Campos preenchidos/atualizados pelo Rust (catálogo + rede + ações).
 export struct SkillRow {
     is-header: bool,
     header-label: string,
@@ -18,10 +23,44 @@ export struct SkillRow {
     author-url: string,
     installed: string,
     latest: string,
-    state: string,        // "missing" | "outdated" | "current"
+    state: string,        // "missing" | "outdated" | "current" | "loading"
     state-label: string,
     verified: bool,
     selected: bool,
+    busy: bool,           // operação (instalar/remover) em andamento nesta linha
+    op-label: string,     // status transitório da linha ("instalando…", erro…)
+    op-error: bool,       // op-label é um erro? (colore em warn)
+}
+
+// Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.
+// Nenhuma string de interface é escrita à mão no .slint: o Rust seta tudo.
+export global L {
+    in-out property <string> window-title: "schematize";
+    in-out property <string> subtitle;
+    in-out property <string> theme-light;
+    in-out property <string> theme-dark;
+    in-out property <string> check;
+    in-out property <string> update-all;
+    in-out property <string> install-sel;
+    in-out property <string> remove-sel;
+    in-out property <string> sel-label;
+    in-out property <string> sel-all;
+    in-out property <string> sel-pending;
+    in-out property <string> sel-none;
+    in-out property <string> col-skill;
+    in-out property <string> col-author;
+    in-out property <string> col-installed;
+    in-out property <string> col-latest;
+    in-out property <string> col-state;
+    in-out property <string> col-actions;
+    in-out property <string> verified;
+    in-out property <string> tab-skills;
+    in-out property <string> tab-overdev;
+    in-out property <string> tab-graph;
+    in-out property <string> coming-soon;
+    in-out property <string> act-install;
+    in-out property <string> act-update;
+    in-out property <string> act-remove;
 }
 
 // Paleta central — um único ponto de verdade para claro/escuro. Trocar
@@ -46,6 +85,7 @@ export global Theme {
 // Checkbox próprio (controle total do visual + tema). Emite `toggled`.
 component Check inherits Rectangle {
     in property <bool> checked;
+    in property <bool> enabled: true;
     callback toggled();
     width: 20px;
     height: 20px;
@@ -53,6 +93,7 @@ component Check inherits Rectangle {
     border-width: 1.5px;
     border-color: checked ? Theme.accent : Theme.text-dim;
     background: checked ? Theme.accent : transparent;
+    opacity: enabled ? 1.0 : 0.4;
     animate background, border-color { duration: 120ms; }
     Text {
         text: "✓";
@@ -61,42 +102,85 @@ component Check inherits Rectangle {
         font-weight: 800;
         visible: root.checked;
     }
-    TouchArea { clicked => { root.toggled(); } }
+    TouchArea { enabled: root.enabled; clicked => { root.toggled(); } }
 }
 
-// Botão de ação com estilo próprio (primário/secundário).
+// Botão de ação com estilo próprio (primário/secundário, normal/compacto).
 component Btn inherits Rectangle {
     in property <string> label;
     in property <bool> primary: false;
     in property <bool> enabled: true;
+    in property <bool> small: false;
     callback clicked();
-    height: 38px;
-    border-radius: 9px;
+    height: small ? 30px : 38px;
+    border-radius: small ? 7px : 9px;
     background: primary
-        ? (ta.has-hover ? #6f9bff : Theme.accent)
-        : (ta.has-hover ? Theme.surface-2 : Theme.surface);
+        ? (ta.has-hover && enabled ? #6f9bff : Theme.accent)
+        : (ta.has-hover && enabled ? Theme.surface-2 : Theme.surface);
     border-width: primary ? 0px : 1px;
     border-color: Theme.border;
     opacity: enabled ? 1.0 : 0.45;
     animate background { duration: 120ms; }
     HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 16px;
+        padding-left: root.small ? 11px : 16px;
+        padding-right: root.small ? 11px : 16px;
         Text {
             text: root.label;
             vertical-alignment: center;
+            horizontal-alignment: center;
             color: primary ? #ffffff : Theme.text;
-            font-size: 14px;
+            font-size: small ? 12.5px : 14px;
             font-weight: 600;
         }
     }
     ta := TouchArea {
         enabled: root.enabled;
-        clicked => { root.clicked(); }
+        clicked => { if (root.enabled) { root.clicked(); } }
     }
 }
 
-// Pill de estado (Instalar / Atualizar / Em dia).
+// Aba do topo (rótulo + marca de "em breve" para as ainda não implementadas).
+component TabBtn inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+    in property <bool> soon: false;
+    callback clicked();
+    height: 34px;
+    border-radius: 8px;
+    background: active ? Theme.accent-soft : (ta.has-hover ? Theme.surface-2 : transparent);
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 6px;
+        Text {
+            text: root.label;
+            vertical-alignment: center;
+            color: active ? Theme.header-fg : Theme.text-dim;
+            font-size: 13.5px;
+            font-weight: active ? 700 : 600;
+        }
+        if root.soon: Rectangle {
+            y: (parent.height - self.height) / 2;
+            height: 18px;
+            width: soonlbl.preferred-width + 12px;
+            border-radius: 9px;
+            background: Theme.warn.transparentize(0.85);
+            border-width: 1px;
+            border-color: Theme.warn.transparentize(0.55);
+            soonlbl := Text {
+                text: L.coming-soon;
+                color: Theme.warn;
+                font-size: 10px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Pill de estado (Instalar / Atualizar / Em dia / carregando).
 component StatePill inherits Rectangle {
     in property <string> state;
     in property <string> label;
@@ -120,26 +204,37 @@ component StatePill inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
-    title: "schematize — Skills (spike Slint)";
-    preferred-width: 940px;
-    preferred-height: 660px;
-    min-width: 720px;
-    min-height: 460px;
+    title: L.window-title;
+    preferred-width: 1040px;
+    preferred-height: 680px;
+    min-width: 820px;
+    min-height: 480px;
     background: Theme.bg;
     default-font-size: 14px;
 
     in property <[SkillRow]> rows;
     in-out property <string> status: "";
+    in-out property <bool> busy: false;
+    // 0 = Skills (implementada), 1 = Overdev (placeholder), 2 = Grafo (placeholder)
+    in-out property <int> active-tab: 0;
+
     callback toggle(int);
-    callback install-selected();
-    callback update-all();
+    callback row-primary(int);   // instalar (missing) / atualizar (outdated) a linha i
+    callback row-remove(int);    // remover a linha i
+    callback open-author(int);   // abrir sponsor.url da linha i
+    callback install-selected(); // instalar/atualizar selecionadas pendentes
+    callback remove-selected();  // remover selecionadas instaladas
+    callback update-all();       // instalar/atualizar tudo que está pendente
+    callback check();            // rechecar versões (re-resolve latest)
+    callback select-all();
+    callback select-pending();
+    callback select-none();
 
     VerticalLayout {
         // ---- cabeçalho -------------------------------------------------
         Rectangle {
             height: 76px;
             background: Theme.surface;
-            border-width: 0px;
             HorizontalLayout {
                 padding-left: 24px;
                 padding-right: 24px;
@@ -153,7 +248,7 @@ export component AppWindow inherits Window {
                         color: Theme.text;
                     }
                     Text {
-                        text: "Gestor de skills · spike de UI em Slint";
+                        text: L.subtitle;
                         font-size: 12.5px;
                         color: Theme.text-dim;
                     }
@@ -162,7 +257,7 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     alignment: center;
                     Btn {
-                        label: Theme.dark ? "☀  Tema claro" : "🌙  Tema escuro";
+                        label: Theme.dark ? L.theme-light : L.theme-dark;
                         clicked => { Theme.dark = !Theme.dark; }
                     }
                 }
@@ -170,168 +265,312 @@ export component AppWindow inherits Window {
         }
         Rectangle { height: 1px; background: Theme.border; }
 
-        // ---- barra de ações -------------------------------------------
+        // ---- barra de abas --------------------------------------------
         Rectangle {
-            height: 66px;
+            height: 50px;
             background: Theme.bg;
             HorizontalLayout {
-                padding-left: 24px;
-                padding-right: 24px;
-                spacing: 12px;
-                VerticalLayout {
-                    alignment: center;
-                    Btn {
-                        label: "Instalar selecionadas";
-                        primary: true;
-                        clicked => { root.install-selected(); }
-                    }
+                padding-left: 20px;
+                padding-right: 20px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                spacing: 8px;
+                alignment: start;
+                TabBtn {
+                    label: L.tab-skills;
+                    active: root.active-tab == 0;
+                    clicked => { root.active-tab = 0; }
                 }
-                VerticalLayout {
-                    alignment: center;
-                    Btn {
-                        label: "Atualizar tudo";
-                        clicked => { root.update-all(); }
-                    }
+                TabBtn {
+                    label: L.tab-overdev;
+                    soon: true;
+                    active: root.active-tab == 1;
+                    clicked => { root.active-tab = 1; }
                 }
-                Rectangle {}  // espaçador
-                VerticalLayout {
-                    alignment: center;
-                    Text {
-                        text: root.status;
-                        font-size: 13px;
-                        color: Theme.text-dim;
-                        horizontal-alignment: right;
-                    }
+                TabBtn {
+                    label: L.tab-graph;
+                    soon: true;
+                    active: root.active-tab == 2;
+                    clicked => { root.active-tab = 2; }
                 }
-            }
-        }
-
-        // ---- cabeçalho de colunas -------------------------------------
-        Rectangle {
-            height: 34px;
-            background: Theme.surface-2;
-            HorizontalLayout {
-                padding-left: 24px;
-                padding-right: 24px;
-                spacing: 0px;
-                Rectangle { width: 34px; }
-                Text { width: 320px; text: "Skill"; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
-                Text { width: 200px; text: "Autor"; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
-                Text { width: 110px; text: "Instalada"; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
-                Text { width: 90px; text: "Latest"; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
-                Text { text: "Estado"; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
             }
         }
         Rectangle { height: 1px; background: Theme.border; }
 
-        // ---- lista rolável --------------------------------------------
-        ScrollView {
+        // ---- conteúdo da aba ativa ------------------------------------
+        if root.active-tab != 0: Rectangle {
+            background: Theme.bg;
             VerticalLayout {
-                padding-bottom: 16px;
-                for row[i] in root.rows: Rectangle {
-                    height: row.is-header ? 48px : 56px;
-                    background: row.is-header
-                        ? Theme.bg
-                        : (Math.mod(i, 2) == 0 ? Theme.stripe : Theme.bg);
+                alignment: center;
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: L.coming-soon;
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: Theme.text-dim;
+                    }
+                }
+            }
+        }
 
-                    // --- cabeçalho de categoria ---
-                    if row.is-header: HorizontalLayout {
-                        padding-left: 24px;
-                        padding-top: 18px;
-                        Text {
-                            text: row.header-label;
-                            font-size: 14px;
-                            font-weight: 800;
-                            color: Theme.header-fg;
+        if root.active-tab == 0: VerticalLayout {
+            // ---- barra de ações -------------------------------------------
+            Rectangle {
+                height: 62px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        Btn {
+                            label: L.install-sel;
+                            primary: true;
+                            enabled: !root.busy;
+                            clicked => { root.install-selected(); }
                         }
                     }
-
-                    // --- linha de skill ---
-                    if !row.is-header: HorizontalLayout {
-                        padding-left: 24px;
-                        padding-right: 24px;
-                        spacing: 0px;
-                        // checkbox
-                        VerticalLayout {
-                            width: 34px;
-                            alignment: center;
-                            Check {
-                                checked: row.selected;
-                                toggled => { root.toggle(i); }
-                            }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn {
+                            label: L.remove-sel;
+                            enabled: !root.busy;
+                            clicked => { root.remove-selected(); }
                         }
-                        // skill + selo verificado
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn {
+                            label: L.update-all;
+                            enabled: !root.busy;
+                            clicked => { root.update-all(); }
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn {
+                            label: L.check;
+                            enabled: !root.busy;
+                            clicked => { root.check(); }
+                        }
+                    }
+                    Rectangle {}  // espaçador
+                    VerticalLayout {
+                        alignment: center;
                         HorizontalLayout {
-                            width: 320px;
                             spacing: 8px;
-                            alignment: start;
+                            alignment: end;
                             VerticalLayout {
                                 alignment: center;
                                 Text {
-                                    text: row.slug;
-                                    font-size: 14.5px;
-                                    font-weight: 700;
-                                    color: Theme.text;
+                                    text: L.sel-label;
+                                    font-size: 12.5px;
+                                    color: Theme.text-dim;
                                 }
                             }
-                            if row.verified: VerticalLayout {
+                            Btn { label: L.sel-all; small: true; enabled: !root.busy; clicked => { root.select-all(); } }
+                            Btn { label: L.sel-pending; small: true; enabled: !root.busy; clicked => { root.select-pending(); } }
+                            Btn { label: L.sel-none; small: true; enabled: !root.busy; clicked => { root.select-none(); } }
+                        }
+                    }
+                }
+            }
+            // ---- linha de status/toast ------------------------------------
+            Rectangle {
+                height: 26px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    Text {
+                        text: root.status;
+                        font-size: 12.5px;
+                        color: Theme.text-dim;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            // ---- cabeçalho de colunas -------------------------------------
+            Rectangle {
+                height: 34px;
+                background: Theme.surface-2;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    spacing: 0px;
+                    Rectangle { width: 34px; }
+                    Text { width: 250px; text: L.col-skill; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { width: 150px; text: L.col-author; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { width: 90px; text: L.col-installed; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { width: 80px; text: L.col-latest; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { width: 150px; text: L.col-state; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: L.col-actions; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+
+            // ---- lista rolável --------------------------------------------
+            ScrollView {
+                VerticalLayout {
+                    padding-bottom: 16px;
+                    for row[i] in root.rows: Rectangle {
+                        height: row.is-header ? 48px : 56px;
+                        background: row.is-header
+                            ? Theme.bg
+                            : (Math.mod(i, 2) == 0 ? Theme.stripe : Theme.bg);
+
+                        // --- cabeçalho de categoria ---
+                        if row.is-header: HorizontalLayout {
+                            padding-left: 24px;
+                            padding-top: 18px;
+                            Text {
+                                text: row.header-label;
+                                font-size: 14px;
+                                font-weight: 800;
+                                color: Theme.header-fg;
+                            }
+                        }
+
+                        // --- linha de skill ---
+                        if !row.is-header: HorizontalLayout {
+                            padding-left: 24px;
+                            padding-right: 24px;
+                            spacing: 0px;
+                            // checkbox
+                            VerticalLayout {
+                                width: 34px;
+                                alignment: center;
+                                Check {
+                                    checked: row.selected;
+                                    enabled: !root.busy;
+                                    toggled => { root.toggle(i); }
+                                }
+                            }
+                            // skill + selo verificado
+                            HorizontalLayout {
+                                width: 250px;
+                                spacing: 8px;
+                                alignment: start;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: row.slug;
+                                        font-size: 14.5px;
+                                        font-weight: 700;
+                                        color: Theme.text;
+                                        overflow: elide;
+                                    }
+                                }
+                                if row.verified: VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        height: 20px;
+                                        width: badge.preferred-width + 16px;
+                                        border-radius: 10px;
+                                        background: Theme.good.transparentize(0.85);
+                                        border-width: 1px;
+                                        border-color: Theme.good.transparentize(0.5);
+                                        badge := Text {
+                                            text: "✓ " + L.verified;
+                                            color: Theme.good;
+                                            font-size: 11px;
+                                            font-weight: 700;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+                            }
+                            // autor (clicável → abre sponsor.url)
+                            VerticalLayout {
+                                width: 150px;
                                 alignment: center;
                                 Rectangle {
-                                    height: 20px;
-                                    width: badge.preferred-width + 16px;
-                                    border-radius: 10px;
-                                    background: Theme.good.transparentize(0.85);
-                                    border-width: 1px;
-                                    border-color: Theme.good.transparentize(0.5);
-                                    badge := Text {
-                                        text: "✓ Verificado";
-                                        color: Theme.good;
-                                        font-size: 11px;
-                                        font-weight: 700;
-                                        horizontal-alignment: center;
+                                    height: 24px;
+                                    HorizontalLayout {
+                                        alignment: start;
+                                        Text {
+                                            text: row.author;
+                                            font-size: 13.5px;
+                                            color: row.author-url != "" ? Theme.accent : Theme.text-dim;
+                                            overflow: elide;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                    authta := TouchArea {
+                                        enabled: row.author-url != "";
+                                        mouse-cursor: pointer;
+                                        clicked => { root.open-author(i); }
+                                    }
+                                }
+                            }
+                            // instalada
+                            VerticalLayout {
+                                width: 90px;
+                                alignment: center;
+                                Text { text: row.installed; font-size: 13.5px; color: Theme.text; }
+                            }
+                            // latest
+                            VerticalLayout {
+                                width: 80px;
+                                alignment: center;
+                                Text { text: row.latest; font-size: 13.5px; color: Theme.text-dim; }
+                            }
+                            // estado (pill)
+                            VerticalLayout {
+                                width: 150px;
+                                alignment: center;
+                                HorizontalLayout {
+                                    alignment: start;
+                                    StatePill { state: row.state; label: row.state-label; }
+                                }
+                            }
+                            // ações por-linha
+                            VerticalLayout {
+                                alignment: center;
+                                // operação em andamento / erro → mostra o rótulo transitório
+                                if row.busy || row.op-label != "": HorizontalLayout {
+                                    alignment: start;
+                                    Text {
+                                        text: row.op-label;
+                                        font-size: 12px;
+                                        font-weight: 600;
+                                        color: row.op-error ? Theme.warn : Theme.text-dim;
                                         vertical-alignment: center;
+                                    }
+                                }
+                                // ociosa → botões de ação conforme o estado
+                                if !row.busy && row.op-label == "": HorizontalLayout {
+                                    spacing: 6px;
+                                    alignment: start;
+                                    if row.state == "missing": Btn {
+                                        label: L.act-install; small: true; primary: true;
+                                        enabled: !root.busy;
+                                        clicked => { root.row-primary(i); }
+                                    }
+                                    if row.state == "outdated": Btn {
+                                        label: L.act-update; small: true; primary: true;
+                                        enabled: !root.busy;
+                                        clicked => { root.row-primary(i); }
+                                    }
+                                    if row.state != "missing": Btn {
+                                        label: L.act-remove; small: true;
+                                        enabled: !root.busy;
+                                        clicked => { root.row-remove(i); }
                                     }
                                 }
                             }
                         }
-                        // autor
-                        VerticalLayout {
-                            width: 200px;
-                            alignment: center;
-                            Text {
-                                text: row.author;
-                                font-size: 13.5px;
-                                color: Theme.text-dim;
-                                overflow: elide;
-                            }
-                        }
-                        // instalada
-                        VerticalLayout {
-                            width: 110px;
-                            alignment: center;
-                            Text { text: row.installed; font-size: 13.5px; color: Theme.text; }
-                        }
-                        // latest
-                        VerticalLayout {
-                            width: 90px;
-                            alignment: center;
-                            Text { text: row.latest; font-size: 13.5px; color: Theme.text-dim; }
-                        }
-                        // estado (pill)
-                        VerticalLayout {
-                            alignment: center;
-                            HorizontalLayout {
-                                alignment: start;
-                                StatePill { state: row.state; label: row.state-label; }
-                            }
-                        }
-                    }
 
-                    // separador fino sob cada skill
-                    if !row.is-header: Rectangle {
-                        y: parent.height - 1px;
-                        height: 1px;
-                        background: Theme.border.transparentize(0.5);
+                        // separador fino sob cada skill
+                        if !row.is-header: Rectangle {
+                            y: parent.height - 1px;
+                            height: 1px;
+                            background: Theme.border.transparentize(0.5);
+                        }
                     }
                 }
             }
