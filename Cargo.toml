@@ -7,7 +7,7 @@ license = "MIT"
 publish = false
 
 [[bin]]
-name = "schematize-gui-slint"
+name = "schematize-gui"
 path = "src/main.rs"
 
 [dependencies]
@@ -25,7 +25,7 @@ slint = { version = "1.17", default-features = false, features = [
 # Reusa a LÓGICA do crate irmão (catálogo + install/remove/versões + i18n) SEM
 # a GUI egui: default-features=false NÃO ativa a feature `gui` (eframe/rfd ficam
 # de fora). Nada de reimplementar registry/skills/i18n aqui.
-schematize = { path = "../schematize_cli_rs", default-features = false }
+schematize = { git = "https://github.com/schematizeme/schematize-cli", branch = "main", default-features = false }
 # Seletor de pasta NATIVO do sistema (aba Overdev: "Abrir pasta…" / dev_dirs).
 # Mesmo backend do egui: xdg-portal + wayland (funciona em Wayland/X11 via portal,
 # SEM puxar GTK). `pick_folder()` é bloqueante — chamado no event loop (rápido).
