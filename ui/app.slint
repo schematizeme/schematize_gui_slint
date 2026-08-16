@@ -15,7 +15,34 @@
 // preenchido pelo Rust a partir de `schematize::i18n` (11 locales).
 // ---------------------------------------------------------------------------
 
-import { ScrollView } from "std-widgets.slint";
+import { ScrollView, LineEdit } from "std-widgets.slint";
+
+// ---- Grafo (aba 4) ----------------------------------------------------------
+// Um nó do grafo force-directed. As posições (x/y) são MUNDO (não-tela) — a física
+// vive no Rust e as escreve a cada tick; o Slint aplica a transformação global
+// (g-scale/g-ox/g-oy + centro do canvas) na hora de renderizar. `r` é o raio EM
+// PIXELS de tela (constante ao zoom, como no egui). `selected`/`hot`/`dim`
+// controlam cor e realce; `has-loc` diz se o nó tem `arquivo:linha` (abrível).
+export struct GraphNode {
+    id: string,
+    label: string,
+    x: float,
+    y: float,
+    r: float,
+    selected: bool,
+    hot: bool,      // vizinho do selecionado OU casa com a busca
+    dim: bool,      // apagado (fora do foco/da busca)
+    has-loc: bool,
+}
+// Uma aresta: as duas pontas em coordenadas de MUNDO (o Slint transforma). `on`
+// realça quando toca o nó selecionado.
+export struct GraphEdge {
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    on: bool,
+}
 
 // Uma linha do modelo. Pode ser um CABEÇALHO de categoria (is-header) ou uma
 // SKILL. Campos preenchidos/atualizados pelo Rust (catálogo + rede + ações).
@@ -131,6 +158,14 @@ export global L {
     in-out property <string> od-plan;             // "Plano"
     in-out property <string> od-questions;        // "Perguntas parkeadas"
     in-out property <string> open-browser;        // "abrir no navegador"
+    // aba Grafo
+    in-out property <string> g-search-hint;        // hint da busca ("procurar")
+    in-out property <string> g-nodes-suffix;       // sufixo "nós"
+    in-out property <string> g-fit;                // "ajustar"
+    in-out property <string> g-no-graph;           // empty-state: sem índice/grafo
+    in-out property <string> g-export-obsidian;    // "exportar Obsidian"
+    in-out property <string> g-open-editor;        // "abrir no editor"
+    in-out property <string> g-no-loc;             // "sem arquivo:linha no índice"
 }
 
 // Paleta central — um único ponto de verdade para claro/escuro.
@@ -575,6 +610,32 @@ export component AppWindow inherits Window {
     callback od-remove-dev-dir(string); // remove um diretório de desenvolvimento
     callback od-open-browser();         // abre o painel HTML do projeto no navegador
 
+    // ---- aba Grafo (força-dirigida nativa) ----
+    // Estado da transformação (dono no Rust; o Slint só lê pra renderizar).
+    in property <[GraphNode]> graph-nodes;
+    in property <[GraphEdge]> graph-edges;
+    in-out property <float> g-scale: 1.0;   // zoom
+    in-out property <float> g-ox: 0;         // pan X (px de tela)
+    in-out property <float> g-oy: 0;         // pan Y (px de tela)
+    in-out property <bool> g-has-graph: false;
+    in-out property <int> g-node-count: 0;
+    in-out property <string> g-search;
+    in-out property <bool> g-has-sel: false;
+    in-out property <string> g-sel-id;
+    in-out property <string> g-sel-loc;      // "" = nó sem arquivo:linha
+    // Ponteiro/roda → Rust (coords relativas ao canvas, em px). O Rust faz o
+    // hit-test (mundo), decide pan-vs-arrasto-de-nó e escreve a transformação.
+    callback graph-press(float, float);       // mouse-down (mx, my)
+    callback graph-move(float, float);        // arrasto (mx, my)
+    callback graph-release();                 // mouse-up
+    callback graph-scroll(float, float, float); // zoom (mx, my, delta)
+    callback graph-canvas-resized(float, float); // canvas mudou de tamanho (w, h)
+    callback graph-fit();                     // enquadrar tudo
+    callback graph-search-changed(string);    // busca digitada
+    callback graph-open-editor();             // abre o arquivo:linha do nó selecionado
+    callback graph-export();                  // exporta o vault Obsidian
+    callback graph-open-browser();            // abre o painel HTML no navegador
+
     // ---- modal de instalação do Marketplace ----
     callback mp-confirm();            // aplica: instala skill (+ base marcada) + (env em terminal se marcado)
     callback mp-cancel();             // fecha sem fazer nada
@@ -657,18 +718,283 @@ export component AppWindow inherits Window {
         }
         Rectangle { height: 1px; background: Theme.border; }
 
-        // ---- placeholder do Grafo (4) — próximo incremento -------------
-        if root.active-tab == 4: Rectangle {
-            background: Theme.bg;
-            VerticalLayout {
+        // ---- aba GRAFO (4) — força-dirigida nativa ---------------------
+        // Porta o graph_view + step_graph do egui: física em Rust num Timer, e o
+        // Slint renderiza arestas (Path) e nós (Rectangle circular). Reusa o MESMO
+        // seletor de projeto da aba Overdev (od-projects/od-current/od-pick-project)
+        // — o projeto escolhido alimenta as DUAS abas.
+        if root.active-tab == 4: VerticalLayout {
+            // ---- barra: seletor de projeto + busca + ações ----
+            Rectangle {
+                height: 58px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.project; font-size: 13px; font-weight: 600; color: Theme.text-dim; }
+                    }
+                    // dropdown de projeto (mesmo modelo/callback da aba Overdev)
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 260px;
+                            height: 34px;
+                            border-radius: 8px;
+                            background: gpta.has-hover ? Theme.surface-2 : Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 8px;
+                                Text {
+                                    text: root.od-current != "" ? root.od-current : "—";
+                                    color: root.od-current != "" ? Theme.text : Theme.text-dim;
+                                    font-size: 13.5px;
+                                    font-weight: 600;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                Rectangle {}
+                                Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                            }
+                            gpta := TouchArea { mouse-cursor: pointer; clicked => { gprojpop.show(); } }
+                            gprojpop := PopupWindow {
+                                x: 0;
+                                y: parent.height + 4px;
+                                width: 260px;
+                                Rectangle {
+                                    background: Theme.surface;
+                                    border-width: 1px;
+                                    border-color: Theme.border;
+                                    border-radius: 10px;
+                                    VerticalLayout {
+                                        padding: 6px;
+                                        spacing: 1px;
+                                        if root.od-projects.length == 0: Text {
+                                            text: L.no-project;
+                                            font-size: 12px;
+                                            color: Theme.text-dim;
+                                            wrap: word-wrap;
+                                        }
+                                        for pit[pi] in root.od-projects: Rectangle {
+                                            height: pit.is-header ? 26px : 32px;
+                                            border-radius: 6px;
+                                            background: (!pit.is-header && gita.has-hover) ? Theme.surface-2 : transparent;
+                                            HorizontalLayout {
+                                                padding-left: 8px;
+                                                padding-right: 8px;
+                                                spacing: 8px;
+                                                if pit.is-header: Text {
+                                                    text: pit.label;
+                                                    font-size: 11px;
+                                                    font-weight: 700;
+                                                    color: Theme.text-dim;
+                                                    vertical-alignment: center;
+                                                }
+                                                if !pit.is-header: Text {
+                                                    text: pit.name;
+                                                    font-size: 13px;
+                                                    font-weight: 600;
+                                                    color: Theme.text;
+                                                    vertical-alignment: center;
+                                                    overflow: elide;
+                                                }
+                                                Rectangle {}
+                                                if !pit.is-header && pit.marker != "": Text {
+                                                    text: pit.marker;
+                                                    font-size: 11px;
+                                                    color: Theme.text-dim;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+                                            gita := TouchArea {
+                                                enabled: !pit.is-header;
+                                                mouse-cursor: pointer;
+                                                clicked => { root.od-pick-project(pit.path); }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // busca (realça/filtra nós por nome)
+                    VerticalLayout {
+                        alignment: center;
+                        gsearch := LineEdit {
+                            width: 170px;
+                            placeholder-text: L.g-search-hint;
+                            text: root.g-search;
+                            edited(s) => { root.graph-search-changed(s); }
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: root.g-node-count + " " + L.g-nodes-suffix;
+                            font-size: 12.5px;
+                            color: Theme.text-dim;
+                        }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.g-fit; small: true; enabled: root.g-has-graph; clicked => { root.graph-fit(); } }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.g-export-obsidian; small: true; enabled: root.g-has-graph; clicked => { root.graph-export(); } }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.open-browser; small: true; enabled: root.g-has-graph; clicked => { root.graph-open-browser(); } }
+                    }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+
+            // Empty-state: nenhum projeto escolhido.
+            if !root.od-has-project: VerticalLayout {
                 alignment: center;
                 HorizontalLayout {
                     alignment: center;
+                    padding: 24px;
                     Text {
-                        text: L.coming-soon;
-                        font-size: 18px;
-                        font-weight: 700;
+                        text: L.no-project;
+                        font-size: 13px;
                         color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+            // Empty-state: projeto sem índice/grafo.
+            if root.od-has-project && !root.g-has-graph: VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    alignment: center;
+                    padding: 24px;
+                    Text {
+                        text: L.g-no-graph;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            // ---- canvas do grafo ----
+            if root.od-has-project && root.g-has-graph: cv := Rectangle {
+                clip: true;
+                background: Theme.dark ? #14161c : #eef1f8;
+                changed width => { root.graph-canvas-resized(self.width / 1px, self.height / 1px); }
+                changed height => { root.graph-canvas-resized(self.width / 1px, self.height / 1px); }
+
+                // arestas (uma Path por aresta; viewbox 1:1 com o canvas → coords em px)
+                for e[ei] in root.graph-edges: Path {
+                    width: 100%;
+                    height: 100%;
+                    viewbox-width: cv.width / 1px;
+                    viewbox-height: cv.height / 1px;
+                    stroke: e.on ? Theme.accent : Theme.text-dim.transparentize(0.7);
+                    stroke-width: e.on ? 1.6px : 1px;
+                    MoveTo {
+                        x: cv.width / 2 / 1px + e.x1 * root.g-scale + root.g-ox;
+                        y: cv.height / 2 / 1px + e.y1 * root.g-scale + root.g-oy;
+                    }
+                    LineTo {
+                        x: cv.width / 2 / 1px + e.x2 * root.g-scale + root.g-ox;
+                        y: cv.height / 2 / 1px + e.y2 * root.g-scale + root.g-oy;
+                    }
+                }
+
+                // nós (círculo = Rectangle com border-radius) + rótulo
+                for n[ni] in root.graph-nodes: Rectangle {
+                    width: n.r * 2px;
+                    height: n.r * 2px;
+                    border-radius: n.r * 1px;
+                    x: cv.width / 2 + (n.x * root.g-scale + root.g-ox) * 1px - self.width / 2;
+                    y: cv.height / 2 + (n.y * root.g-scale + root.g-oy) * 1px - self.height / 2;
+                    opacity: n.dim ? 0.28 : 1.0;
+                    background: n.selected
+                        ? (Theme.dark ? #ffffff : #1a1e2b)
+                        : (n.has-loc ? Theme.accent : Theme.accent.transparentize(0.4));
+                    border-width: n.selected ? 2px : 0px;
+                    border-color: Theme.header-fg;
+                    // rótulo: com zoom alto, ou nó selecionado/realçado.
+                    if root.g-scale > 1.15 || n.selected || n.hot: Text {
+                        x: parent.width + 4px;
+                        y: (parent.height - self.height) / 2;
+                        text: n.label;
+                        font-size: 11px;
+                        font-weight: n.selected ? 700 : 500;
+                        color: n.dim ? Theme.text-dim : Theme.text;
+                    }
+                }
+
+                // camada de interação (por cima dos visuais): pan/zoom/arrasto/clique.
+                // Tudo vai pro Rust (hit-test no mundo); ele decide e escreve a transformação.
+                gta := TouchArea {
+                    mouse-cursor: pointer;
+                    pointer-event(e) => {
+                        if (e.kind == PointerEventKind.down) {
+                            root.graph-press(self.mouse-x / 1px, self.mouse-y / 1px);
+                        }
+                        if (e.kind == PointerEventKind.up) {
+                            root.graph-release();
+                        }
+                    }
+                    moved => {
+                        root.graph-move(self.mouse-x / 1px, self.mouse-y / 1px);
+                    }
+                    scroll-event(e) => {
+                        root.graph-scroll(self.mouse-x / 1px, self.mouse-y / 1px, e.delta-y / 1px);
+                        return accept;
+                    }
+                }
+
+                // painel de info do nó selecionado (canto inferior esquerdo).
+                if root.g-has-sel: Rectangle {
+                    x: 12px;
+                    y: parent.height - self.height - 12px;
+                    width: min(parent.width - 24px, 440px);
+                    height: 96px;
+                    border-radius: 10px;
+                    background: Theme.surface;
+                    border-width: 1px;
+                    border-color: Theme.border;
+                    // absorve cliques (não vaza pro canvas atrás).
+                    TouchArea {}
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+                        Text {
+                            text: root.g-sel-id;
+                            font-size: 14px;
+                            font-weight: 700;
+                            color: Theme.text;
+                            overflow: elide;
+                        }
+                        if root.g-sel-loc != "": Text {
+                            text: root.g-sel-loc;
+                            font-size: 12px;
+                            color: Theme.accent;
+                            overflow: elide;
+                        }
+                        if root.g-sel-loc != "": HorizontalLayout {
+                            alignment: start;
+                            Btn { label: L.g-open-editor; small: true; clicked => { root.graph-open-editor(); } }
+                        }
+                        if root.g-sel-loc == "": Text {
+                            text: L.g-no-loc;
+                            font-size: 12px;
+                            color: Theme.text-dim;
+                        }
                     }
                 }
             }

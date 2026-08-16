@@ -17,11 +17,13 @@
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
 use schematize::{config, environments, panel, projects, skills, util};
-use slint::{Model, ModelRc, SharedString, VecModel, Weak};
+use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/app.slint
 
@@ -112,6 +114,14 @@ fn install_i18n(app: &AppWindow) {
     l.set_od_plan(t("gui.od_plan").into());
     l.set_od_questions(t("gui.od_questions").into());
     l.set_open_browser(t("gui.open_browser").into());
+    // aba Grafo — reusa as chaves do egui (todas já nos 11 locales do lib).
+    l.set_g_search_hint(t("gui.search").into());
+    l.set_g_nodes_suffix(t("gui.graph_nodes").into());
+    l.set_g_fit(t("gui.fit").into());
+    l.set_g_no_graph(t("gui.no_graph").into());
+    l.set_g_export_obsidian(t("gui.export_obsidian").into());
+    l.set_g_open_editor(t("gui.open_editor").into());
+    l.set_g_no_loc(t("gui.no_loc").into());
 }
 
 // ---------------------------------------------------------------------------
@@ -762,6 +772,335 @@ fn select_project(
     refresh_proj_models(proj_model, dev_model);
 }
 
+// ===========================================================================
+// GRAFO — porte do graph_view + step_graph do egui (schematize_cli_rs::gui).
+// A física é force-directed em Rust (repulsão O(n²) + molas nas arestas +
+// gravidade/centralização + damping), rodada num `slint::Timer` a ~60fps que
+// RELAXA (para) quando a energia (alpha) cai. As posições (mundo) vivem aqui; a
+// cada tick empurramos os `VecModel` de nós/arestas que o `.slint` renderiza. A
+// transformação (scale/ox/oy) também é dona daqui (o Slint só a lê pra desenhar).
+// Interação (pan/zoom/arrasto/clique) chega crua do Slint; o hit-test é aqui.
+// ===========================================================================
+
+/// Raio de um nó EM PIXELS de tela (constante ao zoom) — idêntico ao egui.
+fn nsize(deg: f32) -> f32 {
+    3.0 + (deg.sqrt() * 1.7).min(9.0)
+}
+
+/// Rótulo curto do nó (id truncado, seguro a UTF-8) — o egui truncava em 33+"…".
+fn trunc_label(id: &str) -> String {
+    if id.chars().count() > 34 {
+        let s: String = id.chars().take(33).collect();
+        format!("{s}…")
+    } else {
+        id.to_string()
+    }
+}
+
+/// Nó com estado de simulação + flags de realce (recomputadas em `refresh_flags`).
+struct GNode {
+    id: String,
+    loc: Option<String>,
+    label: String,
+    x: f32,
+    y: f32,
+    vx: f32,
+    vy: f32,
+    deg: f32,
+    selected: bool,
+    hot: bool, // vizinho do selecionado OU casa com a busca
+    dim: bool, // apagado (fora do foco/da busca)
+}
+
+/// Estado inteiro do grafo (dono no Rust). Um por app; compartilhado via Rc<RefCell>.
+#[derive(Default)]
+struct GraphState {
+    nodes: Vec<GNode>,
+    edges: Vec<(usize, usize)>,
+    project: Option<PathBuf>,
+    sel: Option<usize>,
+    search: String,
+    scale: f32,
+    ox: f32,
+    oy: f32,
+    alpha: f32,
+    drag_node: Option<usize>,
+    drag_off: (f32, f32),
+    last_ptr: (f32, f32),
+    moved: bool,
+    canvas_w: f32,
+    canvas_h: f32,
+    fit_pending: bool,
+}
+
+impl GraphState {
+    /// Um passo da física (idêntico ao `step_graph` do egui). No-op se relaxado.
+    fn step(&mut self) {
+        if self.alpha < 0.02 {
+            return;
+        }
+        let n = self.nodes.len();
+        const REP: f32 = 1400.0;
+        const SPR: f32 = 0.02;
+        const LEN: f32 = 70.0;
+        const G: f32 = 0.015;
+        for i in 0..n {
+            let (xi, yi) = (self.nodes[i].x, self.nodes[i].y);
+            let (mut fx, mut fy) = (0.0f32, 0.0f32);
+            for j in 0..n {
+                if i == j {
+                    continue;
+                }
+                let dx = xi - self.nodes[j].x;
+                let dy = yi - self.nodes[j].y;
+                let d2 = dx * dx + dy * dy + 0.01;
+                let d = d2.sqrt();
+                let f = REP / d2;
+                fx += f * dx / d;
+                fy += f * dy / d;
+            }
+            fx -= xi * G;
+            fy -= yi * G;
+            self.nodes[i].vx += fx;
+            self.nodes[i].vy += fy;
+        }
+        for &(a, b) in &self.edges {
+            let dx = self.nodes[b].x - self.nodes[a].x;
+            let dy = self.nodes[b].y - self.nodes[a].y;
+            let d = (dx * dx + dy * dy).sqrt().max(0.01);
+            let f = (d - LEN) * SPR;
+            let (fx, fy) = (f * dx / d, f * dy / d);
+            self.nodes[a].vx += fx;
+            self.nodes[a].vy += fy;
+            self.nodes[b].vx -= fx;
+            self.nodes[b].vy -= fy;
+        }
+        for nd in &mut self.nodes {
+            nd.vx *= 0.86;
+            nd.vy *= 0.86;
+            nd.x += nd.vx * self.alpha;
+            nd.y += nd.vy * self.alpha;
+        }
+        self.alpha *= 0.994;
+    }
+
+    /// Tela (px relativo ao canvas) → mundo, desfazendo o centro + pan + zoom.
+    fn to_world(&self, mx: f32, my: f32) -> (f32, f32) {
+        let cx = self.canvas_w / 2.0;
+        let cy = self.canvas_h / 2.0;
+        ((mx - cx - self.ox) / self.scale, (my - cy - self.oy) / self.scale)
+    }
+
+    /// Nó sob o ponto de mundo (raio de tela convertido pra mundo) — como o egui.
+    fn hit(&self, wx: f32, wy: f32) -> Option<usize> {
+        let mut best = None;
+        let mut bd = f32::MAX;
+        for (i, n) in self.nodes.iter().enumerate() {
+            let d = ((n.x - wx).powi(2) + (n.y - wy).powi(2)).sqrt();
+            let r = nsize(n.deg) + 6.0 / self.scale;
+            if d < r && d < bd {
+                bd = d;
+                best = Some(i);
+            }
+        }
+        best
+    }
+
+    /// Enquadra todos os nós no canvas atual (idêntico ao `fit` do egui).
+    fn fit(&mut self) {
+        if self.nodes.is_empty() || self.canvas_w < 1.0 {
+            return;
+        }
+        let (mut minx, mut miny, mut maxx, mut maxy) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+        for n in &self.nodes {
+            minx = minx.min(n.x);
+            miny = miny.min(n.y);
+            maxx = maxx.max(n.x);
+            maxy = maxy.max(n.y);
+        }
+        let w = (maxx - minx).max(1.0);
+        let h = (maxy - miny).max(1.0);
+        self.scale = (0.86 * (self.canvas_w / w).min(self.canvas_h / h)).clamp(0.12, 6.0);
+        self.ox = -self.scale * (minx + maxx) / 2.0;
+        self.oy = -self.scale * (miny + maxy) / 2.0;
+    }
+
+    /// Recomputa selected/hot/dim (só muda em seleção/busca — não a cada tick).
+    fn refresh_flags(&mut self) {
+        let q = self.search.trim().to_lowercase();
+        let focus = self.sel;
+        let nb: HashSet<usize> = match focus {
+            Some(i) => self
+                .edges
+                .iter()
+                .filter_map(|&(a, b)| if a == i { Some(b) } else if b == i { Some(a) } else { None })
+                .collect(),
+            None => HashSet::new(),
+        };
+        for (i, n) in self.nodes.iter_mut().enumerate() {
+            let matched = !q.is_empty() && n.id.to_lowercase().contains(&q);
+            n.selected = focus == Some(i);
+            n.hot = nb.contains(&i) || matched;
+            n.dim = (focus.is_some() && focus != Some(i) && !nb.contains(&i)) || (!q.is_empty() && !matched);
+        }
+    }
+}
+
+/// Constrói uma linha do modelo de nós a partir do estado de simulação.
+fn graph_node_row(n: &GNode) -> GraphNode {
+    GraphNode {
+        id: n.id.clone().into(),
+        label: n.label.clone().into(),
+        x: n.x,
+        y: n.y,
+        r: nsize(n.deg),
+        selected: n.selected,
+        hot: n.hot,
+        dim: n.dim,
+        has_loc: n.loc.is_some(),
+    }
+}
+
+/// Constrói uma linha do modelo de arestas (pontas em mundo + realce).
+fn graph_edge_row(st: &GraphState, a: usize, b: usize) -> GraphEdge {
+    let on = st.sel == Some(a) || st.sel == Some(b);
+    GraphEdge {
+        x1: st.nodes[a].x,
+        y1: st.nodes[a].y,
+        x2: st.nodes[b].x,
+        y2: st.nodes[b].y,
+        on,
+    }
+}
+
+/// Empurra TUDO pro Slint: transformação (props), seleção (info) e os dois
+/// VecModel (nós/arestas). Atualiza in-place quando o tamanho casa (sem realloc
+/// no loop da física); senão troca o vec inteiro (carga/relayout).
+fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edges: &VecModel<GraphEdge>) {
+    app.set_g_scale(st.scale);
+    app.set_g_ox(st.ox);
+    app.set_g_oy(st.oy);
+    app.set_g_has_graph(!st.nodes.is_empty());
+    app.set_g_node_count(st.nodes.len() as i32);
+    match st.sel {
+        Some(i) => {
+            app.set_g_has_sel(true);
+            app.set_g_sel_id(st.nodes[i].id.clone().into());
+            app.set_g_sel_loc(st.nodes[i].loc.clone().unwrap_or_default().into());
+        }
+        None => {
+            app.set_g_has_sel(false);
+            app.set_g_sel_id(SharedString::new());
+            app.set_g_sel_loc(SharedString::new());
+        }
+    }
+    if nodes.row_count() == st.nodes.len() {
+        for (i, n) in st.nodes.iter().enumerate() {
+            nodes.set_row_data(i, graph_node_row(n));
+        }
+    } else {
+        nodes.set_vec(st.nodes.iter().map(graph_node_row).collect::<Vec<_>>());
+    }
+    if edges.row_count() == st.edges.len() {
+        for (i, &(a, b)) in st.edges.iter().enumerate() {
+            edges.set_row_data(i, graph_edge_row(st, a, b));
+        }
+    } else {
+        edges.set_vec(st.edges.iter().map(|&(a, b)| graph_edge_row(st, a, b)).collect::<Vec<_>>());
+    }
+}
+
+/// Carrega o grafo do `proj` (ou limpa se None) no estado. Espelha o
+/// `reload_project` do egui: posições em espiral inicial, graus, e fit pendente.
+fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
+    st.nodes.clear();
+    st.edges.clear();
+    st.sel = None;
+    st.search.clear();
+    st.drag_node = None;
+    st.moved = false;
+    st.scale = 1.0;
+    st.ox = 0.0;
+    st.oy = 0.0;
+    st.alpha = 1.0;
+    st.project = proj.map(|p| p.to_path_buf());
+    let Some(p) = proj else {
+        return;
+    };
+    let (nodes, edges, _idx) = panel::load_graph(p);
+    let mut id_to_idx: HashMap<String, usize> = HashMap::new();
+    for (i, n) in nodes.iter().enumerate() {
+        id_to_idx.insert(n.id.clone(), i);
+        let a = i as f32 * 2.399_963; // ângulo áureo → espiral inicial (evita sobreposição)
+        let r = 40.0 + 9.0 * (i as f32).sqrt();
+        st.nodes.push(GNode {
+            id: n.id.clone(),
+            loc: n.loc.clone(),
+            label: trunc_label(&n.id),
+            x: a.cos() * r,
+            y: a.sin() * r,
+            vx: 0.0,
+            vy: 0.0,
+            deg: 0.0,
+            selected: false,
+            hot: false,
+            dim: false,
+        });
+    }
+    for e in &edges {
+        if let (Some(&a), Some(&b)) = (id_to_idx.get(&e.from), id_to_idx.get(&e.to)) {
+            st.edges.push((a, b));
+            st.nodes[a].deg += 1.0;
+            st.nodes[b].deg += 1.0;
+        }
+    }
+    st.fit_pending = true;
+    st.refresh_flags();
+}
+
+/// (Re)liga o Timer da física se estiver parado. O tick roda um passo, sincroniza,
+/// e PARA (relaxa) quando alpha < 0.02 — não queima CPU parado. Reinicia via arrasto/carga.
+fn graph_kick(
+    timer: &Rc<slint::Timer>,
+    weak: Weak<AppWindow>,
+    state: Rc<RefCell<GraphState>>,
+    nodes: Rc<VecModel<GraphNode>>,
+    edges: Rc<VecModel<GraphEdge>>,
+) {
+    if timer.running() {
+        return;
+    }
+    let timer2 = timer.clone();
+    timer.start(TimerMode::Repeated, Duration::from_millis(16), move || {
+        let Some(app) = weak.upgrade() else {
+            timer2.stop();
+            return;
+        };
+        let mut st = state.borrow_mut();
+        st.step();
+        graph_sync(&app, &st, &nodes, &edges);
+        if st.alpha < 0.02 {
+            timer2.stop();
+        }
+    });
+}
+
+/// Carrega o grafo do projeto no estado, sincroniza e (re)liga a física.
+fn graph_load_and_kick(
+    proj: Option<&Path>,
+    timer: &Rc<slint::Timer>,
+    weak: &Weak<AppWindow>,
+    state: &Rc<RefCell<GraphState>>,
+    nodes: &Rc<VecModel<GraphNode>>,
+    edges: &Rc<VecModel<GraphEdge>>,
+) {
+    load_graph_into(&mut state.borrow_mut(), proj);
+    if let Some(app) = weak.upgrade() {
+        graph_sync(&app, &state.borrow(), nodes, edges);
+    }
+    graph_kick(timer, weak.clone(), state.clone(), nodes.clone(), edges.clone());
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     detect_display_env();
 
@@ -1169,6 +1508,17 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
+    // ==================== aba Grafo ====================
+    // Estado (dono da física + transformação), dois VecModel (nós/arestas) e o
+    // Timer da física. O grafo COMPARTILHA o projeto com a aba Overdev — carregado
+    // junto na seleção/restauração de projeto (mais abaixo).
+    let graph_state = Rc::new(RefCell::new(GraphState { scale: 1.0, alpha: 1.0, ..Default::default() }));
+    let graph_nodes = Rc::new(VecModel::<GraphNode>::from(Vec::new()));
+    let graph_edges = Rc::new(VecModel::<GraphEdge>::from(Vec::new()));
+    let graph_timer = Rc::new(slint::Timer::default());
+    app.set_graph_nodes(ModelRc::from(graph_nodes.clone()));
+    app.set_graph_edges(ModelRc::from(graph_edges.clone()));
+
     // ==================== aba Overdev ====================
     // Modelos: seletor de projeto (detectados + recentes), dev_dirs, e checklist.
     let od_proj_model = Rc::new(VecModel::<ProjItem>::from(Vec::new()));
@@ -1186,6 +1536,8 @@ fn main() -> Result<(), slint::PlatformError> {
             let abs = std::fs::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(&p));
             *od_current.borrow_mut() = Some(abs.clone());
             load_overdev_into(&app, &od_items_model, Some(&abs));
+            // grafo compartilha o projeto restaurado.
+            graph_load_and_kick(Some(&abs), &graph_timer, &app.as_weak(), &graph_state, &graph_nodes, &graph_edges);
         }
         None => load_overdev_into(&app, &od_items_model, None),
     }
@@ -1197,12 +1549,18 @@ fn main() -> Result<(), slint::PlatformError> {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let cur = od_current.clone();
+        let gt = graph_timer.clone();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
         app.on_od_pick_project(move |path| {
             if path.is_empty() {
                 return;
             }
             if let Some(app) = weak.upgrade() {
                 select_project(&app, &items, &pm, &dm, &cur, PathBuf::from(path.to_string()));
+                let p = cur.borrow().clone();
+                graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
             }
         });
     }
@@ -1213,10 +1571,16 @@ fn main() -> Result<(), slint::PlatformError> {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let cur = od_current.clone();
+        let gt = graph_timer.clone();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
         app.on_od_open_folder(move || {
             if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_folder() {
                 if let Some(app) = weak.upgrade() {
                     select_project(&app, &items, &pm, &dm, &cur, dir);
+                    let p = cur.borrow().clone();
+                    graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
                 }
             }
         });
@@ -1228,11 +1592,16 @@ fn main() -> Result<(), slint::PlatformError> {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let cur = od_current.clone();
+        let gt = graph_timer.clone();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
         app.on_od_reload(move || {
             refresh_proj_models(&pm, &dm);
             if let Some(app) = weak.upgrade() {
                 let p = cur.borrow().clone();
                 load_overdev_into(&app, &items, p.as_deref());
+                graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
             }
         });
     }
@@ -1263,6 +1632,205 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_od_open_browser(move || {
             if let Some(p) = cur.borrow().as_ref() {
                 let _ = panel::open_in_browser(p);
+            }
+        });
+    }
+
+    // ==================== aba Grafo — interação ====================
+    // Ponteiro/roda chegam crus do Slint (coords relativas ao canvas, em px). O
+    // hit-test e a decisão pan-vs-arrasto acontecem AQUI (como no egui). Cada
+    // handler sincroniza o modelo/props no fim.
+
+    // canvas mudou de tamanho → guarda; se havia fit pendente (carga), enquadra.
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_canvas_resized(move |w, h| {
+            let mut st = gs.borrow_mut();
+            st.canvas_w = w;
+            st.canvas_h = h;
+            if st.fit_pending && w > 1.0 && h > 1.0 {
+                st.fit();
+                st.fit_pending = false;
+            }
+            if let Some(app) = weak.upgrade() {
+                graph_sync(&app, &st, &gn, &ge);
+            }
+        });
+    }
+    // mouse-down: hit-test → fixa o nó a arrastar (com offset de pega) ou nada.
+    {
+        let gs = graph_state.clone();
+        app.on_graph_press(move |mx, my| {
+            let mut st = gs.borrow_mut();
+            let (wx, wy) = st.to_world(mx, my);
+            st.last_ptr = (mx, my);
+            st.moved = false;
+            match st.hit(wx, wy) {
+                Some(i) => {
+                    st.drag_node = Some(i);
+                    st.drag_off = (st.nodes[i].x - wx, st.nodes[i].y - wy);
+                }
+                None => st.drag_node = None,
+            }
+        });
+    }
+    // arrasto: nó fixo → move o nó (reaquece a física); senão → pan do fundo.
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        let gt = graph_timer.clone();
+        app.on_graph_move(move |mx, my| {
+            let need_kick;
+            {
+                let mut st = gs.borrow_mut();
+                let (dx, dy) = (mx - st.last_ptr.0, my - st.last_ptr.1);
+                if dx.abs() + dy.abs() > 3.0 {
+                    st.moved = true;
+                }
+                match st.drag_node {
+                    Some(i) => {
+                        let (wx, wy) = st.to_world(mx, my);
+                        st.nodes[i].x = wx + st.drag_off.0;
+                        st.nodes[i].y = wy + st.drag_off.1;
+                        st.nodes[i].vx = 0.0;
+                        st.nodes[i].vy = 0.0;
+                        if st.alpha < 0.3 {
+                            st.alpha = 0.3;
+                        }
+                        need_kick = true;
+                    }
+                    None => {
+                        st.ox += dx;
+                        st.oy += dy;
+                        need_kick = false;
+                    }
+                }
+                st.last_ptr = (mx, my);
+                if let Some(app) = weak.upgrade() {
+                    graph_sync(&app, &st, &gn, &ge);
+                }
+            }
+            if need_kick {
+                graph_kick(&gt, weak.clone(), gs.clone(), gn.clone(), ge.clone());
+            }
+        });
+    }
+    // mouse-up: se não houve arrasto, é um CLIQUE → seleciona/deseleciona o nó.
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_release(move || {
+            let mut st = gs.borrow_mut();
+            if !st.moved {
+                let (wx, wy) = st.to_world(st.last_ptr.0, st.last_ptr.1);
+                st.sel = st.hit(wx, wy);
+                st.refresh_flags();
+            }
+            st.drag_node = None;
+            if let Some(app) = weak.upgrade() {
+                graph_sync(&app, &st, &gn, &ge);
+            }
+        });
+    }
+    // roda: zoom centrado no cursor (mesma matemática do egui).
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_scroll(move |mx, my, dy| {
+            let mut st = gs.borrow_mut();
+            let cx = st.canvas_w / 2.0;
+            let cy = st.canvas_h / 2.0;
+            let m = (mx - cx - st.ox, my - cy - st.oy);
+            let f = (dy * 0.0015).exp();
+            st.ox -= m.0 * (f - 1.0);
+            st.oy -= m.1 * (f - 1.0);
+            st.scale = (st.scale * f).clamp(0.12, 6.0);
+            if let Some(app) = weak.upgrade() {
+                graph_sync(&app, &st, &gn, &ge);
+            }
+        });
+    }
+    // botão "ajustar": enquadra tudo no canvas.
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_fit(move || {
+            let mut st = gs.borrow_mut();
+            st.fit();
+            if let Some(app) = weak.upgrade() {
+                graph_sync(&app, &st, &gn, &ge);
+            }
+        });
+    }
+    // busca: realça/apaga nós por nome (recomputa flags e sincroniza).
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_search_changed(move |s| {
+            let mut st = gs.borrow_mut();
+            st.search = s.to_string();
+            st.refresh_flags();
+            if let Some(app) = weak.upgrade() {
+                graph_sync(&app, &st, &gn, &ge);
+            }
+        });
+    }
+    // clique em "abrir no editor" do nó selecionado → vscode://file/<abs>/…:<linha>.
+    {
+        let gs = graph_state.clone();
+        app.on_graph_open_editor(move || {
+            let st = gs.borrow();
+            if let (Some(i), Some(proj)) = (st.sel, st.project.clone()) {
+                if let Some(loc) = st.nodes[i].loc.clone() {
+                    let abs = std::fs::canonicalize(&proj).unwrap_or(proj);
+                    util::open_url(&format!("vscode://file/{}/{}", abs.to_string_lossy(), loc));
+                }
+            }
+        });
+    }
+    // exportar vault Obsidian do índice (bônus — via panel::export_obsidian_at).
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        app.on_graph_export(move || {
+            let proj = gs.borrow().project.clone();
+            if let Some(p) = proj {
+                match panel::export_obsidian_at(&p, None) {
+                    Ok(dir) => {
+                        if let Some(app) = weak.upgrade() {
+                            app.set_status(tf("gui.exported", &[("p", &dir.to_string_lossy())]).into());
+                        }
+                        util::open_url(&dir.to_string_lossy());
+                    }
+                    Err(e) => {
+                        if let Some(app) = weak.upgrade() {
+                            app.set_status(tf("err.prefix", &[("e", &e)]).into());
+                        }
+                    }
+                }
+            }
+        });
+    }
+    // abrir o painel HTML (com o mesmo grafo) no navegador (bônus).
+    {
+        let gs = graph_state.clone();
+        app.on_graph_open_browser(move || {
+            let proj = gs.borrow().project.clone();
+            if let Some(p) = proj {
+                let _ = panel::open_in_browser(&p);
             }
         });
     }
