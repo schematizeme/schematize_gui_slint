@@ -174,6 +174,14 @@ export global L {
     in-out property <string> od-note;              // rótulo/hint "Nota para esta tarefa…"
     in-out property <string> od-correction;        // título/hint "Prompt de correção…"
     in-out property <string> od-notes-title;       // título "Notas e correções"
+    // ---- aba Overdev — Fase 4 (agente acoplado: run/stop + log) ----
+    in-out property <string> od-run;               // botão "Executar overdev"
+    in-out property <string> od-stop;              // botão "Parar"
+    in-out property <string> od-running;           // pill/status "rodando…"
+    in-out property <string> od-confirm-run;       // texto do guardrail (aviso do disparo)
+    in-out property <string> od-log;               // título do pane de log
+    in-out property <string> od-run-done;          // status "concluído"
+    in-out property <string> od-agent-cmd;         // rótulo "Comando do agente"
     // aba Grafo
     in-out property <string> g-search-hint;        // hint da busca ("procurar")
     in-out property <string> g-nodes-suffix;       // sufixo "nós"
@@ -864,6 +872,14 @@ export component AppWindow inherits Window {
     in-out property <string> od-notes;                      // read_notes(root)
     in-out property <string> od-note-input;                 // input de nota por task
     in-out property <string> od-correction-input;           // input do prompt de correção
+    // ---- agente acoplado (Fase 4) ----
+    in-out property <bool> od-session-running: false;       // agente rodando (reflete nos botões)
+    in-out property <bool> od-confirm-open: false;          // guardrail (mini-modal de confirmação) aberto
+    in-out property <string> od-agent-cmdline;              // runner.command_line() mostrado no guardrail
+    in-out property <string> od-run-log;                    // texto acumulado do log/terminal do agente
+    in-out property <string> od-run-status;                 // "concluído" / info do run (vazio = ocioso)
+    in-out property <int> od-run-done: 0;                   // progresso ao vivo: feitos
+    in-out property <int> od-run-open: 0;                   // progresso ao vivo: abertos (máquina)
 
     // ---- aba Environments ----
     in property <[EnvRow]> env-rows;
@@ -943,6 +959,11 @@ export component AppWindow inherits Window {
     callback od-editor-save();          // regrava o arquivo do editor no .overdev/
     callback od-add-note(string);       // add_note(root,"task",texto) — ponto por task
     callback od-add-correction(string); // add_note(root,"correcao",texto) — prompt de correção
+    // ---- Fase 4: agente acoplado (run/stop) ----
+    callback od-run-request();          // clique "Executar overdev" → abre o guardrail (mostra o comando)
+    callback od-run-confirm();          // clique "Confirmar" no guardrail → dispara o agente acoplado
+    callback od-run-cancel();           // fecha o guardrail sem disparar
+    callback od-stop();                 // "Parar" → session.kill() + encerra a thread
     // ---- app ----
     callback restart();                 // relança o app (janela nova) — usado pós self-update
 
@@ -1471,6 +1492,95 @@ export component AppWindow inherits Window {
                         Text { text: "\{L.od-human} \{root.od-human-open}"; font-size: 13.5px; font-weight: 700; color: Theme.accent; }
                         Rectangle {}
                         Btn { label: L.open-browser; small: true; clicked => { root.od-open-browser(); } }
+                    }
+                    // ---- Fase 4: agente acoplado (Executar overdev / Parar + log) ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        HorizontalLayout {
+                            spacing: 12px;
+                            Btn {
+                                label: L.od-run;
+                                primary: true;
+                                small: true;
+                                // só com .overdev/ presente E nenhuma sessão rodando.
+                                enabled: root.od-has-overdev && !root.od-session-running;
+                                clicked => { root.od-run-request(); }
+                            }
+                            Btn {
+                                label: L.od-stop;
+                                small: true;
+                                danger: true;
+                                enabled: root.od-session-running;
+                                clicked => { root.od-stop(); }
+                            }
+                            // pill "rodando…" enquanto a sessão vive.
+                            if root.od-session-running: VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    height: 22px;
+                                    width: runtxt.preferred-width + 18px;
+                                    border-radius: 11px;
+                                    background: Theme.good.transparentize(0.85);
+                                    border-width: 1px;
+                                    border-color: Theme.good.transparentize(0.5);
+                                    runtxt := Text {
+                                        text: L.od-running;
+                                        color: Theme.good;
+                                        font-size: 11.5px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+                            Rectangle {}
+                            if root.od-run-status != "": VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: root.od-run-status;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                    color: Theme.text-dim;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // barra de progresso ao vivo (feitos / feitos+abertos), só durante/depois do run.
+                        if root.od-session-running || root.od-run-log != "": Rectangle {
+                            height: 8px;
+                            border-radius: 4px;
+                            background: Theme.surface-2;
+                            property <int> total: root.od-run-done + root.od-run-open;
+                            Rectangle {
+                                x: 0;
+                                height: 100%;
+                                width: parent.total > 0 ? parent.width * root.od-run-done / parent.total : 0px;
+                                border-radius: 4px;
+                                background: Theme.good;
+                                animate width { duration: 240ms; }
+                            }
+                        }
+                        // pane de log/terminal do agente (monospace, rolável, read-only).
+                        if root.od-session-running || root.od-run-log != "": VerticalLayout {
+                            spacing: 4px;
+                            Text { text: L.od-log; font-size: 12.5px; font-weight: 700; color: Theme.text-dim; }
+                            Rectangle {
+                                height: 240px;
+                                border-radius: 8px;
+                                background: Theme.dark ? #0d0f14 : #0d0f14;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                TextEdit {
+                                    width: 100%;
+                                    height: 100%;
+                                    read-only: true;
+                                    text: root.od-run-log;
+                                    font-size: 12px;
+                                    wrap: no-wrap;
+                                }
+                            }
+                        }
                     }
                     Rectangle { height: 1px; background: Theme.border; }
                     // checklist 2-níveis: ícone/cor por estado + etiqueta MÁQUINA vs HUMANO;
@@ -2560,6 +2670,69 @@ export component AppWindow inherits Window {
                         alignment: center;
                         Btn { label: L.mp-cancel; small: true; clicked => { root.dev-modal-open = false; root.od-reload(); } }
                     }
+                }
+            }
+        }
+    }
+
+    // ---- GUARDRAIL do agente acoplado (Fase 4) --------------------------
+    // Antes de disparar o `claude` acoplado: MOSTRA o comando do agente
+    // (runner.command_line), o projeto e um aviso. Só o "Confirmar" dispara.
+    if root.od-confirm-open: Rectangle {
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { root.od-run-cancel(); } }  // clique fora = cancela
+
+        Rectangle {
+            width: Math.min(root.width - 64px, 560px);
+            height: Math.min(root.height - 96px, 400px);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}  // absorve cliques dentro
+            VerticalLayout {
+                padding: 22px;
+                spacing: 14px;
+                Text { text: L.od-run; font-size: 18px; font-weight: 800; color: Theme.text; }
+                // aviso do disparo
+                Text {
+                    text: L.od-confirm-run;
+                    font-size: 13px;
+                    color: Theme.text-dim;
+                    wrap: word-wrap;
+                }
+                // projeto alvo
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: L.project; font-size: 12.5px; font-weight: 700; color: Theme.text-dim; }
+                    Text { text: root.od-current; font-size: 12.5px; font-weight: 700; color: Theme.text; overflow: elide; }
+                }
+                // comando do agente (monospace)
+                Text { text: L.od-agent-cmd; font-size: 12.5px; font-weight: 700; color: Theme.text-dim; }
+                Rectangle {
+                    border-radius: 8px;
+                    background: Theme.surface-2;
+                    border-width: 1px;
+                    border-color: Theme.border;
+                    VerticalLayout {
+                        padding: 12px;
+                        Text {
+                            text: root.od-agent-cmdline;
+                            font-size: 12px;
+                            font-family: "monospace";
+                            color: Theme.text;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+                Rectangle {}  // empurra o rodapé
+                HorizontalLayout {
+                    spacing: 10px;
+                    Rectangle {}
+                    Btn { label: L.mp-cancel; small: true; clicked => { root.od-run-cancel(); } }
+                    Btn { label: L.od-run; primary: true; small: true; clicked => { root.od-run-confirm(); } }
                 }
             }
         }
