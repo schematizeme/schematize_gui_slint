@@ -68,6 +68,7 @@ export struct SkillRow {
     busy: bool,           // operação (instalar/remover) em andamento nesta linha
     op-label: string,     // status transitório da linha ("instalando…", erro…)
     op-error: bool,       // op-label é um erro? (colore em warn)
+    disp: int,            // índice de exibição na página ativa (paginação); -1 fora da página
 }
 
 // Uma linha da aba Environments: uma LINGUAGEM, seus métodos disponíveis nesta
@@ -104,6 +105,45 @@ export struct OverItem {
     text: string,
     machine: bool,    // true = item de MÁQUINA (agente) · false = item HUMANO
     hindex: int,      // hopen: 1-based entre humanos abertos · senão -1
+}
+
+// Uma chave SSH da máquina (só metadados PÚBLICOS — a privada NUNCA aparece).
+// Preenchida pelo Rust a partir de `schematize::sshkeys::list()`.
+export struct SshRow {
+    name: string,        // nome do arquivo base em ~/.ssh (ex.: "github")
+    kind: string,        // algoritmo (ED25519/RSA/…)
+    comment: string,     // comentário embutido na pública
+    fingerprint: string, // fingerprint SHA256
+    public-path: string, // caminho da PÚBLICA (nunca a privada)
+    op-label: string,    // feedback transitório ("copiado" / erro)
+    op-error: bool,      // op-label é erro?
+}
+
+// Um idioma no seletor de Configurações (código + nome nativo + se é o atual).
+export struct LangItem {
+    code: string,
+    name: string,
+    current: bool,
+}
+
+// Uma linha do histórico do DB do overdev (snapshot). Preenchida pelo Rust a
+// partir de `schematize::overdevdb::history()`. `id` é a chave de Ver/Restaurar.
+export struct SnapRow {
+    id: int,
+    file: string,     // caminho relativo (ex.: .overdev/CHECKLIST.md)
+    date: string,     // ts epoch formatado (AAAA-MM-DD hh:mm)
+    size: string,     // tamanho legível
+    hash: string,     // hash curto
+}
+
+// Uma linha do histórico de commits. Preenchida pelo Rust a partir de
+// `schematize::githist::commits()`. `pushed` decide o marcador ● / ○.
+export struct CommitRow {
+    short: string,
+    date: string,
+    author: string,
+    subject: string,
+    pushed: bool,
 }
 
 // Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.
@@ -228,6 +268,49 @@ export global L {
     in-out property <string> no-installed-skills;     // empty-state do dropdown
     in-out property <string> edit-now;                // botão "Editar agora" (pós-criar)
     in-out property <string> pick-file-hint;          // empty-state do editor
+    // ---- Tela SSH (chaves) — chaves NOVAS via `tor` ----
+    in-out property <string> ssh-title;
+    in-out property <string> ssh-generate;            // "Gerar chave"
+    in-out property <string> ssh-name;                // "Nome"
+    in-out property <string> ssh-kind;                // "Tipo"
+    in-out property <string> ssh-comment;             // "Comentário"
+    in-out property <string> ssh-passphrase;          // "Passphrase (opcional)"
+    in-out property <string> ssh-copy-pub;            // "Copiar pública"
+    in-out property <string> ssh-copied;              // "copiado"
+    in-out property <string> ssh-remove;              // "Remover"
+    in-out property <string> ssh-empty;               // empty-state
+    in-out property <string> ssh-priv-note;           // "A chave privada nunca é exposta"
+    in-out property <string> ssh-keys-title;          // "Suas chaves"
+    // ---- Tela Configurações — chaves NOVAS via `tor` ----
+    in-out property <string> cfg-title;
+    in-out property <string> cfg-language;            // "Idioma"
+    in-out property <string> cfg-theme;               // "Tema"
+    in-out property <string> cfg-autostart;           // "Autostart do agente"
+    in-out property <string> cfg-autostart-desc;
+    in-out property <string> cfg-hooks;               // "Hooks do overdev"
+    in-out property <string> cfg-hooks-desc;
+    in-out property <string> cfg-dirs;                // "Diretórios de dev e projetos fixados"
+    in-out property <string> cfg-dirs-desc;
+    in-out property <string> cfg-manage;              // "Gerenciar…"
+    in-out property <string> cfg-on;                  // "ligado"
+    in-out property <string> cfg-off;                 // "desligado"
+    // ---- Overdev — aditivos (load/index + histórico DB + commits) ----
+    in-out property <string> od-load;                 // "Load"
+    in-out property <string> od-index;                // "Index"
+    in-out property <string> od-load-tip;             // tooltip
+    in-out property <string> od-index-tip;            // tooltip
+    in-out property <string> od-history;              // "Histórico (backup)"
+    in-out property <string> od-history-note;         // explicação da cópia de segurança
+    in-out property <string> od-view;                 // "Ver"
+    in-out property <string> od-restore;              // "Restaurar"
+    in-out property <string> od-snap-empty;           // empty-state do histórico
+    in-out property <string> od-commits;              // "Commits e push"
+    in-out property <string> od-commits-empty;        // empty-state dos commits
+    in-out property <string> od-close;                // "Fechar" (visor)
+    // ---- Paginação ----
+    in-out property <string> pg-prev;                 // "‹ Anterior"
+    in-out property <string> pg-next;                 // "Próximo ›"
+    in-out property <string> pg-of;                   // "de" (página X de Y)
 }
 
 // Paleta central — um único ponto de verdade para claro/escuro.
@@ -827,6 +910,91 @@ component ProjectBar inherits Rectangle {
     }
 }
 
+// Controle de paginação simples e consistente (‹ Anterior · página X de Y · Próximo ›).
+// `page` é 0-based; `total` é o nº TOTAL de itens; `per` o tamanho da página.
+component Pager inherits HorizontalLayout {
+    in property <int> page;
+    in property <int> total;
+    in property <int> per: 20;
+    callback prev();
+    callback next();
+    property <int> pages: root.total <= 0 ? 1 : (root.total + root.per - 1) / root.per;
+    spacing: 12px;
+    alignment: center;
+    Btn {
+        label: L.pg-prev; small: true;
+        enabled: root.page > 0;
+        clicked => { root.prev(); }
+    }
+    VerticalLayout {
+        alignment: center;
+        Text {
+            text: "\{root.page + 1} \{L.pg-of} \{root.pages}";
+            font-size: 12.5px;
+            font-weight: 600;
+            color: Theme.text-dim;
+        }
+    }
+    Btn {
+        label: L.pg-next; small: true;
+        enabled: (root.page + 1) * root.per < root.total;
+        clicked => { root.next(); }
+    }
+}
+
+// Botão pequeno com TOOLTIP flutuante no hover (explica a ação). Usado nos
+// aditivos do overdev (Load/Index).
+component TipBtn inherits Rectangle {
+    in property <string> label;
+    in property <string> tip;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 30px;
+    border-radius: 7px;
+    background: tta.has-hover && root.enabled ? Theme.surface-2 : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    opacity: root.enabled ? 1.0 : 0.45;
+    animate background { duration: 120ms; }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        Text {
+            text: root.label;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            color: Theme.text;
+            font-size: 12.5px;
+            font-weight: 600;
+        }
+    }
+    tta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { if (root.enabled) { root.clicked(); } }
+    }
+    if tta.has-hover && root.tip != "": Rectangle {
+        y: parent.height + 4px;
+        x: 0;
+        width: 240px;
+        height: ttt.preferred-height + 12px;
+        border-radius: 6px;
+        background: Theme.surface-2;
+        border-width: 1px;
+        border-color: Theme.border;
+        ttt := Text {
+            x: 8px;
+            width: 224px;
+            text: root.tip;
+            color: Theme.text;
+            font-size: 11px;
+            font-weight: 500;
+            wrap: word-wrap;
+            vertical-alignment: center;
+        }
+    }
+}
+
 export component AppWindow inherits Window {
     title: L.window-title;
     icon: root.app-icon;
@@ -930,6 +1098,66 @@ export component AppWindow inherits Window {
     callback mg-pick-file(string);       // escolhe um arquivo → carrega o conteúdo
     callback mg-save();                  // write_file(skill, arquivo, conteúdo)
 
+    // ==================== Tela SSH (chaves) ====================
+    in property <[SshRow]> ssh-rows;
+    in-out property <string> ssh-gen-name;
+    in-out property <string> ssh-gen-kind: "ed25519";   // "ed25519" | "rsa"
+    in-out property <string> ssh-gen-comment;
+    in-out property <string> ssh-gen-passphrase;
+    in-out property <string> ssh-gen-status;
+    in-out property <bool> ssh-gen-error: false;
+    in-out property <bool> ssh-confirm-open: false;      // modal de confirmação de remoção
+    in-out property <string> ssh-confirm-name;
+    in-out property <string> ssh-confirm-msg;
+    callback ssh-generate();
+    callback ssh-copy(int);          // copiar pública da linha i
+    callback ssh-remove-request(int);// abrir confirmação de remoção da linha i
+    callback ssh-remove-confirm();   // remove de fato
+    callback ssh-remove-cancel();
+    callback ssh-refresh();
+
+    // ==================== Tela Configurações ====================
+    in property <[LangItem]> cfg-langs;
+    in-out property <string> cfg-lang-code;   // código do idioma atual
+    in-out property <string> cfg-lang-name;   // nome nativo do idioma atual
+    in-out property <bool> cfg-autostart-on: false;
+    in-out property <bool> cfg-hooks-on: false;
+    callback cfg-set-lang(string);       // troca o idioma (persiste + recarrega L)
+    callback cfg-toggle-autostart();
+    callback cfg-toggle-hooks();
+    callback cfg-manage-dirs();          // abre o modal de dev_dirs/pins
+
+    // ==================== Overdev — aditivos ====================
+    callback od-load-cmd();              // envia /eng-load à sessão (ou dica)
+    callback od-index-cmd();             // envia /eng-index à sessão (ou dica)
+    callback od-refresh-history();       // recarrega histórico do DB + commits do projeto atual
+    in property <[SnapRow]> od-snaps;    // histórico do DB (página atual)
+    in-out property <int> od-snap-page: 0;
+    in-out property <int> od-snap-total: 0;
+    callback od-snap-page-prev();
+    callback od-snap-page-next();
+    callback od-snap-view(int);          // Ver: get(id) → visor
+    callback od-snap-restore-request(int);
+    in-out property <bool> od-snap-confirm-open: false;
+    in-out property <int> od-snap-confirm-id: -1;
+    in-out property <string> od-snap-confirm-msg;
+    callback od-snap-restore-confirm();
+    callback od-snap-restore-cancel();
+    in-out property <bool> od-snap-view-open: false;   // visor read-only
+    in-out property <string> od-snap-view-title;
+    in-out property <string> od-snap-view-content;
+    in property <[CommitRow]> od-commits;
+    in-out property <int> od-commit-page: 0;
+    in-out property <int> od-commit-total: 0;
+    in-out property <string> od-upstream-line;         // "main → origin/main · ↑2 ↓0"
+    callback od-commit-page-prev();
+    callback od-commit-page-next();
+
+    // ==================== Paginação do Mercado ====================
+    in-out property <int> mkt-page: 0;
+    in-out property <int> mkt-total: 0;   // total de skills na página-tab ativa
+    callback mkt-recompute();             // recomputa `disp` das linhas (troca de tab)
+
     callback toggle(int);
     callback row-install(int);   // Marketplace: instalar a linha i
     callback row-update(int);    // Instaladas: atualizar a linha i (só se outdated)
@@ -1008,6 +1236,11 @@ export component AppWindow inherits Window {
     callback mp-toggle-rec();         // liga/desliga instalar a recomendada
     callback mp-toggle-env();         // liga/desliga instalar o environment
 
+    // Troca de sub-aba do Mercado → zera a paginação e recomputa os índices.
+    changed active-tab => { root.mkt-page = 0; root.mkt-recompute(); }
+    // Entrar na tela Overdev → recarrega o histórico (DB + commits) do projeto.
+    changed screen => { if (root.screen == 2) { root.od-refresh-history(); } }
+
     VerticalLayout {
         // ---- cabeçalho -------------------------------------------------
         Rectangle {
@@ -1056,7 +1289,9 @@ export component AppWindow inherits Window {
                             Text {
                                 text: root.screen == 1 ? L.home-market
                                     : root.screen == 2 ? L.tab-overdev
-                                    : root.screen == 3 ? L.tab-graph : "";
+                                    : root.screen == 3 ? L.tab-graph
+                                    : root.screen == 4 ? L.home-ssh
+                                    : root.screen == 5 ? L.home-settings : "";
                                 font-size: 14px;
                                 font-weight: 700;
                                 color: Theme.header-fg;
@@ -1142,25 +1377,335 @@ export component AppWindow inherits Window {
                 HomeCard {
                     title: L.home-ssh;
                     desc: L.home-ssh-desc;
-                    soon: true;
+                    clicked => { root.screen = 4; root.ssh-refresh(); }
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M3 5h18v14H3z M7 10l3 2.5-3 2.5 M13 15.5h5";
-                        fill: transparent; stroke: Theme.text-dim; stroke-width: 1.8px;
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
                     }
                 }
                 HomeCard {
                     title: L.home-settings;
                     desc: L.home-settings-desc;
-                    soon: true;
+                    clicked => { root.screen = 5; }
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0";
-                        fill: transparent; stroke: Theme.text-dim; stroke-width: 1.8px;
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
                     }
                 }
             }
             Rectangle {}  // empurra os cards pro topo
+        }
+
+        // ---- TELA SSH (4) — chaves SSH da máquina --------------------
+        // Lista as chaves (só metadados PÚBLICOS), gera novos pares e copia a
+        // pública / remove um par. A PRIVADA nunca é exposta (no máx. o caminho).
+        if root.screen == 4: VerticalLayout {
+            Rectangle {
+                height: 58px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    spacing: 14px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.ssh-title; font-size: 16px; font-weight: 800; color: Theme.text; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.ssh-priv-note; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.check; small: true; clicked => { root.ssh-refresh(); } }
+                    }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+            ScrollView {
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 16px;
+                    // ---- formulário Gerar ----
+                    Text { text: L.ssh-generate; font-size: 14px; font-weight: 800; color: Theme.text; }
+                    HorizontalLayout {
+                        spacing: 14px;
+                        alignment: start;
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: L.ssh-name; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 220px;
+                                placeholder-text: L.ssh-name;
+                                text: root.ssh-gen-name;
+                                edited(s) => { root.ssh-gen-name = s; }
+                            }
+                        }
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: L.ssh-kind; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Chip { label: "ed25519"; selected: root.ssh-gen-kind == "ed25519"; clicked => { root.ssh-gen-kind = "ed25519"; } }
+                                Chip { label: "rsa"; selected: root.ssh-gen-kind == "rsa"; clicked => { root.ssh-gen-kind = "rsa"; } }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 14px;
+                        alignment: start;
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: L.ssh-comment; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 300px;
+                                placeholder-text: L.ssh-comment;
+                                text: root.ssh-gen-comment;
+                                edited(s) => { root.ssh-gen-comment = s; }
+                            }
+                        }
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: L.ssh-passphrase; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 220px;
+                                input-type: InputType.password;
+                                placeholder-text: L.ssh-passphrase;
+                                text: root.ssh-gen-passphrase;
+                                edited(s) => { root.ssh-gen-passphrase = s; }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        Btn {
+                            label: L.ssh-generate; primary: true; small: true;
+                            enabled: root.ssh-gen-name != "";
+                            clicked => { root.ssh-generate(); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            if root.ssh-gen-status != "": Text {
+                                text: root.ssh-gen-status;
+                                font-size: 12.5px; font-weight: 600;
+                                color: root.ssh-gen-error ? Theme.warn : Theme.good;
+                            }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- lista de chaves ----
+                    Text { text: L.ssh-keys-title; font-size: 14px; font-weight: 800; color: Theme.text; }
+                    if root.ssh-rows.length == 0: Text {
+                        text: L.ssh-empty; font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap;
+                    }
+                    for k[ki] in root.ssh-rows: Rectangle {
+                        height: 92px;
+                        border-radius: 12px;
+                        background: Theme.surface;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        VerticalLayout {
+                            padding: 14px;
+                            spacing: 6px;
+                            HorizontalLayout {
+                                spacing: 10px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text { text: k.name; font-size: 14.5px; font-weight: 700; color: Theme.text; }
+                                }
+                                Rectangle {
+                                    y: (parent.height - self.height) / 2;
+                                    height: 22px;
+                                    width: ktxt.preferred-width + 18px;
+                                    border-radius: 11px;
+                                    background: Theme.accent.transparentize(0.85);
+                                    border-width: 1px;
+                                    border-color: Theme.accent.transparentize(0.5);
+                                    ktxt := Text {
+                                        text: k.kind; color: Theme.accent; font-size: 11px; font-weight: 700;
+                                        horizontal-alignment: center; vertical-alignment: center;
+                                    }
+                                }
+                                Rectangle {}
+                                if k.op-label != "": VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: k.op-label; font-size: 12px; font-weight: 600;
+                                        color: k.op-error ? Theme.warn : Theme.good;
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.ssh-copy-pub; small: true; clicked => { root.ssh-copy(ki); } }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.ssh-remove; small: true; danger: true; clicked => { root.ssh-remove-request(ki); } }
+                                }
+                            }
+                            if k.comment != "": Text { text: k.comment; font-size: 12px; color: Theme.text-dim; overflow: elide; }
+                            Text { text: k.fingerprint; font-size: 11.5px; color: Theme.text-dim; overflow: elide; }
+                        }
+                    }
+                    Rectangle {}
+                }
+            }
+        }
+
+        // ---- TELA CONFIGURAÇÕES (5) ---------------------------------
+        // Idioma (troca ao vivo), tema, autostart do agente, hooks do overdev,
+        // e atalho pro modal de diretórios de dev / projetos fixados.
+        if root.screen == 5: VerticalLayout {
+            Rectangle {
+                height: 58px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.cfg-title; font-size: 16px; font-weight: 800; color: Theme.text; }
+                    }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+            ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 20px;
+                    // ---- idioma ----
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.cfg-language; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        Rectangle {
+                            width: 260px;
+                            height: 34px;
+                            border-radius: 8px;
+                            background: lgdd.has-hover ? Theme.surface-2 : Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 8px;
+                                Text {
+                                    text: root.cfg-lang-name != "" ? root.cfg-lang-name : root.cfg-lang-code;
+                                    color: Theme.text; font-size: 13.5px; font-weight: 600;
+                                    vertical-alignment: center; overflow: elide;
+                                }
+                                Rectangle {}
+                                Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                            }
+                            lgdd := TouchArea { mouse-cursor: pointer; clicked => { lgpop.show(); } }
+                            lgpop := PopupWindow {
+                                x: 0;
+                                y: parent.height + 4px;
+                                width: 260px;
+                                Rectangle {
+                                    background: Theme.surface;
+                                    border-width: 1px;
+                                    border-color: Theme.border;
+                                    border-radius: 10px;
+                                    ScrollView {
+                                        height: 280px;
+                                        VerticalLayout {
+                                            padding: 6px;
+                                            spacing: 1px;
+                                            for lg[lgi] in root.cfg-langs: Rectangle {
+                                                height: 30px;
+                                                border-radius: 6px;
+                                                background: lg.current
+                                                    ? Theme.accent-soft
+                                                    : (lgita.has-hover ? Theme.surface-2 : transparent);
+                                                HorizontalLayout {
+                                                    padding-left: 8px;
+                                                    padding-right: 8px;
+                                                    Text {
+                                                        text: lg.name;
+                                                        font-size: 13px;
+                                                        font-weight: lg.current ? 700 : 500;
+                                                        color: lg.current ? Theme.header-fg : Theme.text;
+                                                        vertical-alignment: center;
+                                                        overflow: elide;
+                                                    }
+                                                }
+                                                lgita := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.cfg-set-lang(lg.code); }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- tema ----
+                    HorizontalLayout {
+                        spacing: 12px;
+                        VerticalLayout {
+                            alignment: center;
+                            Text { text: L.cfg-theme; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        }
+                        Rectangle {}
+                        ThemeToggle { clicked => { Theme.dark = !Theme.dark; } }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- autostart do agente ----
+                    HorizontalLayout {
+                        spacing: 14px;
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 3px;
+                            Text { text: L.cfg-autostart; font-size: 14px; font-weight: 800; color: Theme.text; }
+                            Text { text: L.cfg-autostart-desc; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                        }
+                        Rectangle {}
+                        VerticalLayout {
+                            alignment: center;
+                            Check { checked: root.cfg-autostart-on; toggled => { root.cfg-toggle-autostart(); } }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- hooks do overdev ----
+                    HorizontalLayout {
+                        spacing: 14px;
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 3px;
+                            Text { text: L.cfg-hooks; font-size: 14px; font-weight: 800; color: Theme.text; }
+                            Text { text: L.cfg-hooks-desc; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                        }
+                        Rectangle {}
+                        VerticalLayout {
+                            alignment: center;
+                            Check { checked: root.cfg-hooks-on; toggled => { root.cfg-toggle-hooks(); } }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- diretórios de dev + projetos fixados ----
+                    HorizontalLayout {
+                        spacing: 14px;
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 3px;
+                            Text { text: L.cfg-dirs; font-size: 14px; font-weight: 800; color: Theme.text; }
+                            Text { text: L.cfg-dirs-desc; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                        }
+                        Rectangle {}
+                        VerticalLayout {
+                            alignment: center;
+                            Btn { label: L.cfg-manage; small: true; clicked => { root.cfg-manage-dirs(); } }
+                        }
+                    }
+                    Rectangle {}
+                }
+            }
         }
 
         // ---- barra de sub-abas do MERCADO (só na tela Mercado) --------
@@ -1522,6 +2067,17 @@ export component AppWindow inherits Window {
                                 enabled: root.od-session-running;
                                 clicked => { root.od-stop(); }
                             }
+                            // aditivos: injeta /eng-load e /eng-index na sessão (ou dica).
+                            TipBtn {
+                                label: L.od-load;
+                                tip: L.od-load-tip;
+                                clicked => { root.od-load-cmd(); }
+                            }
+                            TipBtn {
+                                label: L.od-index;
+                                tip: L.od-index-tip;
+                                clicked => { root.od-index-cmd(); }
+                            }
                             // pill "rodando…" enquanto a sessão vive.
                             if root.od-session-running: VerticalLayout {
                                 alignment: center;
@@ -1734,6 +2290,107 @@ export component AppWindow inherits Window {
                                 enabled: root.od-correction-input != "";
                                 clicked => { root.od-add-correction(root.od-correction-input); root.od-correction-input = ""; }
                             }
+                        }
+                    }
+                    Rectangle { height: 6px; }
+                    // ---- Histórico do DB do overdev (cópia de segurança) ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.od-history; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        Text { text: L.od-history-note; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                        if root.od-snaps.length == 0: Text { text: L.od-snap-empty; font-size: 12px; color: Theme.text-dim; }
+                        for s[si] in root.od-snaps: Rectangle {
+                            height: 44px;
+                            border-radius: 8px;
+                            background: Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 12px;
+                                VerticalLayout {
+                                    width: 210px;
+                                    alignment: center;
+                                    Text { text: s.file; font-size: 12.5px; font-weight: 600; color: Theme.text; overflow: elide; }
+                                }
+                                VerticalLayout {
+                                    width: 130px;
+                                    alignment: center;
+                                    Text { text: s.date; font-size: 11.5px; color: Theme.text-dim; }
+                                }
+                                VerticalLayout {
+                                    width: 70px;
+                                    alignment: center;
+                                    Text { text: s.size; font-size: 11.5px; color: Theme.text-dim; }
+                                }
+                                Rectangle {}
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.od-view; small: true; clicked => { root.od-snap-view(s.id); } }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.od-restore; small: true; danger: true; clicked => { root.od-snap-restore-request(s.id); } }
+                                }
+                            }
+                        }
+                        if root.od-snap-total > 20: Pager {
+                            page: root.od-snap-page;
+                            total: root.od-snap-total;
+                            prev => { root.od-snap-page-prev(); }
+                            next => { root.od-snap-page-next(); }
+                        }
+                    }
+                    // ---- Histórico de commits / push ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.od-commits; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        if root.od-upstream-line != "": Text { text: root.od-upstream-line; font-size: 12px; font-weight: 600; color: Theme.accent; }
+                        if root.od-commits.length == 0: Text { text: L.od-commits-empty; font-size: 12px; color: Theme.text-dim; }
+                        for c[ci] in root.od-commits: Rectangle {
+                            height: 40px;
+                            border-radius: 8px;
+                            background: Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 10px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text { text: c.pushed ? "●" : "○"; font-size: 13px; color: c.pushed ? Theme.good : Theme.text-dim; }
+                                }
+                                VerticalLayout {
+                                    width: 70px;
+                                    alignment: center;
+                                    Text { text: c.short; font-size: 12px; color: Theme.accent; }
+                                }
+                                VerticalLayout {
+                                    width: 90px;
+                                    alignment: center;
+                                    Text { text: c.date; font-size: 11.5px; color: Theme.text-dim; }
+                                }
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    Text { text: c.subject; font-size: 12.5px; color: Theme.text; overflow: elide; }
+                                }
+                                VerticalLayout {
+                                    width: 110px;
+                                    alignment: center;
+                                    Text { text: c.author; font-size: 11.5px; color: Theme.text-dim; overflow: elide; }
+                                }
+                            }
+                        }
+                        if root.od-commit-total > 20: Pager {
+                            page: root.od-commit-page;
+                            total: root.od-commit-total;
+                            prev => { root.od-commit-page-prev(); }
+                            next => { root.od-commit-page-next(); }
                         }
                     }
                     Rectangle { height: 6px; }
@@ -2314,11 +2971,16 @@ export component AppWindow inherits Window {
                         // ou skill cujo ESTADO casa com a página ativa.
                         //   tab 0 (Instaladas)  → state != "missing"
                         //   tab 1 (Marketplace) → state == "missing"
-                        property <bool> show: row.is-header
+                        property <bool> on-page: row.is-header
                             ? (row.count > 0 && root.active-tab == row.page)
                             : (root.active-tab == 0 ? row.state != "missing"
                                : root.active-tab == 1 ? row.state == "missing"
                                : false);
+                        // Paginação: cabeçalho segue as regras de página; skill só
+                        // aparece se seu índice de exibição cai na janela atual (20/página).
+                        property <bool> show: row.is-header
+                            ? on-page
+                            : (on-page && row.disp >= root.mkt-page * 20 && row.disp < (root.mkt-page + 1) * 20);
                         height: show ? (row.is-header ? 48px : 56px) : 0px;
                         visible: show;
                         background: row.is-header
@@ -2461,6 +3123,17 @@ export component AppWindow inherits Window {
                             background: Theme.border.transparentize(0.5);
                         }
                     }
+                }
+            }
+            // paginação (só quando passa de uma página)
+            if root.mkt-total > 20: Rectangle {
+                height: 44px;
+                background: Theme.bg;
+                Pager {
+                    page: root.mkt-page;
+                    total: root.mkt-total;
+                    prev => { root.mkt-page = root.mkt-page - 1; }
+                    next => { root.mkt-page = root.mkt-page + 1; }
                 }
             }
         }
@@ -2789,6 +3462,109 @@ export component AppWindow inherits Window {
                     Rectangle {}
                     Btn { label: L.mp-cancel; small: true; clicked => { root.od-run-cancel(); } }
                     Btn { label: L.od-run; primary: true; small: true; clicked => { root.od-run-confirm(); } }
+                }
+            }
+        }
+    }
+
+    // ---- MODAL de confirmação de remoção de chave SSH -------------------
+    if root.ssh-confirm-open: Rectangle {
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { root.ssh-remove-cancel(); } }
+        Rectangle {
+            width: Math.min(root.width - 64px, 460px);
+            height: sshcard.preferred-height;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            sshcard := VerticalLayout {
+                padding: 22px;
+                spacing: 16px;
+                Text { text: root.ssh-confirm-msg; font-size: 14px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    Btn { label: L.mp-cancel; clicked => { root.ssh-remove-cancel(); } }
+                    Btn { label: L.ssh-remove; primary: true; danger: true; clicked => { root.ssh-remove-confirm(); } }
+                }
+            }
+        }
+    }
+
+    // ---- MODAL de confirmação de RESTAURAR snapshot ---------------------
+    if root.od-snap-confirm-open: Rectangle {
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { root.od-snap-restore-cancel(); } }
+        Rectangle {
+            width: Math.min(root.width - 64px, 460px);
+            height: snapcard.preferred-height;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            snapcard := VerticalLayout {
+                padding: 22px;
+                spacing: 16px;
+                Text { text: root.od-snap-confirm-msg; font-size: 14px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    Btn { label: L.mp-cancel; clicked => { root.od-snap-restore-cancel(); } }
+                    Btn { label: L.od-restore; primary: true; danger: true; clicked => { root.od-snap-restore-confirm(); } }
+                }
+            }
+        }
+    }
+
+    // ---- VISOR read-only de um snapshot do DB ---------------------------
+    if root.od-snap-view-open: Rectangle {
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { root.od-snap-view-open = false; } }
+        Rectangle {
+            width: Math.min(root.width - 64px, 720px);
+            height: Math.min(root.height - 96px, 560px);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: root.od-snap-view-title; font-size: 14px; font-weight: 800; color: Theme.text; overflow: elide; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.od-close; small: true; clicked => { root.od-snap-view-open = false; } }
+                    }
+                }
+                Rectangle {
+                    border-radius: 8px;
+                    background: Theme.bg;
+                    border-width: 1px;
+                    border-color: Theme.border;
+                    TextEdit {
+                        width: 100%;
+                        height: 100%;
+                        read-only: true;
+                        text: root.od-snap-view-content;
+                        font-size: 12px;
+                        wrap: no-wrap;
+                    }
                 }
             }
         }

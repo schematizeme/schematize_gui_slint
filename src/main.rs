@@ -17,7 +17,10 @@
 use schematize::agentrun::{self, AgentRunner, ClaudeRunner};
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
-use schematize::{config, environments, overdev, panel, projects, skilledit, skills, util};
+use schematize::{
+    autostart, config, environments, githist, overdev, overdevdb, panel, projects, settings,
+    skilledit, skills, sshkeys, util,
+};
 use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -206,6 +209,49 @@ fn install_i18n(app: &AppWindow) {
     l.set_no_installed_skills(tor("gui.no_installed_skills", "Nenhuma skill instalada para editar").into());
     l.set_edit_now(tor("gui.edit_now", "Editar agora").into());
     l.set_pick_file_hint(tor("gui.pick_file_hint", "Selecione um arquivo na barra lateral para editar").into());
+    // Tela SSH — chaves NOVAS via `tor`.
+    l.set_ssh_title(tor("gui.ssh_title", "Chaves SSH").into());
+    l.set_ssh_generate(tor("gui.ssh_generate", "Gerar chave").into());
+    l.set_ssh_name(tor("gui.ssh_name", "Nome").into());
+    l.set_ssh_kind(tor("gui.ssh_kind", "Tipo").into());
+    l.set_ssh_comment(tor("gui.ssh_comment", "Comentário").into());
+    l.set_ssh_passphrase(tor("gui.ssh_passphrase", "Passphrase (opcional)").into());
+    l.set_ssh_copy_pub(tor("gui.ssh_copy_pub", "Copiar pública").into());
+    l.set_ssh_copied(tor("gui.ssh_copied", "copiado").into());
+    l.set_ssh_remove(tor("gui.ssh_remove", "Remover").into());
+    l.set_ssh_empty(tor("gui.ssh_empty", "Nenhuma chave em ~/.ssh — gere uma acima.").into());
+    l.set_ssh_priv_note(tor("gui.ssh_priv_note", "A chave privada nunca é exposta — só a pública sai.").into());
+    l.set_ssh_keys_title(tor("gui.ssh_keys_title", "Suas chaves").into());
+    // Tela Configurações — chaves NOVAS via `tor`.
+    l.set_cfg_title(tor("gui.cfg_title", "Configurações").into());
+    l.set_cfg_language(tor("gui.cfg_language", "Idioma").into());
+    l.set_cfg_theme(tor("gui.cfg_theme", "Tema").into());
+    l.set_cfg_autostart(tor("gui.cfg_autostart", "Autostart do agente").into());
+    l.set_cfg_autostart_desc(tor("gui.cfg_autostart_desc", "Inicia o agente de atualização junto com a sua sessão.").into());
+    l.set_cfg_hooks(tor("gui.cfg_hooks", "Hooks do overdev").into());
+    l.set_cfg_hooks_desc(tor("gui.cfg_hooks_desc", "Registra os hooks (Stop/PreToolUse) do overdev no Claude Code.").into());
+    l.set_cfg_dirs(tor("gui.cfg_dirs", "Diretórios de dev e projetos fixados").into());
+    l.set_cfg_dirs_desc(tor("gui.cfg_dirs_desc", "Onde o schematize procura os seus projetos.").into());
+    l.set_cfg_manage(tor("gui.cfg_manage", "Gerenciar…").into());
+    l.set_cfg_on(tor("gui.cfg_on", "ligado").into());
+    l.set_cfg_off(tor("gui.cfg_off", "desligado").into());
+    // Overdev — aditivos.
+    l.set_od_load(tor("gui.od_load", "Load").into());
+    l.set_od_index(tor("gui.od_index", "Index").into());
+    l.set_od_load_tip(tor("gui.od_load_tip", "Carrega os preceitos de engenharia da casa no contexto do agente (/eng-load).").into());
+    l.set_od_index_tip(tor("gui.od_index_tip", "(Re)indexa o conteúdo do projeto — grafo/MAPA (/eng-index).").into());
+    l.set_od_history(tor("gui.od_history", "Histórico (cópia de segurança)").into());
+    l.set_od_history_note(tor("gui.od_history_note", "O agente pode editar/apagar os arquivos do .overdev/ — este é o backup versionado deles.").into());
+    l.set_od_view(tor("gui.od_view", "Ver").into());
+    l.set_od_restore(tor("gui.od_restore", "Restaurar").into());
+    l.set_od_snap_empty(tor("gui.od_snap_empty", "Sem snapshots ainda.").into());
+    l.set_od_commits(tor("gui.od_commits", "Commits e push").into());
+    l.set_od_commits_empty(tor("gui.od_commits_empty", "Sem commits (ou não é um repositório git).").into());
+    l.set_od_close(tor("gui.od_close", "Fechar").into());
+    // Paginação.
+    l.set_pg_prev(tor("gui.pg_prev", "‹ Anterior").into());
+    l.set_pg_next(tor("gui.pg_next", "Próximo ›").into());
+    l.set_pg_of(tor("gui.pg_of", "de").into());
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +387,7 @@ fn header_row(label: &str, cat: &str, page: i32) -> SkillRow {
         busy: false,
         op_label: SharedString::new(),
         op_error: false,
+        disp: -1,
     }
 }
 
@@ -370,6 +417,7 @@ fn skill_row(it: &Item) -> SkillRow {
         busy: false,
         op_label: SharedString::new(),
         op_error: false,
+        disp: -1,
     }
 }
 
@@ -435,6 +483,39 @@ fn recompute_headers(app: &AppWindow) {
             rows.set_row_data(i, h);
         }
     }
+    recompute_pagination(app);
+}
+
+// ---------------------------------------------------------------------------
+// Paginação do Mercado: numera (disp) as skills VISÍVEIS na página-tab ativa em
+// ordem sequencial; -1 nas que não pertencem à página. O Slint mostra só as
+// cujo `disp` cai na janela `[mkt-page*20, +20)`. Total → controla o Pager.
+// ---------------------------------------------------------------------------
+fn recompute_pagination(app: &AppWindow) {
+    let tab = app.get_active_tab();
+    let rows = app.get_rows();
+    let n = rows.row_count();
+    let mut idx = 0i32;
+    for i in 0..n {
+        let Some(mut r) = rows.row_data(i) else { continue };
+        if r.is_header {
+            continue;
+        }
+        let missing = r.state == "missing";
+        let on_page = (tab == 0 && !missing) || (tab == 1 && missing);
+        let new_disp = if on_page {
+            let d = idx;
+            idx += 1;
+            d
+        } else {
+            -1
+        };
+        if r.disp != new_disp {
+            r.disp = new_disp;
+            rows.set_row_data(i, r);
+        }
+    }
+    app.set_mkt_total(idx);
 }
 
 // ---------------------------------------------------------------------------
@@ -694,6 +775,120 @@ fn env_row(le: &environments::LangEnv) -> EnvRow {
 /// Constrói o modelo inteiro da aba Environments a partir de `environments::status()`.
 fn build_env_rows() -> Vec<EnvRow> {
     environments::status().iter().map(env_row).collect()
+}
+
+// ---------------------------------------------------------------------------
+// SSH — modelo da tela de chaves a partir de `sshkeys::list()` (só metadados
+// PÚBLICOS; a privada nunca é lida/exposta). Igual ao padrão dos demais modelos.
+// ---------------------------------------------------------------------------
+fn build_ssh_rows() -> Vec<SshRow> {
+    sshkeys::list()
+        .into_iter()
+        .map(|k| SshRow {
+            name: k.name.into(),
+            kind: k.kind.into(),
+            comment: k.comment.into(),
+            fingerprint: k.fingerprint.into(),
+            public_path: k.public_path.into(),
+            op_label: SharedString::new(),
+            op_error: false,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Idiomas p/ o seletor de Configurações (código + nome nativo + marca do atual).
+// ---------------------------------------------------------------------------
+fn build_lang_items(current: &str) -> Vec<LangItem> {
+    i18n::LANGS
+        .iter()
+        .map(|(code, name, _)| LangItem {
+            code: (*code).into(),
+            name: (*name).into(),
+            current: *code == current,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Formatação p/ o histórico do DB do overdev. Sem crate de data: converte o
+// epoch (UTC) via o algoritmo civil de Howard Hinnant.
+// ---------------------------------------------------------------------------
+fn fmt_ts(ts: i64) -> String {
+    if ts <= 0 {
+        return "—".into();
+    }
+    let days = ts.div_euclid(86_400);
+    let secs = ts.rem_euclid(86_400);
+    let (h, mi) = (secs / 3600, (secs % 3600) / 60);
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02} {h:02}:{mi:02}")
+}
+
+/// Tamanho legível (B / KB / MB).
+fn fmt_size(bytes: i64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+/// Linha de upstream (branch → remote · ↑ahead ↓behind); vazia se sem tracking.
+fn fmt_upstream(up: Option<githist::Upstream>) -> String {
+    match up {
+        Some(u) => {
+            let remote = u.remote.unwrap_or_else(|| "—".into());
+            format!("{} → {} · ↑{} ↓{}", u.branch, remote, u.ahead, u.behind)
+        }
+        None => String::new(),
+    }
+}
+
+/// Tamanho da página das listas paginadas (mercado, histórico do DB, commits).
+const PAGE: usize = 20;
+
+/// Uma página do histórico do DB (metadados → SnapRow).
+fn snap_rows_page(all: &[overdevdb::SnapshotMeta], page: i32) -> Vec<SnapRow> {
+    let start = (page.max(0) as usize) * PAGE;
+    all.iter()
+        .skip(start)
+        .take(PAGE)
+        .map(|m| SnapRow {
+            id: m.id as i32,
+            file: m.file.clone().into(),
+            date: fmt_ts(m.ts).into(),
+            size: fmt_size(m.size).into(),
+            hash: m.hash.chars().take(8).collect::<String>().into(),
+        })
+        .collect()
+}
+
+/// Uma página do histórico de commits (Commit → CommitRow).
+fn commit_rows_page(all: &[githist::Commit], page: i32) -> Vec<CommitRow> {
+    let start = (page.max(0) as usize) * PAGE;
+    all.iter()
+        .skip(start)
+        .take(PAGE)
+        .map(|c| CommitRow {
+            short: c.short.clone().into(),
+            date: c.date.clone().into(),
+            author: c.author.clone().into(),
+            subject: c.subject.clone().into(),
+            pushed: c.pushed,
+        })
+        .collect()
 }
 
 /// Localiza o binário `schematize` (CLI) pra montar o comando do terminal:
@@ -1116,10 +1311,26 @@ fn post_run_end(weak: &Weak<AppWindow>, status: String) {
     });
 }
 
+/// Canal de INJEÇÃO de comandos na sessão acoplada (Load/Index). O worker guarda
+/// o `Sender` aqui enquanto vive; a UI (thread principal) envia por ele. O guard
+/// zera o slot quando o worker termina (qualquer caminho de saída), pra o handler
+/// da UI voltar a cair na dica "inicie a sessão".
+type Inject = Arc<std::sync::Mutex<Option<std::sync::mpsc::Sender<String>>>>;
+
+/// RAII: limpa o slot de injeção quando o worker sai (drop).
+struct InjectGuard(Inject);
+impl Drop for InjectGuard {
+    fn drop(&mut self) {
+        if let Ok(mut g) = self.0.lock() {
+            *g = None;
+        }
+    }
+}
+
 /// Sobe o agente acoplado numa thread e MONITORA até o overdev fechar, o agente
 /// morrer, o teto de nudges estourar ou a `stop` ser acionada (botão Parar).
 /// Todos os argumentos são `Send`; a UI só é tocada pelos `post_*` acima.
-fn run_overdev_worker(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>) {
+fn run_overdev_worker(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>, inject: Inject) {
     std::thread::spawn(move || {
         let objetivo = overdev::objetivo_at(&project).unwrap_or_default();
         let runner = ClaudeRunner;
@@ -1135,6 +1346,12 @@ fn run_overdev_worker(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicB
             &weak,
             format!("[schematize] agente `{}` acoplado em {}\n", runner.name(), project.display()),
         );
+        // Registra o canal de injeção (Load/Index) e garante limpeza na saída.
+        let (itx, irx) = std::sync::mpsc::channel::<String>();
+        if let Ok(mut g) = inject.lock() {
+            *g = Some(itx);
+        }
+        let _inject_guard = InjectGuard(inject.clone());
 
         let max = agentrun::DEFAULT_MAX_NUDGES;
         let mut nudges: u64 = 0;
@@ -1150,6 +1367,15 @@ fn run_overdev_worker(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicB
                 }
                 post_run_end(&weak, tor("gui.od_done", "concluído"));
                 return;
+            }
+
+            // 0.5) Injeta comandos pedidos pela UI (Load/Index) na sessão.
+            while let Ok(cmd) = irx.try_recv() {
+                let line = format!("{}\n", cmd.trim_end());
+                if session.send(&line).is_ok() {
+                    append_run_log(&weak, format!("[schematize] → {}\n", cmd.trim()));
+                    last_output = Instant::now();
+                }
             }
 
             // 1) Drena o output disponível (bloqueia no máx. 500ms — mantém o loop vivo).
@@ -1205,6 +1431,25 @@ fn run_overdev_worker(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicB
             }
         }
     });
+}
+
+/// Envia `cmd` (ex.: `/eng-load`) à sessão acoplada se ela existir; senão mostra
+/// a dica de que é preciso iniciar o overdev primeiro. Botões Load/Index.
+fn inject_or_hint(app: &AppWindow, inject: &Inject, cmd: &str) {
+    if app.get_od_session_running() {
+        if let Ok(g) = inject.lock() {
+            if let Some(tx) = g.as_ref() {
+                if tx.send(cmd.to_string()).is_ok() {
+                    let msg = format!("{}{}", tor("gui.od_sent", "enviado à sessão: "), cmd);
+                    app.set_od_run_status(msg.into());
+                    return;
+                }
+            }
+        }
+    }
+    app.set_od_run_status(
+        tor("gui.od_need_session", "Inicie a sessão do overdev (Executar) para usar Load/Index.").into(),
+    );
 }
 
 // ===========================================================================
@@ -1536,6 +1781,45 @@ fn graph_load_and_kick(
     graph_kick(timer, weak.clone(), state.clone(), nodes.clone(), edges.clone());
 }
 
+/// (Re)carrega o histórico do DB do overdev + os commits do projeto `proj` nos
+/// modelos, reseta a paginação e escreve a linha de upstream. None → limpa tudo.
+/// Síncrono (sqlite/git locais e rápidos — mesma escolha do env status).
+fn refresh_od_history(
+    app: &AppWindow,
+    snaps_all: &RefCell<Vec<overdevdb::SnapshotMeta>>,
+    snaps_model: &VecModel<SnapRow>,
+    commits_all: &RefCell<Vec<githist::Commit>>,
+    commits_model: &VecModel<CommitRow>,
+    proj: Option<&Path>,
+) {
+    match proj {
+        Some(p) => {
+            let snaps = overdevdb::history(p, 50).unwrap_or_default();
+            let commits = githist::commits(p, 50);
+            app.set_od_upstream_line(fmt_upstream(githist::upstream(p)).into());
+            app.set_od_snap_total(snaps.len() as i32);
+            app.set_od_commit_total(commits.len() as i32);
+            app.set_od_snap_page(0);
+            app.set_od_commit_page(0);
+            snaps_model.set_vec(snap_rows_page(&snaps, 0));
+            commits_model.set_vec(commit_rows_page(&commits, 0));
+            *snaps_all.borrow_mut() = snaps;
+            *commits_all.borrow_mut() = commits;
+        }
+        None => {
+            app.set_od_upstream_line(SharedString::new());
+            app.set_od_snap_total(0);
+            app.set_od_commit_total(0);
+            app.set_od_snap_page(0);
+            app.set_od_commit_page(0);
+            snaps_model.set_vec(Vec::new());
+            commits_model.set_vec(Vec::new());
+            snaps_all.borrow_mut().clear();
+            commits_all.borrow_mut().clear();
+        }
+    }
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     detect_display_env();
 
@@ -1558,6 +1842,9 @@ fn main() -> Result<(), slint::PlatformError> {
     if !model.iter().any(|r| !r.is_header && is_installed(&r)) {
         app.set_active_tab(1);
     }
+    // Recomputa a paginação para a aba inicial efetiva (o handler `changed active-tab`
+    // ainda não está ligado neste ponto — recomputa explicitamente).
+    recompute_pagination(&app);
 
     // Resolve o latest de todas as skills assim que a janela sobe (não bloqueia).
     kick_resolve_all(&app.as_weak(), &row_items);
@@ -2173,12 +2460,23 @@ fn main() -> Result<(), slint::PlatformError> {
     // Fase 4: flag de parada da sessão acoplada (o botão Parar a levanta; o worker
     // a checa a cada ciclo e encerra). `Arc` porque cruza pra a thread do agente.
     let od_stop_flag = Arc::new(AtomicBool::new(false));
+    // Canal de injeção Load/Index na sessão acoplada (vazio = sem sessão viva).
+    let od_inject: Inject = Arc::new(std::sync::Mutex::new(None));
+    // Histórico do DB do overdev + commits (aditivos): estado completo no Rust +
+    // modelos com a PÁGINA atual (paginação Rust-side).
+    let od_snaps_all: Rc<RefCell<Vec<overdevdb::SnapshotMeta>>> = Rc::new(RefCell::new(Vec::new()));
+    let od_snaps_model = Rc::new(VecModel::<SnapRow>::from(Vec::new()));
+    let od_commits_all: Rc<RefCell<Vec<githist::Commit>>> = Rc::new(RefCell::new(Vec::new()));
+    let od_commits_model = Rc::new(VecModel::<CommitRow>::from(Vec::new()));
+    app.set_od_snaps(ModelRc::from(od_snaps_model.clone()));
+    app.set_od_commits(ModelRc::from(od_commits_model.clone()));
     // Restaura a última escolha (mais recente), senão empty-state.
     match config::recent_projects().into_iter().next() {
         Some(p) => {
             let abs = std::fs::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(&p));
             *od_current.borrow_mut() = Some(abs.clone());
             load_overdev_into(&app, &od_items_model, Some(&abs));
+            refresh_od_history(&app, &od_snaps_all, &od_snaps_model, &od_commits_all, &od_commits_model, Some(&abs));
             // grafo compartilha o projeto restaurado.
             graph_load_and_kick(Some(&abs), &graph_timer, &app.as_weak(), &graph_state, &graph_nodes, &graph_edges);
         }
@@ -2205,6 +2503,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 select_project(&app, &items, &pm, &dm, &pnm, &cur, PathBuf::from(path.to_string()));
                 let p = cur.borrow().clone();
                 graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
+                app.invoke_od_refresh_history();
             }
         });
     }
@@ -2226,6 +2525,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     select_project(&app, &items, &pm, &dm, &pnm, &cur, dir);
                     let p = cur.borrow().clone();
                     graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
+                    app.invoke_od_refresh_history();
                 }
             }
         });
@@ -2266,6 +2566,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 let p = cur.borrow().clone();
                 load_overdev_into(&app, &items, p.as_deref());
                 graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
+                app.invoke_od_refresh_history();
             }
         });
     }
@@ -2439,6 +2740,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let weak = app.as_weak();
         let cur = od_current.clone();
         let stop = od_stop_flag.clone();
+        let inject = od_inject.clone();
         app.on_od_run_confirm(move || {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
@@ -2452,7 +2754,26 @@ fn main() -> Result<(), slint::PlatformError> {
                 app.set_od_run_done(0);
                 app.set_od_run_open(0);
                 stop.store(false, Ordering::SeqCst);
-                run_overdev_worker(weak.clone(), p, stop.clone());
+                run_overdev_worker(weak.clone(), p, stop.clone(), inject.clone());
+            }
+        });
+    }
+    // ---- aditivos: Load / Index → injeta o slash-command na sessão (ou dica) ----
+    {
+        let weak = app.as_weak();
+        let inject = od_inject.clone();
+        app.on_od_load_cmd(move || {
+            if let Some(app) = weak.upgrade() {
+                inject_or_hint(&app, &inject, overdev::load_cmd());
+            }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        let inject = od_inject.clone();
+        app.on_od_index_cmd(move || {
+            if let Some(app) = weak.upgrade() {
+                inject_or_hint(&app, &inject, overdev::index_cmd());
             }
         });
     }
@@ -2663,6 +2984,330 @@ fn main() -> Result<(), slint::PlatformError> {
             let proj = gs.borrow().project.clone();
             if let Some(p) = proj {
                 let _ = panel::open_in_browser(&p);
+            }
+        });
+    }
+
+    // ==================== Paginação do Mercado ====================
+    // Recomputa os índices de exibição (disp) quando a sub-aba muda.
+    {
+        let weak = app.as_weak();
+        app.on_mkt_recompute(move || {
+            if let Some(app) = weak.upgrade() {
+                recompute_pagination(&app);
+            }
+        });
+    }
+
+    // ==================== Tela SSH (chaves) ====================
+    let ssh_model = Rc::new(VecModel::<SshRow>::from(build_ssh_rows()));
+    app.set_ssh_rows(ModelRc::from(ssh_model.clone()));
+    // re-sonda ~/.ssh.
+    {
+        let weak = app.as_weak();
+        let m = ssh_model.clone();
+        app.on_ssh_refresh(move || {
+            m.set_vec(build_ssh_rows());
+            if let Some(app) = weak.upgrade() {
+                app.set_ssh_gen_status(SharedString::new());
+            }
+        });
+    }
+    // gerar um par (ed25519/rsa). NUNCA sobrescreve (force=false).
+    {
+        let weak = app.as_weak();
+        let m = ssh_model.clone();
+        app.on_ssh_generate(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let name = app.get_ssh_gen_name().to_string();
+            let kind_s = app.get_ssh_gen_kind().to_string();
+            let comment = app.get_ssh_gen_comment().to_string();
+            let pass = app.get_ssh_gen_passphrase().to_string();
+            if let Err(e) = sshkeys::valid_name(&name) {
+                app.set_ssh_gen_error(true);
+                app.set_ssh_gen_status(e.into());
+                return;
+            }
+            let kind = match sshkeys::KeyKind::parse(&kind_s) {
+                Ok(k) => k,
+                Err(e) => {
+                    app.set_ssh_gen_error(true);
+                    app.set_ssh_gen_status(e.into());
+                    return;
+                }
+            };
+            let comment_opt = if comment.trim().is_empty() { None } else { Some(comment.as_str()) };
+            let pass_opt = if pass.is_empty() { None } else { Some(pass.as_str()) };
+            match sshkeys::generate(&name, kind, comment_opt, pass_opt, false) {
+                Ok(info) => {
+                    app.set_ssh_gen_error(false);
+                    app.set_ssh_gen_status(format!("{} · {}", info.name, info.fingerprint).into());
+                    app.set_ssh_gen_name(SharedString::new());
+                    app.set_ssh_gen_comment(SharedString::new());
+                    app.set_ssh_gen_passphrase(SharedString::new());
+                    m.set_vec(build_ssh_rows());
+                }
+                Err(e) => {
+                    app.set_ssh_gen_error(true);
+                    app.set_ssh_gen_status(e.into());
+                }
+            }
+        });
+    }
+    // copiar a PÚBLICA (export_public + clipboard). NUNCA toca a privada.
+    {
+        let m = ssh_model.clone();
+        app.on_ssh_copy(move |idx| {
+            let i = idx as usize;
+            if let Some(mut r) = m.row_data(i) {
+                let name = r.name.to_string();
+                match sshkeys::export_public(&name) {
+                    Ok(pubtext) => {
+                        let ok = sshkeys::copy_to_clipboard(&pubtext);
+                        r.op_label = if ok {
+                            tor("gui.ssh_copied", "copiado").into()
+                        } else {
+                            tor("gui.ssh_copy_fail", "sem clipboard (instale wl-copy/xclip)").into()
+                        };
+                        r.op_error = !ok;
+                    }
+                    Err(e) => {
+                        r.op_label = e.into();
+                        r.op_error = true;
+                    }
+                }
+                m.set_row_data(i, r);
+            }
+        });
+    }
+    // pedir remoção → abre o modal de confirmação.
+    {
+        let weak = app.as_weak();
+        let m = ssh_model.clone();
+        app.on_ssh_remove_request(move |idx| {
+            let Some(app) = weak.upgrade() else { return };
+            if let Some(r) = m.row_data(idx as usize) {
+                let name = r.name.to_string();
+                app.set_ssh_confirm_name(name.clone().into());
+                app.set_ssh_confirm_msg(
+                    format!(
+                        "{} '{}'? {}",
+                        tor("gui.ssh_remove_confirm", "Remover a chave"),
+                        name,
+                        tor("gui.ssh_remove_note", "Isto apaga o par (privada + pública).")
+                    )
+                    .into(),
+                );
+                app.set_ssh_confirm_open(true);
+            }
+        });
+    }
+    // confirmar remoção (remove o par).
+    {
+        let weak = app.as_weak();
+        let m = ssh_model.clone();
+        app.on_ssh_remove_confirm(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let name = app.get_ssh_confirm_name().to_string();
+            app.set_ssh_confirm_open(false);
+            if !name.is_empty() {
+                match sshkeys::remove(&name) {
+                    Ok(()) => m.set_vec(build_ssh_rows()),
+                    Err(e) => {
+                        app.set_ssh_gen_error(true);
+                        app.set_ssh_gen_status(e.into());
+                    }
+                }
+            }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.on_ssh_remove_cancel(move || {
+            if let Some(app) = weak.upgrade() {
+                app.set_ssh_confirm_open(false);
+            }
+        });
+    }
+
+    // ==================== Tela Configurações ====================
+    let cur_lang = i18n::current_code();
+    let cfg_lang_model = Rc::new(VecModel::<LangItem>::from(build_lang_items(&cur_lang)));
+    app.set_cfg_langs(ModelRc::from(cfg_lang_model.clone()));
+    app.set_cfg_lang_code(cur_lang.clone().into());
+    app.set_cfg_lang_name(i18n::name_of(&cur_lang).unwrap_or("").into());
+    app.set_cfg_autostart_on(autostart::is_active());
+    app.set_cfg_hooks_on(settings::overdev_enabled());
+    // trocar idioma AO VIVO: persiste + recarrega TODOS os rótulos estáticos (L).
+    {
+        let weak = app.as_weak();
+        let lm = cfg_lang_model.clone();
+        app.on_cfg_set_lang(move |code| {
+            let Some(app) = weak.upgrade() else { return };
+            let c = code.to_string();
+            if i18n::set_lang(&c).is_ok() {
+                install_i18n(&app);
+                app.set_cfg_lang_code(c.clone().into());
+                app.set_cfg_lang_name(i18n::name_of(&c).unwrap_or("").into());
+                lm.set_vec(build_lang_items(&c));
+            }
+        });
+    }
+    // autostart do agente (systemd --user + XDG). exe = binário do CLI schematize.
+    {
+        let weak = app.as_weak();
+        app.on_cfg_toggle_autostart(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let on = app.get_cfg_autostart_on();
+            let res = if on { autostart::disable() } else { autostart::enable(&schematize_bin()) };
+            app.set_cfg_autostart_on(if res.is_ok() { !on } else { autostart::is_active() });
+        });
+    }
+    // hooks do overdev no settings.json do Claude Code.
+    {
+        let weak = app.as_weak();
+        app.on_cfg_toggle_hooks(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let on = app.get_cfg_hooks_on();
+            let res = if on { settings::disable() } else { settings::enable(&schematize_bin()) };
+            app.set_cfg_hooks_on(if res.is_ok() { !on } else { settings::overdev_enabled() });
+        });
+    }
+    // atalho: reusa o modal de diretórios de dev / projetos fixados.
+    {
+        let weak = app.as_weak();
+        app.on_cfg_manage_dirs(move || {
+            if let Some(app) = weak.upgrade() {
+                app.set_dev_modal_open(true);
+            }
+        });
+    }
+
+    // ==================== Overdev — histórico DB + commits ====================
+    // recarrega o histórico do projeto atual (chamado ao entrar na tela / reload).
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        let sa = od_snaps_all.clone();
+        let sm = od_snaps_model.clone();
+        let ca = od_commits_all.clone();
+        let cm = od_commits_model.clone();
+        app.on_od_refresh_history(move || {
+            if let Some(app) = weak.upgrade() {
+                let p = cur.borrow().clone();
+                refresh_od_history(&app, &sa, &sm, &ca, &cm, p.as_deref());
+            }
+        });
+    }
+    // paginação do histórico do DB.
+    {
+        let weak = app.as_weak();
+        let all = od_snaps_all.clone();
+        let m = od_snaps_model.clone();
+        app.on_od_snap_page_prev(move || {
+            if let Some(app) = weak.upgrade() {
+                let p = (app.get_od_snap_page() - 1).max(0);
+                app.set_od_snap_page(p);
+                m.set_vec(snap_rows_page(&all.borrow(), p));
+            }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        let all = od_snaps_all.clone();
+        let m = od_snaps_model.clone();
+        app.on_od_snap_page_next(move || {
+            if let Some(app) = weak.upgrade() {
+                let p = app.get_od_snap_page() + 1;
+                if (p as usize) * PAGE < all.borrow().len() {
+                    app.set_od_snap_page(p);
+                    m.set_vec(snap_rows_page(&all.borrow(), p));
+                }
+            }
+        });
+    }
+    // Ver: conteúdo do snapshot num visor read-only.
+    {
+        let weak = app.as_weak();
+        app.on_od_snap_view(move |id| {
+            let Some(app) = weak.upgrade() else { return };
+            match overdevdb::get(id as i64) {
+                Ok(content) => {
+                    app.set_od_snap_view_title(format!("snapshot #{id}").into());
+                    app.set_od_snap_view_content(content.into());
+                }
+                Err(e) => {
+                    app.set_od_snap_view_title(format!("snapshot #{id}").into());
+                    app.set_od_snap_view_content(e.into());
+                }
+            }
+            app.set_od_snap_view_open(true);
+        });
+    }
+    // Restaurar: pede confirmação.
+    {
+        let weak = app.as_weak();
+        app.on_od_snap_restore_request(move |id| {
+            let Some(app) = weak.upgrade() else { return };
+            app.set_od_snap_confirm_id(id);
+            app.set_od_snap_confirm_msg(
+                format!("{} #{id}?", tor("gui.od_restore_confirm", "Restaurar o snapshot")).into(),
+            );
+            app.set_od_snap_confirm_open(true);
+        });
+    }
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.on_od_snap_restore_confirm(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let id = app.get_od_snap_confirm_id();
+            app.set_od_snap_confirm_open(false);
+            let root = cur.borrow().clone();
+            if let (Some(p), true) = (root, id >= 0) {
+                match overdevdb::restore(id as i64, &p) {
+                    Ok(dest) => app.set_od_run_status(
+                        format!("{} {}", tor("gui.od_restored", "restaurado:"), dest.display()).into(),
+                    ),
+                    Err(e) => app.set_od_run_status(e.into()),
+                }
+                // recarrega overdev (checklist) + histórico refletindo o disco.
+                app.invoke_od_reload();
+            }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.on_od_snap_restore_cancel(move || {
+            if let Some(app) = weak.upgrade() {
+                app.set_od_snap_confirm_open(false);
+            }
+        });
+    }
+    // paginação dos commits.
+    {
+        let weak = app.as_weak();
+        let all = od_commits_all.clone();
+        let m = od_commits_model.clone();
+        app.on_od_commit_page_prev(move || {
+            if let Some(app) = weak.upgrade() {
+                let p = (app.get_od_commit_page() - 1).max(0);
+                app.set_od_commit_page(p);
+                m.set_vec(commit_rows_page(&all.borrow(), p));
+            }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        let all = od_commits_all.clone();
+        let m = od_commits_model.clone();
+        app.on_od_commit_page_next(move || {
+            if let Some(app) = weak.upgrade() {
+                let p = app.get_od_commit_page() + 1;
+                if (p as usize) * PAGE < all.borrow().len() {
+                    app.set_od_commit_page(p);
+                    m.set_vec(commit_rows_page(&all.borrow(), p));
+                }
             }
         });
     }
