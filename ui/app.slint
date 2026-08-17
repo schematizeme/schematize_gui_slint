@@ -69,6 +69,7 @@ export struct SkillRow {
     op-label: string,     // status transitório da linha ("instalando…", erro…)
     op-error: bool,       // op-label é um erro? (colore em warn)
     disp: int,            // índice de exibição na página ativa (paginação); -1 fora da página
+    forked: bool,         // skill oficial que virou FORK editável (marca [fork] + habilita Comparar)
 }
 
 // Uma linha da aba Environments: uma LINGUAGEM, seus métodos disponíveis nesta
@@ -144,6 +145,26 @@ export struct CommitRow {
     author: string,
     subject: string,
     pushed: bool,
+}
+
+// Uma notificação do sininho (mapeada de `schematize::notifications::Notif`).
+// `scope` = "global" | "personal" (agrupador). `has-action` decide se mostra o
+// botão de ação; `kind` decide o rótulo/efeito ("app_update"|"news"|"skill_outdated").
+export struct NotifItem {
+    idx: int,        // posição na lista completa colhida (arg de notif-action)
+    scope: string,
+    title: string,
+    body: string,
+    kind: string,
+    action: string,
+    has-action: bool,
+}
+
+// Um arquivo na comparação fork-ativo vs nova oficial (mapeado de `skills::FileDiff`).
+// `status` = "igual" | "mudou" | "novo" | "removido" (texto já em pt-BR do lib).
+export struct CmpFile {
+    path: string,
+    status: string,
 }
 
 // Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.
@@ -311,6 +332,35 @@ export global L {
     in-out property <string> pg-prev;                 // "‹ Anterior"
     in-out property <string> pg-next;                 // "Próximo ›"
     in-out property <string> pg-of;                   // "de" (página X de Y)
+
+    // ---- versão do app + self-update (Configurações) ----
+    in-out property <string> app-version-title;       // "Versão do app"
+    in-out property <string> app-check-update;        // "Verificar atualização"
+    in-out property <string> app-checking;            // "Verificando…"
+    in-out property <string> app-up-to-date;          // "Você está atualizado"
+    in-out property <string> app-update-btn;          // "Atualizar app"
+    in-out property <string> app-updating;            // "Atualizando…"
+    in-out property <string> app-restart-hint;        // "Atualização concluída — reinicie o app."
+    in-out property <string> app-restart;             // "Reiniciar"
+
+    // ---- sininho de notificações ----
+    in-out property <string> notif-title;             // "Notificações"
+    in-out property <string> notif-empty;             // "Sem notificações"
+    in-out property <string> notif-global;            // "Globais"
+    in-out property <string> notif-personal;          // "Pessoais"
+    in-out property <string> notif-loading;           // "Carregando…"
+    in-out property <string> notif-do-update;         // ação app_update: "Atualizar"
+    in-out property <string> notif-open;              // ação news: "Abrir"
+    in-out property <string> notif-go-installed;      // ação skill_outdated: "Ver instaladas"
+
+    // ---- fork + comparar ----
+    in-out property <string> fork-badge;              // "fork"
+    in-out property <string> fork-will;               // aviso: editar vai forkar
+    in-out property <string> fork-active;             // "[fork] ativo — oficial preservada"
+    in-out property <string> compare-official;        // "Comparar com oficial"
+    in-out property <string> compare-note;            // "Comparar NÃO sobrescreve nada"
+    in-out property <string> compare-files;           // "Arquivos"
+    in-out property <string> compare-loading;         // "Comparando…"
 }
 
 // Paleta central — um único ponto de verdade para claro/escuro.
@@ -482,6 +532,55 @@ component ThemeToggle inherits Rectangle {
     }
 
     ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Sininho de notificações — botão-ícone no header, com badge numérico. Visível em
+// TODAS as telas. `count` alimenta o badge (esconde se 0); `clicked` abre o painel.
+component Bell inherits Rectangle {
+    in property <int> count: 0;
+    callback clicked();
+    width: 38px;
+    height: 38px;
+    border-radius: 19px;
+    background: bta.has-hover ? Theme.surface-2 : transparent;
+    border-width: 1px;
+    border-color: bta.has-hover ? Theme.border : transparent;
+    animate background, border-color { duration: 160ms; }
+
+    // corpo do sino (traço) — tema-aware.
+    Path {
+        width: 20px;
+        height: 20px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0";
+        fill: transparent;
+        stroke: Theme.text-dim;
+        stroke-width: 1.8px;
+    }
+    // badge (contagem > 0).
+    if root.count > 0: Rectangle {
+        x: parent.width - self.width - 3px;
+        y: 3px;
+        width: Math.max(16px, badgetxt.preferred-width + 8px);
+        height: 16px;
+        border-radius: 8px;
+        background: Theme.warn;
+        badgetxt := Text {
+            text: root.count > 99 ? "99+" : root.count;
+            color: #1a1200;
+            font-size: 10.5px;
+            font-weight: 800;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+    bta := TouchArea {
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
     }
@@ -1203,6 +1302,43 @@ export component AppWindow inherits Window {
     // ---- app ----
     callback restart();                 // relança o app (janela nova) — usado pós self-update
 
+    // ==================== Versão do app + self-update ====================
+    in property <string> app-version;                  // "schematize v0.25.1" (montado no Rust)
+    in-out property <bool> app-checking: false;        // checagem de update em andamento
+    in-out property <string> app-update-status;        // linha de resultado ("atualizado" / erro)
+    in-out property <bool> app-has-update: false;      // há versão nova?
+    in-out property <bool> app-updating: false;        // self-update em andamento
+    in-out property <bool> app-update-done: false;     // update concluído → sugerir reiniciar
+    callback app-check-update();                        // app_update_available() em thread
+    callback app-do-update();                           // selfupdate::run() em thread
+
+    // ==================== Sininho de notificações ====================
+    in-out property <int> notif-count: 0;              // badge (notifications::count())
+    in-out property <bool> notif-open: false;          // painel aberto?
+    in-out property <bool> notif-loading: false;       // collect() em thread
+    in-out property <int> notif-total: 0;              // total colhido (empty-state)
+    in property <[NotifItem]> notif-global;            // notificações de escopo Global
+    in property <[NotifItem]> notif-personal;          // notificações de escopo Pessoal
+    callback notif-refresh();                           // só recomputa a contagem (thread)
+    callback notif-toggle();                            // abre o painel + collect() (thread)
+    callback notif-action(string, string);              // executa a ação (kind, action) da notificação
+
+    // ==================== Fork na edição (Gerenciar) ====================
+    in-out property <bool> mg-sel-official: false;     // a skill escolhida é OFICIAL (catálogo)?
+    in-out property <bool> mg-sel-forked: false;       // já virou fork editável?
+
+    // ==================== Comparar fork vs oficial ====================
+    in-out property <bool> cmp-open: false;            // painel de comparação aberto?
+    in-out property <bool> cmp-loading: false;         // compare_update() em thread
+    in-out property <string> cmp-slug;                 // slug em comparação
+    in-out property <string> cmp-title;                // "Comparar: <slug>"
+    in-out property <string> cmp-versions;             // "base vX → nova vY"
+    in-out property <string> cmp-error;                // erro (ou "")
+    in-out property <string> cmp-diff;                 // diff unificado (visor mono read-only)
+    in property <[CmpFile]> cmp-files;                 // arquivos + status
+    callback cmp-request(string);                       // abre o painel + compare_update(slug) em thread
+    callback cmp-close();                               // fecha o painel
+
     // ---- aba Grafo (força-dirigida nativa) ----
     // Estado da transformação (dono no Rust; o Slint só lê pra renderizar).
     in property <[GraphNode]> graph-nodes;
@@ -1239,7 +1375,10 @@ export component AppWindow inherits Window {
     // Troca de sub-aba do Mercado → zera a paginação e recomputa os índices.
     changed active-tab => { root.mkt-page = 0; root.mkt-recompute(); }
     // Entrar na tela Overdev → recarrega o histórico (DB + commits) do projeto.
-    changed screen => { if (root.screen == 2) { root.od-refresh-history(); } }
+    changed screen => {
+        if (root.screen == 2) { root.od-refresh-history(); }
+        if (root.screen == 0) { root.notif-refresh(); }
+    }
 
     VerticalLayout {
         // ---- cabeçalho -------------------------------------------------
@@ -1302,6 +1441,13 @@ export component AppWindow inherits Window {
                     }
                 }
                 Rectangle {}  // espaçador elástico
+                VerticalLayout {
+                    alignment: center;
+                    Bell {
+                        count: root.notif-count;
+                        clicked => { root.notif-toggle(); }
+                    }
+                }
                 VerticalLayout {
                     alignment: center;
                     ThemeToggle {
@@ -1577,6 +1723,57 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     padding: 24px;
                     spacing: 20px;
+                    // ---- versão do app + self-update ----
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.app-version-title; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        HorizontalLayout {
+                            spacing: 14px;
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: root.app-version; font-size: 13.5px; font-weight: 700; color: Theme.text; }
+                            }
+                            Rectangle {}
+                            VerticalLayout {
+                                alignment: center;
+                                Btn {
+                                    label: root.app-checking ? L.app-checking : L.app-check-update;
+                                    small: true;
+                                    enabled: !root.app-checking && !root.app-updating;
+                                    clicked => { root.app-check-update(); }
+                                }
+                            }
+                        }
+                        // resultado da checagem (atualizado / erro / nova versão).
+                        if root.app-update-status != "": Text {
+                            text: root.app-update-status;
+                            font-size: 12.5px;
+                            font-weight: 600;
+                            color: root.app-has-update ? Theme.header-fg : Theme.text-dim;
+                            wrap: word-wrap;
+                        }
+                        // há update → botão Atualizar app (ou hint de reiniciar quando pronto).
+                        if root.app-has-update && !root.app-update-done: HorizontalLayout {
+                            alignment: start;
+                            Btn {
+                                label: root.app-updating ? L.app-updating : L.app-update-btn;
+                                primary: true;
+                                small: true;
+                                enabled: !root.app-updating;
+                                clicked => { root.app-do-update(); }
+                            }
+                        }
+                        if root.app-update-done: HorizontalLayout {
+                            spacing: 12px;
+                            alignment: start;
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: L.app-restart-hint; font-size: 12.5px; font-weight: 600; color: Theme.good; wrap: word-wrap; }
+                            }
+                            Btn { label: L.app-restart; small: true; primary: true; clicked => { root.restart(); } }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
                     // ---- idioma ----
                     VerticalLayout {
                         spacing: 8px;
@@ -2775,6 +2972,55 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     padding: 16px;
                     spacing: 12px;
+                    // aviso de FORK: skill OFICIAL ainda não-forkada → editar vai forkar;
+                    // skill já forkada → [fork] ativo + botão Comparar com a oficial nova.
+                    if root.mg-sel-skill != "" && root.mg-sel-official && !root.mg-sel-forked: Rectangle {
+                        border-radius: 8px;
+                        background: Theme.warn.transparentize(0.86);
+                        border-width: 1px;
+                        border-color: Theme.warn.transparentize(0.5);
+                        HorizontalLayout {
+                            padding: 12px;
+                            spacing: 8px;
+                            Text { text: "⚠"; font-size: 14px; color: Theme.warn; vertical-alignment: center; }
+                            Text {
+                                text: L.fork-will;
+                                font-size: 12.5px;
+                                font-weight: 600;
+                                color: Theme.text;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                    if root.mg-sel-skill != "" && root.mg-sel-forked: Rectangle {
+                        border-radius: 8px;
+                        background: Theme.accent-soft;
+                        border-width: 1px;
+                        border-color: Theme.accent.transparentize(0.5);
+                        HorizontalLayout {
+                            padding: 12px;
+                            spacing: 10px;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: L.fork-active;
+                                    font-size: 12.5px;
+                                    font-weight: 600;
+                                    color: Theme.text;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            Rectangle {}
+                            VerticalLayout {
+                                alignment: center;
+                                Btn {
+                                    label: L.compare-official;
+                                    small: true;
+                                    clicked => { root.cmp-request(root.mg-sel-skill); }
+                                }
+                            }
+                        }
+                    }
                     // empty-state: nenhum arquivo escolhido
                     if root.mg-sel-file == "": VerticalLayout {
                         alignment: center;
@@ -3014,11 +3260,31 @@ export component AppWindow inherits Window {
                                     toggled => { root.toggle(i); }
                                 }
                             }
-                            // skill + selo
+                            // skill + selo (+ badge [fork] quando forkada)
                             VerticalLayout {
                                 width: 260px;
                                 alignment: center;
-                                SkillName { slug: row.slug; verified: row.verified; }
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    SkillName { slug: row.slug; verified: row.verified; }
+                                    if row.forked: Rectangle {
+                                        width: forktxt.preferred-width + 12px;
+                                        height: 18px;
+                                        border-radius: 5px;
+                                        background: Theme.accent-soft;
+                                        border-width: 1px;
+                                        border-color: Theme.accent.transparentize(0.55);
+                                        forktxt := Text {
+                                            text: L.fork-badge;
+                                            font-size: 10.5px;
+                                            font-weight: 800;
+                                            color: Theme.header-fg;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                    Rectangle {}
+                                }
                             }
                             // autor
                             VerticalLayout {
@@ -3072,6 +3338,12 @@ export component AppWindow inherits Window {
                                             label: L.act-update; small: true; primary: true;
                                             enabled: !root.busy && row.state == "outdated";
                                             clicked => { root.row-update(i); }
+                                        }
+                                        // Comparar com a oficial nova (só skills forkadas).
+                                        if row.forked: Btn {
+                                            label: L.compare-official; small: true;
+                                            enabled: !root.busy;
+                                            clicked => { root.cmp-request(row.slug); }
                                         }
                                         // Desinstalar sempre disponível numa instalada.
                                         Btn {
@@ -3564,6 +3836,207 @@ export component AppWindow inherits Window {
                         text: root.od-snap-view-content;
                         font-size: 12px;
                         wrap: no-wrap;
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- PAINEL de notificações (sininho) -------------------------------
+    // Overlay ancorado no topo-direito. Agrupa Globais e Pessoais; cada item com
+    // título + corpo + (se houver) botão de ação. Vazio → "Sem notificações".
+    if root.notif-open: Rectangle {
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { root.notif-open = false; } }
+        Rectangle {
+            width: Math.min(root.width - 48px, 420px);
+            height: Math.min(root.height - 110px, 520px);
+            x: parent.width - self.width - 20px;
+            y: 78px;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            VerticalLayout {
+                padding: 18px;
+                spacing: 12px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.notif-title; font-size: 15px; font-weight: 800; color: Theme.text; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.od-close; small: true; clicked => { root.notif-open = false; } }
+                    }
+                }
+                Rectangle { height: 1px; background: Theme.border; }
+                if root.notif-loading: Text { text: L.notif-loading; font-size: 12.5px; color: Theme.text-dim; }
+                if !root.notif-loading && root.notif-total == 0: VerticalLayout {
+                    alignment: center;
+                    Text {
+                        text: L.notif-empty;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        horizontal-alignment: center;
+                    }
+                }
+                if !root.notif-loading && root.notif-total > 0: ScrollView {
+                    VerticalLayout {
+                        spacing: 10px;
+                        // ---- Globais ----
+                        if root.notif-global.length > 0: VerticalLayout {
+                            spacing: 8px;
+                            Text { text: L.notif-global; font-size: 11.5px; font-weight: 800; color: Theme.header-fg; }
+                            for n[ni] in root.notif-global: Rectangle {
+                                border-radius: 9px;
+                                background: Theme.bg;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                VerticalLayout {
+                                    padding: 11px;
+                                    spacing: 5px;
+                                    Text { text: n.title; font-size: 13px; font-weight: 700; color: Theme.text; wrap: word-wrap; }
+                                    Text { text: n.body; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                                    if n.has-action: HorizontalLayout {
+                                        alignment: start;
+                                        Btn {
+                                            label: n.kind == "app_update" ? L.notif-do-update
+                                                 : n.kind == "news" ? L.notif-open
+                                                 : L.notif-go-installed;
+                                            small: true;
+                                            primary: n.kind == "app_update";
+                                            clicked => { root.notif-action(n.kind, n.action); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // ---- Pessoais ----
+                        if root.notif-personal.length > 0: VerticalLayout {
+                            spacing: 8px;
+                            Text { text: L.notif-personal; font-size: 11.5px; font-weight: 800; color: Theme.header-fg; }
+                            for n[ni] in root.notif-personal: Rectangle {
+                                border-radius: 9px;
+                                background: Theme.bg;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                VerticalLayout {
+                                    padding: 11px;
+                                    spacing: 5px;
+                                    Text { text: n.title; font-size: 13px; font-weight: 700; color: Theme.text; wrap: word-wrap; }
+                                    Text { text: n.body; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                                    if n.has-action: HorizontalLayout {
+                                        alignment: start;
+                                        Btn {
+                                            label: n.kind == "skill_outdated" ? L.notif-go-installed : L.notif-open;
+                                            small: true;
+                                            clicked => { root.notif-action(n.kind, n.action); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- PAINEL de comparação (fork ativo vs nova oficial) --------------
+    // Só LEITURA: base→nova, lista de arquivos com status e o diff monoespaçado.
+    // Deixa explícito que comparar NÃO sobrescreve nada.
+    if root.cmp-open: Rectangle {
+        background: #000000.transparentize(0.5);
+        TouchArea { clicked => { root.cmp-close(); } }
+        Rectangle {
+            width: Math.min(root.width - 48px, 820px);
+            height: Math.min(root.height - 80px, 640px);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        Text { text: root.cmp-title; font-size: 15px; font-weight: 800; color: Theme.text; overflow: elide; }
+                        if root.cmp-versions != "": Text { text: root.cmp-versions; font-size: 12.5px; font-weight: 700; color: Theme.header-fg; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.od-close; small: true; clicked => { root.cmp-close(); } }
+                    }
+                }
+                Text { text: L.compare-note; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+                if root.cmp-loading: Text { text: L.compare-loading; font-size: 12.5px; color: Theme.text-dim; }
+                if !root.cmp-loading && root.cmp-error != "": Text { text: root.cmp-error; font-size: 12.5px; font-weight: 600; color: Theme.warn; wrap: word-wrap; }
+                if !root.cmp-loading && root.cmp-error == "": HorizontalLayout {
+                    spacing: 12px;
+                    // ---- lista de arquivos (status) ----
+                    Rectangle {
+                        width: 240px;
+                        border-radius: 8px;
+                        background: Theme.bg;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        VerticalLayout {
+                            padding: 8px;
+                            spacing: 6px;
+                            Text { text: L.compare-files; font-size: 11.5px; font-weight: 800; color: Theme.text-dim; }
+                            ScrollView {
+                                VerticalLayout {
+                                    spacing: 2px;
+                                    for cf[cfi] in root.cmp-files: HorizontalLayout {
+                                        spacing: 6px;
+                                        Rectangle {
+                                            width: statustxt.preferred-width + 12px;
+                                            height: 17px;
+                                            border-radius: 5px;
+                                            background: cf.status == "mudou" ? Theme.warn.transparentize(0.75)
+                                                     : cf.status == "novo" ? Theme.good.transparentize(0.75)
+                                                     : cf.status == "removido" ? #ff6b6b.transparentize(0.78)
+                                                     : Theme.surface-2;
+                                            statustxt := Text {
+                                                text: cf.status;
+                                                font-size: 10px;
+                                                font-weight: 700;
+                                                color: Theme.text;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                        Text { text: cf.path; font-size: 11.5px; color: Theme.text; overflow: elide; vertical-alignment: center; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // ---- diff unificado (mono, read-only) ----
+                    Rectangle {
+                        border-radius: 8px;
+                        background: Theme.bg;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        TextEdit {
+                            width: 100%;
+                            height: 100%;
+                            read-only: true;
+                            text: root.cmp-diff;
+                            font-size: 12px;
+                            wrap: no-wrap;
+                        }
                     }
                 }
             }
