@@ -14,7 +14,7 @@
 //! Escopo deste incremento: SÓ a aba Skills funcional. Overdev/Grafo ficam como
 //! placeholders "em breve" na barra de abas (próximos incrementos).
 
-use schematize::agentrun::{self, AgentRunner, ClaudeRunner};
+use schematize::agentrun;
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
 use schematize::{
@@ -155,18 +155,25 @@ fn install_i18n(app: &AppWindow) {
     l.set_od_note(tor("gui.od_note", "Nota para esta tarefa…").into());
     l.set_od_correction(tor("gui.od_correction", "Prompt de correção do overdev").into());
     l.set_od_notes_title(tor("gui.od_notes", "Notas e correções").into());
-    // aba Overdev — Fase 4 (agente acoplado: run/stop + log). Chaves NOVAS via `tor`.
+    // aba Overdev — Fase 4 (terminal externo + monitor leve). Chaves NOVAS via `tor`.
     l.set_od_run(tor("gui.od_run", "Executar overdev").into());
     l.set_od_stop(tor("gui.od_stop", "Parar").into());
-    l.set_od_running(tor("gui.od_running", "rodando…").into());
+    l.set_od_running(tor("gui.od_running", "monitorando…").into());
+    l.set_od_mon_active(tor("gui.od_mon_active", "rodando").into());
     l.set_od_confirm_run(tor(
         "gui.od_confirm_run",
-        "Isto dispara o agente `claude` ACOPLADO neste projeto: ele roda o overdev com \
-         acesso ao seu ambiente e pode editar arquivos. Confira o comando abaixo antes de confirmar.",
+        "Isto abre o `claude` num TERMINAL EXTERNO (processo próprio, fora do app) e roda o overdev \
+         neste projeto com acesso ao seu ambiente — ele pode editar arquivos. O app apenas MONITORA o \
+         progresso. Confira o comando abaixo antes de confirmar.",
     ).into());
-    l.set_od_log(tor("gui.od_log", "Log do agente").into());
     l.set_od_run_done(tor("gui.od_done", "concluído").into());
     l.set_od_agent_cmd(tor("gui.od_agent_cmd", "Comando do agente").into());
+    l.set_od_ext_terminal(tor(
+        "gui.od_ext_terminal",
+        "claude rodando em terminal externo (processo próprio) — o load dele fica fora do app.",
+    ).into());
+    l.set_od_mon_iters(tor("gui.od_mon_iters", "iterações").into());
+    l.set_od_mon_open_title(tor("gui.od_mon_open_title", "Itens abertos (máquina)").into());
     // aba Grafo — reusa as chaves do egui (todas já nos 11 locales do lib).
     l.set_g_search_hint(t("gui.search").into());
     l.set_g_nodes_suffix(t("gui.graph_nodes").into());
@@ -250,10 +257,6 @@ fn install_i18n(app: &AppWindow) {
     l.set_cfg_on(tor("gui.cfg_on", "ligado").into());
     l.set_cfg_off(tor("gui.cfg_off", "desligado").into());
     // Overdev — aditivos.
-    l.set_od_load(tor("gui.od_load", "Load").into());
-    l.set_od_index(tor("gui.od_index", "Index").into());
-    l.set_od_load_tip(tor("gui.od_load_tip", "Carrega os preceitos de engenharia da casa no contexto do agente (/eng-load).").into());
-    l.set_od_index_tip(tor("gui.od_index_tip", "(Re)indexa o conteúdo do projeto — grafo/MAPA (/eng-index).").into());
     l.set_od_history(tor("gui.od_history", "Histórico (cópia de segurança)").into());
     l.set_od_history_note(tor("gui.od_history_note", "O agente pode editar/apagar os arquivos do .overdev/ — este é o backup versionado deles.").into());
     l.set_od_view(tor("gui.od_view", "Ver").into());
@@ -1369,217 +1372,91 @@ fn select_project(
 }
 
 // ===========================================================================
-// FASE 4 — agente acoplado (overdev run). Espelha o `agentrun::run_attached` do
-// CLI, mas ASSÍNCRONO: uma thread de trabalho dona da `Session` (que é `Send`)
-// drena o output pro pane de log, lê `overdev::progress_at` pra barra de
-// progresso e injeta `continue` por ociosidade (respeitando o teto de nudges).
-// NADA de `Rc`/models cruza a thread — só `String`/`PathBuf`/`Weak<AppWindow>` +
-// `Arc<AtomicBool>` (flag de parada). A UI é tocada só via `invoke_from_event_loop`.
+// FASE 4 — overdev em TERMINAL EXTERNO + MONITOR leve. DECISÃO do dono: o `claude`
+// NÃO roda mais acoplado (PTY) dentro do app — carregava o LOAD dele aqui (RAM,
+// inchaço tipo VSCode) e nem submetia na TUI. Agora o botão só chama
+// `agentrun::launch_in_terminal` (processo PRÓPRIO num terminal do sistema,
+// DESACOPLADO) e o app apenas MONITORA o `.overdev/` a cada ~3s (só LÊ arquivos,
+// não segura processo). O "não pare" é imposto pelo Stop hook do overdev — nada
+// de auto-continue/nudge aqui. Só `String`/`PathBuf`/`Weak<AppWindow>` +
+// `Arc<AtomicBool>` cruzam a fronteira de thread; a UI é tocada por `post_*`.
 // ===========================================================================
 
-/// Teto de itens abertos anexados à mensagem de nudge (espelha o `NUDGE_ITEMS`
-/// privado do lib). Mantido pequeno pra não estourar a linha injetada no PTY.
-const OD_NUDGE_ITEMS: usize = 8;
+/// Intervalo do monitor leve do `.overdev/` (só relê arquivos de progresso).
+const OD_MONITOR_EVERY: Duration = Duration::from_secs(3);
 
-/// De quanto em quanto tempo o monitor relê o progresso do `.overdev/` e avalia
-/// ociosidade/auto-continue (o drain de output roda mais rápido, a cada 500ms).
-const OD_PROGRESS_EVERY: Duration = Duration::from_secs(2);
+/// Teto de itens abertos listados no monitor (o `claude` roda fora; isto é só espelho).
+const OD_MONITOR_ITEMS: usize = 10;
 
-/// thread→UI: anexa `chunk` ao pane de log, com teto (mantém só a cauda pra o
-/// texto não crescer sem limite numa sessão longa). Corta em fronteira de char.
-fn append_run_log(weak: &Weak<AppWindow>, chunk: String) {
+/// thread→UI: espelha o snapshot do `.overdev/` (estado + contadores + iterações +
+/// lista de itens abertos). Cria um `VecModel` novo pra a lista (roda na UI thread).
+fn post_monitor(weak: &Weak<AppWindow>, prog: overdev::Progress, items: Vec<String>) {
     let w = weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = w.upgrade() {
-            const CAP: usize = 60_000;
-            let mut s = app.get_od_run_log().to_string();
-            s.push_str(&chunk);
-            if s.len() > CAP {
-                let mut idx = s.len() - CAP;
-                while idx < s.len() && !s.is_char_boundary(idx) {
-                    idx += 1;
-                }
-                s = s[idx..].to_string();
-            }
-            app.set_od_run_log(s.into());
+            app.set_od_run_done(prog.done as i32);
+            app.set_od_run_open(prog.open as i32);
+            app.set_od_mon_human(prog.human as i32);
+            app.set_od_mon_hold(prog.hold as i32);
+            app.set_od_mon_iter(prog.iterations as i32);
+            app.set_od_mon_max(prog.max_iters as i32);
+            app.set_od_mon_mode(prog.mode.into());
+            let rows: Vec<SharedString> = items.into_iter().map(SharedString::from).collect();
+            app.set_od_mon_items(ModelRc::from(Rc::new(VecModel::from(rows))));
         }
     });
 }
 
-/// thread→UI: atualiza a barra de progresso (feitos / feitos+abertos).
-fn post_run_progress(weak: &Weak<AppWindow>, done: usize, open: usize) {
-    let w = weak.clone();
-    let _ = slint::invoke_from_event_loop(move || {
-        if let Some(app) = w.upgrade() {
-            app.set_od_run_done(done as i32);
-            app.set_od_run_open(open as i32);
-        }
-    });
-}
-
-/// thread→UI: escreve o status corrente do run (info do nudge, etc.) sem encerrar.
-fn post_run_status(weak: &Weak<AppWindow>, msg: String) {
-    let w = weak.clone();
-    let _ = slint::invoke_from_event_loop(move || {
-        if let Some(app) = w.upgrade() {
-            app.set_od_run_status(msg.into());
-        }
-    });
-}
-
-/// thread→UI: FIM da sessão — solta os botões (`od-session-running=false`),
-/// mostra o `status` e re-sonda o projeto (via `od-reload`) pra o checklist/
-/// contagem refletirem o estado final em disco.
-fn post_run_end(weak: &Weak<AppWindow>, status: String) {
+/// thread→UI: FIM do monitor — larga o flag de "monitorando", fixa o modo final e
+/// re-sonda o projeto (`od-reload`) pra o checklist/contagem refletirem o disco.
+fn post_monitor_end(weak: &Weak<AppWindow>, mode: String) {
     let w = weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = w.upgrade() {
             app.set_od_session_running(false);
-            app.set_od_run_status(status.into());
+            app.set_od_mon_mode(mode.into());
             app.invoke_od_reload();
         }
     });
 }
 
-/// Canal de INJEÇÃO de comandos na sessão acoplada (Load/Index). O worker guarda
-/// o `Sender` aqui enquanto vive; a UI (thread principal) envia por ele. O guard
-/// zera o slot quando o worker termina (qualquer caminho de saída), pra o handler
-/// da UI voltar a cair na dica "inicie a sessão".
-type Inject = Arc<std::sync::Mutex<Option<std::sync::mpsc::Sender<String>>>>;
-
-/// RAII: limpa o slot de injeção quando o worker sai (drop).
-struct InjectGuard(Inject);
-impl Drop for InjectGuard {
-    fn drop(&mut self) {
-        if let Ok(mut g) = self.0.lock() {
-            *g = None;
-        }
-    }
-}
-
-/// Sobe o agente acoplado numa thread e MONITORA até o overdev fechar, o agente
-/// morrer, o teto de nudges estourar ou a `stop` ser acionada (botão Parar).
-/// Todos os argumentos são `Send`; a UI só é tocada pelos `post_*` acima.
-fn run_overdev_worker(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>, inject: Inject) {
+/// MONITOR leve: a cada ~3s lê `overdev::progress_at` + `open_items_at` e espelha
+/// na UI. NÃO segura o processo do `claude` (ele roda no terminal externo). Para
+/// quando o botão Parar levanta a `stop`, ou quando o run some/termina
+/// (`mode == "stopped"` / `Progress::finished()`), MAS só depois de ter visto o run
+/// ficar `active` uma vez — assim um `state.json` velho ("stopped") não encerra o
+/// monitor antes de o overdev sequer arrancar no terminal.
+fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>) {
     std::thread::spawn(move || {
-        let objetivo = overdev::objetivo_at(&project).unwrap_or_default();
-        let runner = ClaudeRunner;
-        let session = match runner.spawn(&project, &objetivo) {
-            Ok(s) => s,
-            Err(e) => {
-                append_run_log(&weak, format!("\n[schematize] falha ao subir o agente: {e}\n"));
-                post_run_end(&weak, format!("{}: {e}", runner.name()));
-                return;
-            }
-        };
-        append_run_log(
-            &weak,
-            format!("[schematize] agente `{}` acoplado em {}\n", runner.name(), project.display()),
-        );
-        // Registra o canal de injeção (Load/Index) e garante limpeza na saída.
-        let (itx, irx) = std::sync::mpsc::channel::<String>();
-        if let Ok(mut g) = inject.lock() {
-            *g = Some(itx);
-        }
-        let _inject_guard = InjectGuard(inject.clone());
-
-        let max = agentrun::DEFAULT_MAX_NUDGES;
-        let mut nudges: u64 = 0;
-        let mut last_output = Instant::now();
-        let mut last_progress = Instant::now() - OD_PROGRESS_EVERY; // força 1ª leitura já
-
+        let mut seen_active = false;
         loop {
-            // 0) Parada pedida pelo botão Parar.
             if stop.load(Ordering::SeqCst) {
-                session.kill();
-                while let Some(more) = session.try_recv() {
-                    append_run_log(&weak, more);
-                }
-                post_run_end(&weak, tor("gui.od_done", "concluído"));
+                post_monitor_end(&weak, "stopped".into());
                 return;
             }
-
-            // 0.5) Injeta comandos pedidos pela UI (Load/Index) na sessão.
-            while let Ok(cmd) = irx.try_recv() {
-                let line = format!("{}\n", cmd.trim_end());
-                if session.send(&line).is_ok() {
-                    append_run_log(&weak, format!("[schematize] → {}\n", cmd.trim()));
-                    last_output = Instant::now();
-                }
+            let prog = overdev::progress_at(&project);
+            let items = overdev::open_items_at(&project, OD_MONITOR_ITEMS);
+            let mode = prog.mode.clone();
+            let finished = prog.finished();
+            if mode == "active" {
+                seen_active = true;
             }
-
-            // 1) Drena o output disponível (bloqueia no máx. 500ms — mantém o loop vivo).
-            if let Some(chunk) = session.recv_timeout(Duration::from_millis(500)) {
-                append_run_log(&weak, chunk);
-                last_output = Instant::now();
-                while let Some(more) = session.try_recv() {
-                    append_run_log(&weak, more);
-                }
-            }
-
-            // 2) Progresso + término + auto-continue (a cada ~2s).
-            if last_progress.elapsed() >= OD_PROGRESS_EVERY {
-                last_progress = Instant::now();
-                let prog = overdev::progress_at(&project);
-                post_run_progress(&weak, prog.done, prog.open);
-
-                if prog.mode == "stopped" {
-                    post_run_end(&weak, tor("gui.od_done", "concluído"));
-                    return;
-                }
-                if prog.mode == "active" && prog.open == 0 {
-                    post_run_end(&weak, tor("gui.od_done", "concluído"));
-                    return;
-                }
-
-                let idle = last_output.elapsed().as_secs();
-                if agentrun::should_nudge(idle, prog.open) {
-                    if nudges >= max {
-                        session.kill();
-                        post_run_end(
-                            &weak,
-                            format!("budget de auto-continue esgotado ({nudges}/{max})"),
-                        );
-                        return;
-                    }
-                    let items = overdev::open_items_at(&project, OD_NUDGE_ITEMS);
-                    if session.send(&agentrun::nudge_message(&items)).is_ok() {
-                        nudges += 1;
-                        last_output = Instant::now();
-                        post_run_status(&weak, format!("auto-continue {nudges}/{max}"));
-                    }
-                }
-            }
-
-            // 3) O agente morreu por conta própria.
-            if !session.is_alive() {
-                while let Some(more) = session.try_recv() {
-                    append_run_log(&weak, more);
-                }
-                post_run_end(&weak, tor("gui.od_done", "concluído"));
+            post_monitor(&weak, prog, items);
+            if seen_active && (mode == "stopped" || finished) {
+                post_monitor_end(&weak, if mode.is_empty() { "stopped".into() } else { mode });
                 return;
+            }
+            // Dorme em fatias curtas pra responder rápido ao botão Parar.
+            let mut slept = Duration::ZERO;
+            while slept < OD_MONITOR_EVERY {
+                if stop.load(Ordering::SeqCst) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+                slept += Duration::from_millis(200);
             }
         }
     });
-}
-
-/// Envia `cmd` (ex.: `/eng-load`) à sessão acoplada se ela existir; senão mostra
-/// a dica de que é preciso iniciar o overdev primeiro. Botões Load/Index.
-fn inject_or_hint(app: &AppWindow, inject: &Inject, cmd: &str) {
-    if app.get_od_session_running() {
-        if let Ok(g) = inject.lock() {
-            if let Some(tx) = g.as_ref() {
-                if tx.send(cmd.to_string()).is_ok() {
-                    let msg = format!("{}{}", tor("gui.od_sent", "enviado à sessão: "), cmd);
-                    app.set_od_run_status(msg.into());
-                    return;
-                }
-            }
-        }
-    }
-    app.set_od_run_status(
-        tor("gui.od_need_session", "Inicie a sessão do overdev (Executar) para usar Load/Index.").into(),
-    );
 }
 
 // ===========================================================================
@@ -2605,11 +2482,10 @@ fn main() -> Result<(), slint::PlatformError> {
     refresh_proj_models(&od_proj_model, &od_dev_model, &od_pin_model);
     // Projeto atual (lado Rust) — persiste entre execuções via recent_projects.
     let od_current: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
-    // Fase 4: flag de parada da sessão acoplada (o botão Parar a levanta; o worker
-    // a checa a cada ciclo e encerra). `Arc` porque cruza pra a thread do agente.
+    // Fase 4: flag de parada do MONITOR (o botão Parar a levanta; o monitor a checa
+    // a cada fatia e encerra). `Arc` porque cruza pra a thread do monitor. NÃO mata o
+    // `claude` — ele roda no terminal externo (processo próprio); só para o espelho.
     let od_stop_flag = Arc::new(AtomicBool::new(false));
-    // Canal de injeção Load/Index na sessão acoplada (vazio = sem sessão viva).
-    let od_inject: Inject = Arc::new(std::sync::Mutex::new(None));
     // Histórico do DB do overdev + commits (aditivos): estado completo no Rust +
     // modelos com a PÁGINA atual (paginação Rust-side).
     let od_snaps_all: Rc<RefCell<Vec<overdevdb::SnapshotMeta>>> = Rc::new(RefCell::new(Vec::new()));
@@ -2860,16 +2736,19 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     // ---- Fase 4: "Executar overdev" — passo 1: GUARDRAIL (mostra o comando) ----
-    // Não dispara nada; só computa o `command_line()` do agente pro projeto atual
-    // e abre o mini-modal de confirmação. O disparo real é no `od-run-confirm`.
+    // Não dispara nada; só mostra o comando que abrirá no TERMINAL EXTERNO e abre o
+    // mini-modal de confirmação. O disparo real (launch_in_terminal) é no `od-run-confirm`.
     {
         let weak = app.as_weak();
-        let cur = od_current.clone();
         app.on_od_run_request(move || {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                let objetivo = overdev::objetivo_at(&p).unwrap_or_default();
-                app.set_od_agent_cmdline(ClaudeRunner.command_line(&objetivo).into());
+            if let Some(app) = weak.upgrade() {
+                app.set_od_agent_cmdline(
+                    tor(
+                        "gui.od_agent_cmdline",
+                        "claude --dangerously-skip-permissions \"<prompt do overdev>\"  (terminal externo, processo próprio)",
+                    )
+                    .into(),
+                );
                 app.set_od_confirm_open(true);
             }
         });
@@ -2883,49 +2762,67 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- Fase 4: guardrail — CONFIRMAR: dispara o agente acoplado numa thread ----
+    // ---- Fase 4: guardrail — CONFIRMAR: abre o `claude` num TERMINAL EXTERNO ----
+    // Chama `agentrun::launch_in_terminal` numa thread (processo próprio, RAM dele,
+    // fora do app). Sucesso → mensagem "claude aberto no terminal <nome>…" + liga o
+    // MONITOR leve. Erro (claude/terminal ausente) → mostra a msg e não monitora.
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
         let stop = od_stop_flag.clone();
-        let inject = od_inject.clone();
         app.on_od_run_confirm(move || {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 if app.get_od_session_running() {
-                    return; // já há uma sessão — não sobe outra
+                    return; // já monitorando — não dispara outro
                 }
                 app.set_od_confirm_open(false);
-                app.set_od_session_running(true);
                 app.set_od_run_status(SharedString::new());
-                app.set_od_run_log(SharedString::new());
                 app.set_od_run_done(0);
                 app.set_od_run_open(0);
+                app.set_od_mon_human(0);
+                app.set_od_mon_hold(0);
+                app.set_od_mon_iter(0);
+                app.set_od_mon_max(0);
+                app.set_od_mon_mode(SharedString::new());
+                app.set_od_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
                 stop.store(false, Ordering::SeqCst);
-                run_overdev_worker(weak.clone(), p, stop.clone(), inject.clone());
+                let objetivo = overdev::objetivo_at(&p).unwrap_or_default();
+                let w = weak.clone();
+                let stop2 = stop.clone();
+                std::thread::spawn(move || match agentrun::launch_in_terminal(&p, &objetivo) {
+                    Ok(term) => {
+                        let wu = w.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(app) = wu.upgrade() {
+                                app.set_od_session_running(true);
+                                let msg = format!(
+                                    "{}{}{}",
+                                    tor("gui.od_launched_pre", "claude aberto no terminal "),
+                                    term,
+                                    tor(
+                                        "gui.od_launched_post",
+                                        " — o overdev roda fora do app; acompanhe abaixo.",
+                                    ),
+                                );
+                                app.set_od_run_status(msg.into());
+                            }
+                        });
+                        run_monitor(w, p, stop2);
+                    }
+                    Err(e) => {
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(app) = w.upgrade() {
+                                app.set_od_session_running(false);
+                                app.set_od_run_status(e.into());
+                            }
+                        });
+                    }
+                });
             }
         });
     }
-    // ---- aditivos: Load / Index → injeta o slash-command na sessão (ou dica) ----
-    {
-        let weak = app.as_weak();
-        let inject = od_inject.clone();
-        app.on_od_load_cmd(move || {
-            if let Some(app) = weak.upgrade() {
-                inject_or_hint(&app, &inject, overdev::load_cmd());
-            }
-        });
-    }
-    {
-        let weak = app.as_weak();
-        let inject = od_inject.clone();
-        app.on_od_index_cmd(move || {
-            if let Some(app) = weak.upgrade() {
-                inject_or_hint(&app, &inject, overdev::index_cmd());
-            }
-        });
-    }
-    // ---- Fase 4: "Parar" — levanta a flag; o worker mata a sessão e encerra ----
+    // ---- Fase 4: "Parar" — levanta a flag; o MONITOR encerra (não mata o claude) ----
     {
         let weak = app.as_weak();
         let stop = od_stop_flag.clone();

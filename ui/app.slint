@@ -241,14 +241,17 @@ export global L {
     in-out property <string> od-note;              // rótulo/hint "Nota para esta tarefa…"
     in-out property <string> od-correction;        // título/hint "Prompt de correção…"
     in-out property <string> od-notes-title;       // título "Notas e correções"
-    // ---- aba Overdev — Fase 4 (agente acoplado: run/stop + log) ----
+    // ---- aba Overdev — Fase 4 (terminal externo + monitor leve) ----
     in-out property <string> od-run;               // botão "Executar overdev"
     in-out property <string> od-stop;              // botão "Parar"
-    in-out property <string> od-running;           // pill/status "rodando…"
+    in-out property <string> od-running;           // pill de estado (monitor ligado)
+    in-out property <string> od-mon-active;        // pill quando o run está "active"
     in-out property <string> od-confirm-run;       // texto do guardrail (aviso do disparo)
-    in-out property <string> od-log;               // título do pane de log
     in-out property <string> od-run-done;          // status "concluído"
     in-out property <string> od-agent-cmd;         // rótulo "Comando do agente"
+    in-out property <string> od-ext-terminal;      // rótulo "claude rodando em terminal externo…"
+    in-out property <string> od-mon-iters;         // rótulo "iterações"
+    in-out property <string> od-mon-open-title;    // título "Itens abertos"
     // aba Grafo
     in-out property <string> g-search-hint;        // hint da busca ("procurar")
     in-out property <string> g-nodes-suffix;       // sufixo "nós"
@@ -322,11 +325,7 @@ export global L {
     in-out property <string> cfg-manage;              // "Gerenciar…"
     in-out property <string> cfg-on;                  // "ligado"
     in-out property <string> cfg-off;                 // "desligado"
-    // ---- Overdev — aditivos (load/index + histórico DB + commits) ----
-    in-out property <string> od-load;                 // "Load"
-    in-out property <string> od-index;                // "Index"
-    in-out property <string> od-load-tip;             // tooltip
-    in-out property <string> od-index-tip;            // tooltip
+    // ---- Overdev — aditivos (histórico DB + commits) ----
     in-out property <string> od-history;              // "Histórico (backup)"
     in-out property <string> od-history-note;         // explicação da cópia de segurança
     in-out property <string> od-view;                 // "Ver"
@@ -1062,59 +1061,6 @@ component Pager inherits HorizontalLayout {
     }
 }
 
-// Botão pequeno com TOOLTIP flutuante no hover (explica a ação). Usado nos
-// aditivos do overdev (Load/Index).
-component TipBtn inherits Rectangle {
-    in property <string> label;
-    in property <string> tip;
-    in property <bool> enabled: true;
-    callback clicked();
-    height: 30px;
-    border-radius: 7px;
-    background: tta.has-hover && root.enabled ? Theme.surface-2 : Theme.surface;
-    border-width: 1px;
-    border-color: Theme.border;
-    opacity: root.enabled ? 1.0 : 0.45;
-    animate background { duration: 120ms; }
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        Text {
-            text: root.label;
-            vertical-alignment: center;
-            horizontal-alignment: center;
-            color: Theme.text;
-            font-size: 12.5px;
-            font-weight: 600;
-        }
-    }
-    tta := TouchArea {
-        enabled: root.enabled;
-        mouse-cursor: root.enabled ? pointer : default;
-        clicked => { if (root.enabled) { root.clicked(); } }
-    }
-    if tta.has-hover && root.tip != "": Rectangle {
-        y: parent.height + 4px;
-        x: 0;
-        width: 240px;
-        height: ttt.preferred-height + 12px;
-        border-radius: 6px;
-        background: Theme.surface-2;
-        border-width: 1px;
-        border-color: Theme.border;
-        ttt := Text {
-            x: 8px;
-            width: 224px;
-            text: root.tip;
-            color: Theme.text;
-            font-size: 11px;
-            font-weight: 500;
-            wrap: word-wrap;
-            vertical-alignment: center;
-        }
-    }
-}
-
 export component AppWindow inherits Window {
     title: L.window-title;
     icon: root.app-icon;
@@ -1166,14 +1112,19 @@ export component AppWindow inherits Window {
     in-out property <string> od-notes;                      // read_notes(root)
     in-out property <string> od-note-input;                 // input de nota por task
     in-out property <string> od-correction-input;           // input do prompt de correção
-    // ---- agente acoplado (Fase 4) ----
-    in-out property <bool> od-session-running: false;       // agente rodando (reflete nos botões)
+    // ---- overdev em terminal externo + MONITOR leve (Fase 4) ----
+    in-out property <bool> od-session-running: false;       // MONITOR ativo (claude roda fora do app)
     in-out property <bool> od-confirm-open: false;          // guardrail (mini-modal de confirmação) aberto
-    in-out property <string> od-agent-cmdline;              // runner.command_line() mostrado no guardrail
-    in-out property <string> od-run-log;                    // texto acumulado do log/terminal do agente
-    in-out property <string> od-run-status;                 // "concluído" / info do run (vazio = ocioso)
-    in-out property <int> od-run-done: 0;                   // progresso ao vivo: feitos
-    in-out property <int> od-run-open: 0;                   // progresso ao vivo: abertos (máquina)
+    in-out property <string> od-agent-cmdline;              // comando que abre no terminal externo (guardrail)
+    in-out property <string> od-run-status;                 // msg do launch/monitor (vazio = ocioso)
+    in-out property <int> od-run-done: 0;                   // monitor: feitos
+    in-out property <int> od-run-open: 0;                   // monitor: abertos (máquina)
+    in-out property <int> od-mon-human: 0;                  // monitor: humanos abertos (- [H ])
+    in-out property <int> od-mon-hold: 0;                   // monitor: on-hold (- [~])
+    in-out property <int> od-mon-iter: 0;                   // monitor: iterações gastas
+    in-out property <int> od-mon-max: 0;                    // monitor: teto de iterações
+    in-out property <string> od-mon-mode;                   // monitor: estado do run (active/stopped/…)
+    in-out property <[string]> od-mon-items;                // monitor: itens abertos (máquina)
 
     // ---- aba Environments ----
     in property <[EnvRow]> env-rows;
@@ -1252,8 +1203,6 @@ export component AppWindow inherits Window {
     callback cfg-manage-dirs();          // abre o modal de dev_dirs/pins
 
     // ==================== Overdev — aditivos ====================
-    callback od-load-cmd();              // envia /eng-load à sessão (ou dica)
-    callback od-index-cmd();             // envia /eng-index à sessão (ou dica)
     callback od-refresh-history();       // recarrega histórico do DB + commits do projeto atual
     in property <[SnapRow]> od-snaps;    // histórico do DB (página atual)
     in-out property <int> od-snap-page: 0;
@@ -2412,17 +2361,21 @@ export component AppWindow inherits Window {
                         Rectangle {}
                         Btn { label: L.open-browser; small: true; clicked => { root.od-open-browser(); } }
                     }
-                    // ---- Fase 4: agente acoplado (Executar overdev / Parar + log) ----
+                    // ---- Fase 4: overdev em terminal externo + MONITOR leve ----
+                    // O `claude` roda num terminal do sistema (processo próprio, RAM dele,
+                    // fora do app). Aqui é só o botão de disparo + um monitor que relê o
+                    // `.overdev/` a cada ~3s. O "não pare" é do Stop hook do overdev.
                     Rectangle { height: 1px; background: Theme.border; }
                     VerticalLayout {
                         spacing: 8px;
+                        property <bool> od-show-monitor: root.od-session-running || root.od-mon-mode != "";
                         HorizontalLayout {
                             spacing: 12px;
                             Btn {
                                 label: L.od-run;
                                 primary: true;
                                 small: true;
-                                // só com .overdev/ presente E nenhuma sessão rodando.
+                                // só com .overdev/ presente E nenhum monitor ativo.
                                 enabled: root.od-has-overdev && !root.od-session-running;
                                 clicked => { root.od-run-request(); }
                             }
@@ -2433,18 +2386,7 @@ export component AppWindow inherits Window {
                                 enabled: root.od-session-running;
                                 clicked => { root.od-stop(); }
                             }
-                            // aditivos: injeta /eng-load e /eng-index na sessão (ou dica).
-                            TipBtn {
-                                label: L.od-load;
-                                tip: L.od-load-tip;
-                                clicked => { root.od-load-cmd(); }
-                            }
-                            TipBtn {
-                                label: L.od-index;
-                                tip: L.od-index-tip;
-                                clicked => { root.od-index-cmd(); }
-                            }
-                            // pill "rodando…" enquanto a sessão vive.
+                            // pill de estado (active/parado) enquanto o monitor vive.
                             if root.od-session-running: VerticalLayout {
                                 alignment: center;
                                 Rectangle {
@@ -2455,7 +2397,7 @@ export component AppWindow inherits Window {
                                     border-width: 1px;
                                     border-color: Theme.good.transparentize(0.5);
                                     runtxt := Text {
-                                        text: L.od-running;
+                                        text: root.od-mon-mode == "active" ? L.od-mon-active : L.od-running;
                                         color: Theme.good;
                                         font-size: 11.5px;
                                         font-weight: 700;
@@ -2476,39 +2418,64 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
-                        // barra de progresso ao vivo (feitos / feitos+abertos), só durante/depois do run.
-                        if root.od-session-running || root.od-run-log != "": Rectangle {
-                            height: 8px;
-                            border-radius: 4px;
-                            background: Theme.surface-2;
-                            property <int> total: root.od-run-done + root.od-run-open;
-                            Rectangle {
-                                x: 0;
-                                height: 100%;
-                                width: parent.total > 0 ? parent.width * root.od-run-done / parent.total : 0px;
-                                border-radius: 4px;
-                                background: Theme.good;
-                                animate width { duration: 240ms; }
+                        // rótulo: o claude é um processo próprio num terminal externo.
+                        if root.od-session-running: Text {
+                            text: L.od-ext-terminal;
+                            font-size: 11.5px;
+                            font-weight: 600;
+                            color: Theme.text-dim;
+                            wrap: word-wrap;
+                        }
+                        // contadores do monitor: feitos / abertos / humano / on-hold + iterações.
+                        if od-show-monitor: HorizontalLayout {
+                            spacing: 18px;
+                            alignment: start;
+                            Text { text: "✓ \{root.od-run-done}"; font-size: 13px; font-weight: 700; color: Theme.good; }
+                            Text { text: "○ \{root.od-run-open}"; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
+                            Text { text: "\{L.od-human} \{root.od-mon-human}"; font-size: 13px; font-weight: 700; color: Theme.accent; }
+                            Text { text: "~ \{root.od-mon-hold}"; font-size: 13px; font-weight: 700; color: Theme.warn; }
+                            Rectangle {}
+                            Text {
+                                text: "\{L.od-mon-iters} \{root.od-mon-iter}/\{root.od-mon-max}";
+                                font-size: 13px;
+                                font-weight: 700;
+                                color: Theme.text-dim;
                             }
                         }
-                        // pane de log/terminal do agente (monospace, rolável, read-only).
-                        if root.od-session-running || root.od-run-log != "": VerticalLayout {
-                            spacing: 4px;
-                            Text { text: L.od-log; font-size: 12.5px; font-weight: 700; color: Theme.text-dim; }
+                        // barra de progresso (feitos / feitos+abertos) + percentual.
+                        if od-show-monitor: HorizontalLayout {
+                            spacing: 10px;
                             Rectangle {
-                                height: 240px;
-                                border-radius: 8px;
-                                background: Theme.dark ? #0d0f14 : #0d0f14;
-                                border-width: 1px;
-                                border-color: Theme.border;
-                                TextEdit {
-                                    width: 100%;
+                                vertical-stretch: 0;
+                                height: 8px;
+                                border-radius: 4px;
+                                background: Theme.surface-2;
+                                Rectangle {
+                                    x: 0;
                                     height: 100%;
-                                    read-only: true;
-                                    text: root.od-run-log;
-                                    font-size: 12px;
-                                    wrap: no-wrap;
+                                    width: parent.width * root.od-run-done / max(1, root.od-run-done + root.od-run-open);
+                                    border-radius: 4px;
+                                    background: Theme.good;
+                                    animate width { duration: 240ms; }
                                 }
+                            }
+                            Text {
+                                text: "\{round(100 * root.od-run-done / max(1, root.od-run-done + root.od-run-open))}%";
+                                font-size: 12px;
+                                font-weight: 700;
+                                color: Theme.text-dim;
+                                vertical-alignment: center;
+                            }
+                        }
+                        // lista dos itens abertos (máquina) — o que ainda trava o run.
+                        if root.od-mon-items.length > 0: VerticalLayout {
+                            spacing: 4px;
+                            Text { text: L.od-mon-open-title; font-size: 12.5px; font-weight: 700; color: Theme.text-dim; }
+                            for item in root.od-mon-items: HorizontalLayout {
+                                spacing: 6px;
+                                alignment: start;
+                                Text { text: "○"; font-size: 12px; font-weight: 800; color: Theme.text-dim; }
+                                Text { text: item; font-size: 12px; color: Theme.text; wrap: word-wrap; }
                             }
                         }
                     }
