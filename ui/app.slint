@@ -70,6 +70,7 @@ export struct SkillRow {
     op-error: bool,       // op-label é um erro? (colore em warn)
     disp: int,            // índice de exibição na página ativa (paginação); -1 fora da página
     forked: bool,         // skill oficial que virou FORK editável (marca [fork] + habilita Comparar)
+    rating: string,       // nota do marketplace ("★4.7 (12)"); vazio = sem nota (preenchido async)
 }
 
 // Uma linha da aba Environments: uma LINGUAGEM, seus métodos disponíveis nesta
@@ -302,6 +303,12 @@ export global L {
     in-out property <string> ssh-empty;               // empty-state
     in-out property <string> ssh-priv-note;           // "A chave privada nunca é exposta"
     in-out property <string> ssh-keys-title;          // "Suas chaves"
+    in-out property <string> ssh-entropy-ed25519;     // nota de entropia do ed25519
+    in-out property <string> ssh-entropy-rsa;         // nota de entropia do RSA 4096
+    in-out property <string> ssh-kind-hint;           // "ed25519 é o default forte; RSA exige ≥4096"
+    in-out property <string> ssh-proof-label;         // "Prova da chave (bits · fingerprint · tipo)"
+    in-out property <string> ssh-export-bw;           // "Exportar → Bitwarden"
+    in-out property <string> ssh-bw-note;             // nota: a privada nunca aparece na tela
     // ---- Tela Configurações — chaves NOVAS via `tor` ----
     in-out property <string> cfg-title;
     in-out property <string> cfg-language;            // "Idioma"
@@ -1219,10 +1226,14 @@ export component AppWindow inherits Window {
     in-out property <string> ssh-gen-passphrase;
     in-out property <string> ssh-gen-status;
     in-out property <bool> ssh-gen-error: false;
+    in-out property <string> ssh-gen-proof;              // prova (bits·fingerprint·tipo) da chave recém-gerada
+    in-out property <string> ssh-bw-result;              // resultado da exportação p/ Bitwarden (banner)
+    in-out property <bool> ssh-bw-error: false;          // ssh-bw-result é erro?
     in-out property <bool> ssh-confirm-open: false;      // modal de confirmação de remoção
     in-out property <string> ssh-confirm-name;
     in-out property <string> ssh-confirm-msg;
     callback ssh-generate();
+    callback ssh-export-bw(int);     // exportar a chave da linha i p/ o Bitwarden (thread)
     callback ssh-copy(int);          // copiar pública da linha i
     callback ssh-remove-request(int);// abrir confirmação de remoção da linha i
     callback ssh-remove-confirm();   // remove de fato
@@ -1691,6 +1702,19 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
+                    // Nota de entropia do tipo SELECIONADO (antes de gerar; atualiza ao trocar o
+                    // chip) + a regra da casa (ed25519 default forte / RSA exige >= 4096).
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: root.ssh-gen-kind == "rsa" ? L.ssh-entropy-rsa : L.ssh-entropy-ed25519;
+                            font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap;
+                        }
+                        Text {
+                            text: L.ssh-kind-hint;
+                            font-size: 11.5px; font-weight: 700; color: Theme.text; wrap: word-wrap;
+                        }
+                    }
                     HorizontalLayout {
                         spacing: 12px;
                         alignment: start;
@@ -1708,9 +1732,38 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
+                    // PROVA da chave recém-gerada (ssh-keygen -l): bits · fingerprint · tipo.
+                    if root.ssh-gen-proof != "": Rectangle {
+                        border-radius: 8px;
+                        background: Theme.good.transparentize(0.9);
+                        border-width: 1px;
+                        border-color: Theme.good.transparentize(0.6);
+                        VerticalLayout {
+                            padding: 10px;
+                            spacing: 3px;
+                            Text { text: L.ssh-proof-label; font-size: 11px; font-weight: 700; color: Theme.text-dim; }
+                            Text { text: root.ssh-gen-proof; font-size: 12.5px; color: Theme.text; wrap: word-wrap; }
+                        }
+                    }
                     Rectangle { height: 1px; background: Theme.border; }
                     // ---- lista de chaves ----
                     Text { text: L.ssh-keys-title; font-size: 14px; font-weight: 800; color: Theme.text; }
+                    // Exportar p/ Bitwarden — nota de segurança + resultado da última exportação.
+                    Text { text: L.ssh-bw-note; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+                    if root.ssh-bw-result != "": Rectangle {
+                        border-radius: 8px;
+                        background: root.ssh-bw-error ? Theme.warn.transparentize(0.88) : Theme.good.transparentize(0.9);
+                        border-width: 1px;
+                        border-color: root.ssh-bw-error ? Theme.warn.transparentize(0.6) : Theme.good.transparentize(0.6);
+                        VerticalLayout {
+                            padding: 10px;
+                            Text {
+                                text: root.ssh-bw-result;
+                                font-size: 12px; wrap: word-wrap;
+                                color: root.ssh-bw-error ? Theme.warn : Theme.text;
+                            }
+                        }
+                    }
                     if root.ssh-rows.length == 0: Text {
                         text: L.ssh-empty; font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap;
                     }
@@ -1749,6 +1802,10 @@ export component AppWindow inherits Window {
                                         text: k.op-label; font-size: 12px; font-weight: 600;
                                         color: k.op-error ? Theme.warn : Theme.good;
                                     }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.ssh-export-bw; small: true; clicked => { root.ssh-export-bw(ki); } }
                                 }
                                 VerticalLayout {
                                     alignment: center;
@@ -3394,6 +3451,14 @@ export component AppWindow inherits Window {
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
                                         }
+                                    }
+                                    // Nota do marketplace (discreta): "★4.7 (12)". Vazio → some.
+                                    if row.rating != "": Text {
+                                        text: row.rating;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        color: #d9a406;
+                                        vertical-alignment: center;
                                     }
                                     Rectangle {}
                                 }

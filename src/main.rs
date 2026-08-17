@@ -18,8 +18,8 @@ use schematize::agentrun::{self, AgentRunner, ClaudeRunner};
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
 use schematize::{
-    account, autostart, config, environments, githist, notifications, overdev, overdevdb, panel,
-    projects, selfupdate, settings, skilledit, skills, sshkeys, upgrade, util,
+    account, autostart, config, environments, githist, market, notifications, overdev, overdevdb,
+    panel, projects, selfupdate, settings, skilledit, skills, sshkeys, upgrade, util,
 };
 use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 use std::cell::RefCell;
@@ -222,6 +222,20 @@ fn install_i18n(app: &AppWindow) {
     l.set_ssh_empty(tor("gui.ssh_empty", "Nenhuma chave em ~/.ssh — gere uma acima.").into());
     l.set_ssh_priv_note(tor("gui.ssh_priv_note", "A chave privada nunca é exposta — só a pública sai.").into());
     l.set_ssh_keys_title(tor("gui.ssh_keys_title", "Suas chaves").into());
+    // SSH — entropia (do lib, por tipo) + prova + Bitwarden. Chaves NOVAS via `tor`.
+    l.set_ssh_entropy_ed25519(sshkeys::entropy_note(sshkeys::KeyKind::Ed25519).into());
+    l.set_ssh_entropy_rsa(sshkeys::entropy_note(sshkeys::KeyKind::Rsa4096).into());
+    l.set_ssh_kind_hint(tor(
+        "gui.ssh_kind_hint",
+        "ed25519 é o default forte da casa; use RSA só para hosts legados — e nunca abaixo de 4096 bits.",
+    ).into());
+    l.set_ssh_proof_label(tor("gui.ssh_proof_label", "Prova da chave (bits · fingerprint · tipo)").into());
+    l.set_ssh_export_bw(tor("gui.ssh_export_bw", "Exportar → Bitwarden").into());
+    l.set_ssh_bw_note(tor(
+        "gui.ssh_bw_note",
+        "Exportar → Bitwarden salva a chave no seu cofre (se destravado) ou gera um arquivo de import 600. \
+         A chave PRIVADA nunca aparece nesta tela.",
+    ).into());
     // Tela Configurações — chaves NOVAS via `tor`.
     l.set_cfg_title(tor("gui.cfg_title", "Configurações").into());
     l.set_cfg_language(tor("gui.cfg_language", "Idioma").into());
@@ -443,6 +457,7 @@ fn header_row(label: &str, cat: &str, page: i32) -> SkillRow {
         op_error: false,
         disp: -1,
         forked: false,
+        rating: SharedString::new(),
     }
 }
 
@@ -475,6 +490,7 @@ fn skill_row(it: &Item, forked: bool) -> SkillRow {
         op_error: false,
         disp: -1,
         forked,
+        rating: SharedString::new(),
     }
 }
 
@@ -740,6 +756,35 @@ fn kick_resolve_all(weak: &Weak<AppWindow>, row_items: &Rc<Vec<Option<Item>>>) {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Notas do marketplace: busca TODAS as médias numa thread (1 request) e preenche
+// a coluna `rating` de cada linha de skill por slug. Sem nota (count 0 / None) →
+// `format_rating` devolve "" e o badge some. Falha de rede = HashMap vazio → só
+// não mostra nota (a UI nunca trava; nada de bloqueio no event loop).
+// ---------------------------------------------------------------------------
+fn kick_market_ratings(weak: Weak<AppWindow>) {
+    std::thread::spawn(move || {
+        let ratings = market::market_ratings_all(); // HashMap<String,(f32,u32)> (Send)
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(app) = weak.upgrade() {
+                let rows = app.get_rows();
+                for i in 0..rows.row_count() {
+                    if let Some(mut r) = rows.row_data(i) {
+                        if r.is_header {
+                            continue;
+                        }
+                        let rating = market::format_rating(ratings.get(r.slug.as_str()).copied());
+                        if r.rating.as_str() != rating {
+                            r.rating = rating.into();
+                            rows.set_row_data(i, r);
+                        }
+                    }
+                }
+            }
+        });
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -1935,6 +1980,8 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // Resolve o latest de todas as skills assim que a janela sobe (não bloqueia).
     kick_resolve_all(&app.as_weak(), &row_items);
+    // Busca as notas do marketplace (1 request, thread) e preenche os badges por slug.
+    kick_market_ratings(app.as_weak());
 
     // ---- aba Environments: modelo + índices auxiliares p/ o modal ----
     // Sonda a máquina UMA vez (local, rápido pra command -v). O refresh re-sonda.
@@ -2192,6 +2239,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let row_items = row_items.clone();
         app.on_check(move || {
             kick_resolve_all(&weak, &row_items);
+            kick_market_ratings(weak.clone());
         });
     }
 
@@ -3110,7 +3158,52 @@ fn main() -> Result<(), slint::PlatformError> {
             m.set_vec(build_ssh_rows());
             if let Some(app) = weak.upgrade() {
                 app.set_ssh_gen_status(SharedString::new());
+                app.set_ssh_gen_proof(SharedString::new());
+                app.set_ssh_bw_result(SharedString::new());
             }
+        });
+    }
+    // exportar uma chave p/ o Bitwarden (cofre destravado OU arquivo de import 600).
+    // Roda em THREAD (bw/subprocesso pode bloquear); só o resultado (String, Send)
+    // volta pela event loop. A chave PRIVADA nunca chega à UI (o lib a esconde).
+    {
+        let weak = app.as_weak();
+        let m = ssh_model.clone();
+        app.on_ssh_export_bw(move |idx| {
+            let Some(app) = weak.upgrade() else { return };
+            let i = idx as usize;
+            let Some(mut r) = m.row_data(i) else { return };
+            let name = r.name.to_string();
+            // marca a linha como ocupada e limpa o banner anterior.
+            r.op_label = tor("gui.ssh_bw_exporting", "exportando…").into();
+            r.op_error = false;
+            m.set_row_data(i, r);
+            app.set_ssh_bw_result(SharedString::new());
+            let weak2 = app.as_weak();
+            std::thread::spawn(move || {
+                let res = sshkeys::export_bitwarden(&name, None);
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak2.upgrade() {
+                        // solta o "ocupado" da linha (o modelo é o mesmo VecModel).
+                        let rows = app.get_ssh_rows();
+                        if let Some(mut r) = rows.row_data(i) {
+                            r.op_label = SharedString::new();
+                            r.op_error = false;
+                            rows.set_row_data(i, r);
+                        }
+                        match res {
+                            Ok(msg) => {
+                                app.set_ssh_bw_result(msg.into());
+                                app.set_ssh_bw_error(false);
+                            }
+                            Err(e) => {
+                                app.set_ssh_bw_result(e.into());
+                                app.set_ssh_bw_error(true);
+                            }
+                        }
+                    }
+                });
+            });
         });
     }
     // gerar um par (ed25519/rsa). NUNCA sobrescreve (force=false).
@@ -3142,6 +3235,9 @@ fn main() -> Result<(), slint::PlatformError> {
                 Ok(info) => {
                     app.set_ssh_gen_error(false);
                     app.set_ssh_gen_status(format!("{} · {}", info.name, info.fingerprint).into());
+                    // PROVA da chave: bits · fingerprint · tipo (ssh-keygen -l). Confere a força.
+                    let proof = sshkeys::proof_line(&info.name).unwrap_or_default();
+                    app.set_ssh_gen_proof(proof.into());
                     app.set_ssh_gen_name(SharedString::new());
                     app.set_ssh_gen_comment(SharedString::new());
                     app.set_ssh_gen_passphrase(SharedString::new());
@@ -3150,6 +3246,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 Err(e) => {
                     app.set_ssh_gen_error(true);
                     app.set_ssh_gen_status(e.into());
+                    app.set_ssh_gen_proof(SharedString::new());
                 }
             }
         });
