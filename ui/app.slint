@@ -252,6 +252,9 @@ export global L {
     in-out property <string> od-ext-terminal;      // rótulo "claude rodando em terminal externo…"
     in-out property <string> od-mon-iters;         // rótulo "iterações"
     in-out property <string> od-mon-open-title;    // título "Itens abertos"
+    in-out property <string> od-attach;            // botão "Reload / Acompanhar" (anexa a run externo)
+    in-out property <string> od-refresh-tokens;    // botão "Atualizar tokens"
+    in-out property <string> od-completions-title; // título "Conclusões" (log com data/hora)
     // aba Grafo
     in-out property <string> g-search-hint;        // hint da busca ("procurar")
     in-out property <string> g-nodes-suffix;       // sufixo "nós"
@@ -1125,6 +1128,8 @@ export component AppWindow inherits Window {
     in-out property <int> od-mon-max: 0;                    // monitor: teto de iterações
     in-out property <string> od-mon-mode;                   // monitor: estado do run (active/stopped/…)
     in-out property <[string]> od-mon-items;                // monitor: itens abertos (máquina)
+    in-out property <[string]> od-completions;              // monitor: log de conclusões ("HH:MM:SS  texto")
+    in-out property <string> od-usage-line;                 // monitor: tokens+modelo já formatado (vazio = sem dado)
 
     // ---- aba Environments ----
     in property <[EnvRow]> env-rows;
@@ -1273,6 +1278,8 @@ export component AppWindow inherits Window {
     callback od-run-confirm();          // clique "Confirmar" no guardrail → dispara o agente acoplado
     callback od-run-cancel();           // fecha o guardrail sem disparar
     callback od-stop();                 // "Parar" → session.kill() + encerra a thread
+    callback od-attach();               // "Reload / Acompanhar" → anexa o monitor a um overdev externo
+    callback od-refresh-tokens();       // "Atualizar tokens" → relê agent_usage sob demanda
     // ---- app ----
     callback restart();                 // relança o app (janela nova) — usado pós self-update
 
@@ -2386,6 +2393,15 @@ export component AppWindow inherits Window {
                                 enabled: root.od-session-running;
                                 clicked => { root.od-stop(); }
                             }
+                            // Anexa o monitor a um overdev que já roda POR FORA (terminal),
+                            // sem ter clicado "Executar overdev". Desligado enquanto um
+                            // monitor deste app já está vivo (evita thread duplicada).
+                            Btn {
+                                label: L.od-attach;
+                                small: true;
+                                enabled: !root.od-session-running;
+                                clicked => { root.od-attach(); }
+                            }
                             // pill de estado (active/parado) enquanto o monitor vive.
                             if root.od-session-running: VerticalLayout {
                                 alignment: center;
@@ -2476,6 +2492,50 @@ export component AppWindow inherits Window {
                                 alignment: start;
                                 Text { text: "○"; font-size: 12px; font-weight: 800; color: Theme.text-dim; }
                                 Text { text: item; font-size: 12px; color: Theme.text; wrap: word-wrap; }
+                            }
+                        }
+                        // Tokens + modelo (agent_usage) + botão pra reler sob demanda.
+                        // A linha só aparece quando já houve uma leitura (evita "0" enganoso).
+                        HorizontalLayout {
+                            spacing: 10px;
+                            alignment: start;
+                            if root.od-usage-line != "": Text {
+                                text: root.od-usage-line;
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: Theme.text-dim;
+                                vertical-alignment: center;
+                                wrap: word-wrap;
+                            }
+                            Rectangle {}
+                            Btn {
+                                label: L.od-refresh-tokens;
+                                small: true;
+                                enabled: root.od-has-overdev;
+                                clicked => { root.od-refresh-tokens(); }
+                            }
+                        }
+                        // Log de CONCLUSÕES com data/hora (mais recentes embaixo). Atualiza
+                        // junto com o monitor. Rola internamente (a aba já está num ScrollView).
+                        if root.od-completions.length > 0: VerticalLayout {
+                            spacing: 4px;
+                            Text {
+                                text: "\{L.od-completions-title} (\{root.od-completions.length})";
+                                font-size: 12.5px;
+                                font-weight: 700;
+                                color: Theme.text-dim;
+                            }
+                            ScrollView {
+                                height: 150px;
+                                VerticalLayout {
+                                    spacing: 3px;
+                                    for line in root.od-completions: HorizontalLayout {
+                                        spacing: 6px;
+                                        alignment: start;
+                                        Text { text: "✓"; font-size: 12px; font-weight: 800; color: Theme.good; }
+                                        Text { text: line; font-size: 12px; color: Theme.text; wrap: word-wrap; }
+                                    }
+                                }
                             }
                         }
                     }

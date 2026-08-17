@@ -33,6 +33,11 @@ rfd = { version = "0.17", default-features = false, features = [
     "xdg-portal",
     "wayland",
 ] }
+# Só pra converter o epoch das conclusões do overdev pra HORA LOCAL (HH:MM:SS) no
+# log da aba Overdev. JÁ está no grafo de deps (transitivo via i-slint-core, com a
+# feature `clock` ligada) — declarar direto NÃO puxa crate novo, só libera
+# `chrono::Local` aqui. Sem isso teríamos de mostrar UTC (offset local não sai do std).
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [build-dependencies]
 slint-build = "1.17"

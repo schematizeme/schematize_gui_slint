@@ -19,7 +19,7 @@ use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
 use schematize::{
     account, autostart, config, environments, githist, market, notifications, overdev, overdevdb,
-    panel, projects, selfupdate, settings, skilledit, skills, sshkeys, upgrade, util,
+    panel, projects, selfupdate, settings, skilledit, skills, sshkeys, upgrade, usage, util,
 };
 use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 use std::cell::RefCell;
@@ -174,6 +174,10 @@ fn install_i18n(app: &AppWindow) {
     ).into());
     l.set_od_mon_iters(tor("gui.od_mon_iters", "iterações").into());
     l.set_od_mon_open_title(tor("gui.od_mon_open_title", "Itens abertos (máquina)").into());
+    // Reload/Acompanhar + log de conclusões + tokens (anexar monitor a run externo).
+    l.set_od_attach(tor("gui.od_attach", "Reload / Acompanhar").into());
+    l.set_od_refresh_tokens(tor("gui.od_refresh_tokens", "Atualizar tokens").into());
+    l.set_od_completions_title(tor("gui.od_completions_title", "Conclusões").into());
     // aba Grafo — reusa as chaves do egui (todas já nos 11 locales do lib).
     l.set_g_search_hint(t("gui.search").into());
     l.set_g_nodes_suffix(t("gui.graph_nodes").into());
@@ -1388,6 +1392,98 @@ const OD_MONITOR_EVERY: Duration = Duration::from_secs(3);
 /// Teto de itens abertos listados no monitor (o `claude` roda fora; isto é só espelho).
 const OD_MONITOR_ITEMS: usize = 10;
 
+/// Intervalo MÍNIMO entre leituras de `usage::agent_usage` dentro do monitor.
+/// CUIDADO PERF: `agent_usage` parseia os `.jsonl` do Claude (100MB+) — jamais a
+/// cada ciclo. Relemos os tokens no máx. a cada 30s (e sempre em thread própria).
+const OD_USAGE_EVERY: Duration = Duration::from_secs(30);
+
+/// Agrupa milhares com `.` (separador pt-BR): 1234567 → "1.234.567". PURO.
+fn sep_thousands(n: u64) -> String {
+    let s = n.to_string();
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    let len = bytes.len();
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 && (len - i) % 3 == 0 {
+            out.push('.');
+        }
+        out.push(*b as char);
+    }
+    out
+}
+
+/// Converte um epoch (segundos) pra `HH:MM:SS` na hora LOCAL via `chrono::Local`.
+/// Fallback improvável (timestamp fora de faixa) → string vazia.
+fn fmt_ts_local(ts: i64) -> String {
+    use chrono::TimeZone;
+    chrono::Local
+        .timestamp_opt(ts, 0)
+        .single()
+        .map(|dt| dt.format("%H:%M:%S").to_string())
+        .unwrap_or_default()
+}
+
+/// Materializa as conclusões (`overdev::completions`) em linhas prontas pra UI:
+/// `HH:MM:SS  <texto>` (hora local). Mantém a ordem do lib (ts asc → recentes embaixo).
+fn fmt_completions(cs: Vec<overdev::Completion>) -> Vec<String> {
+    cs.into_iter()
+        .map(|c| {
+            let hhmmss = fmt_ts_local(c.ts);
+            if hhmmss.is_empty() {
+                c.text
+            } else {
+                format!("{hhmmss}  {}", c.text)
+            }
+        })
+        .collect()
+}
+
+/// Monta a linha de tokens do painel do monitor a partir de `usage::Usage`.
+/// "Tokens: <total> (in <in> / out <out> · cache-read <cr>) · Modelo: <main>".
+fn fmt_usage(u: &usage::Usage) -> String {
+    let model = u.main_model().unwrap_or("—");
+    format!(
+        "{}: {} (in {} / out {} · cache-read {}) · {}: {}",
+        tor("gui.od_tokens", "Tokens"),
+        sep_thousands(u.total),
+        sep_thousands(u.input),
+        sep_thousands(u.output),
+        sep_thousands(u.cache_read),
+        tor("gui.od_model", "Modelo"),
+        model,
+    )
+}
+
+/// thread→UI: espelha o log de conclusões (linhas já formatadas `HH:MM:SS texto`).
+fn post_completions(weak: &Weak<AppWindow>, lines: Vec<String>) {
+    let w = weak.clone();
+    let _ = slint::invoke_from_event_loop(move || {
+        if let Some(app) = w.upgrade() {
+            let rows: Vec<SharedString> = lines.into_iter().map(SharedString::from).collect();
+            app.set_od_completions(ModelRc::from(Rc::new(VecModel::from(rows))));
+        }
+    });
+}
+
+/// thread→UI: escreve a linha de tokens/modelo já formatada.
+fn post_usage(weak: &Weak<AppWindow>, line: String) {
+    let w = weak.clone();
+    let _ = slint::invoke_from_event_loop(move || {
+        if let Some(app) = w.upgrade() {
+            app.set_od_usage_line(line.into());
+        }
+    });
+}
+
+/// Lê `usage::agent_usage` (PESADO: parseia .jsonl de 100MB+) numa thread PRÓPRIA e
+/// posta a linha formatada. Nunca no event loop, nunca no ritmo de 3s do monitor.
+fn spawn_usage(weak: Weak<AppWindow>, project: PathBuf) {
+    std::thread::spawn(move || {
+        let u = usage::agent_usage(&project);
+        post_usage(&weak, fmt_usage(&u));
+    });
+}
+
 /// thread→UI: espelha o snapshot do `.overdev/` (estado + contadores + iterações +
 /// lista de itens abertos). Cria um `VecModel` novo pra a lista (roda na UI thread).
 fn post_monitor(weak: &Weak<AppWindow>, prog: overdev::Progress, items: Vec<String>) {
@@ -1420,15 +1516,26 @@ fn post_monitor_end(weak: &Weak<AppWindow>, mode: String) {
     });
 }
 
-/// MONITOR leve: a cada ~3s lê `overdev::progress_at` + `open_items_at` e espelha
-/// na UI. NÃO segura o processo do `claude` (ele roda no terminal externo). Para
-/// quando o botão Parar levanta a `stop`, ou quando o run some/termina
-/// (`mode == "stopped"` / `Progress::finished()`), MAS só depois de ter visto o run
-/// ficar `active` uma vez — assim um `state.json` velho ("stopped") não encerra o
-/// monitor antes de o overdev sequer arrancar no terminal.
-fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>) {
+/// MONITOR leve: a cada ~3s lê `overdev::progress_at` + `open_items_at` + o log de
+/// `overdev::completions` (tudo BARATO) e espelha na UI; os tokens (`agent_usage`,
+/// PESADO) só no arranque e a cada ~30s, sempre em thread própria. NÃO segura o
+/// processo do `claude` (ele roda no terminal externo). Para quando o botão Parar
+/// levanta a `stop`, ou quando o run some/termina (`mode == "stopped"` /
+/// `Progress::finished()`), MAS só depois de ter visto o run ficar `active` uma vez —
+/// assim um `state.json` velho ("stopped") não encerra o monitor antes de o overdev
+/// sequer arrancar no terminal.
+///
+/// `attach`: quando `true` (botão "Reload / Acompanhar", anexando a um run que já
+/// roda POR FORA), começamos com `seen_active = true` — assim um run já em
+/// andamento (mode "active") é seguido de imediato e um run já FINALIZADO
+/// ("stopped") posta o snapshot final uma vez e encerra, em vez de exigir que o
+/// monitor testemunhe a transição pra active (que já aconteceu antes de anexarmos).
+fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>, attach: bool) {
     std::thread::spawn(move || {
-        let mut seen_active = false;
+        let mut seen_active = attach;
+        // Arranque: tokens uma vez (thread própria) — o resto é relido a cada ciclo.
+        spawn_usage(weak.clone(), project.clone());
+        let mut last_usage = Instant::now();
         loop {
             if stop.load(Ordering::SeqCst) {
                 post_monitor_end(&weak, "stopped".into());
@@ -1436,6 +1543,12 @@ fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>) {
             }
             let prog = overdev::progress_at(&project);
             let items = overdev::open_items_at(&project, OD_MONITOR_ITEMS);
+            post_completions(&weak, fmt_completions(overdev::completions(&project)));
+            // Tokens: no MÁX. a cada 30s, sempre fora do event loop.
+            if last_usage.elapsed() >= OD_USAGE_EVERY {
+                spawn_usage(weak.clone(), project.clone());
+                last_usage = Instant::now();
+            }
             let mode = prog.mode.clone();
             let finished = prog.finished();
             if mode == "active" {
@@ -2808,7 +2921,7 @@ fn main() -> Result<(), slint::PlatformError> {
                                 app.set_od_run_status(msg.into());
                             }
                         });
-                        run_monitor(w, p, stop2);
+                        run_monitor(w, p, stop2, false);
                     }
                     Err(e) => {
                         let _ = slint::invoke_from_event_loop(move || {
@@ -2830,6 +2943,64 @@ fn main() -> Result<(), slint::PlatformError> {
             stop.store(true, Ordering::SeqCst);
             if let Some(app) = weak.upgrade() {
                 app.set_od_run_status(tor("gui.od_stop", "Parar").into());
+            }
+        });
+    }
+    // ---- Reload / Acompanhar: ANEXA o monitor a um overdev que já roda POR FORA ----
+    // (terminal/processo próprio). Sem depender de ter clicado "Executar overdev":
+    // (re)liga a `run_monitor` no projeto atual lendo o `.overdev/` do disco e passa
+    // a espelhar ao vivo. Sem `.overdev/` → avisa e não liga. Se um monitor já está
+    // vivo, só reforça os tokens (o loop já reflete o resto). `attach=true` faz o
+    // monitor seguir um run já em curso (ou postar 1x e encerrar se já finalizou).
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        let stop = od_stop_flag.clone();
+        app.on_od_attach(move || {
+            let root = cur.borrow().clone();
+            let Some(app) = weak.upgrade() else { return };
+            let Some(p) = root else {
+                app.set_od_run_status(tor("gui.od_pick_first", "Selecione um projeto primeiro.").into());
+                return;
+            };
+            if !p.join(".overdev").is_dir() {
+                app.set_od_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
+                return;
+            }
+            // Já monitorando: não dispara outra thread (evita duplicata na mesma
+            // `stop`); só reforça os tokens agora.
+            if app.get_od_session_running() {
+                spawn_usage(weak.clone(), p.clone());
+                app.set_od_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
+                return;
+            }
+            // Zera o painel e liga o monitor anexado ao run externo.
+            app.set_od_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
+            app.set_od_run_done(0);
+            app.set_od_run_open(0);
+            app.set_od_mon_human(0);
+            app.set_od_mon_hold(0);
+            app.set_od_mon_iter(0);
+            app.set_od_mon_max(0);
+            app.set_od_mon_mode(SharedString::new());
+            app.set_od_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
+            app.set_od_session_running(true);
+            stop.store(false, Ordering::SeqCst);
+            run_monitor(weak.clone(), p, stop.clone(), true);
+        });
+    }
+    // ---- "Atualizar tokens": relê `agent_usage` (PESADO) sob demanda, em thread ----
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.on_od_refresh_tokens(move || {
+            let root = cur.borrow().clone();
+            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
+                if p.join(".overdev").is_dir() {
+                    spawn_usage(weak.clone(), p);
+                } else {
+                    app.set_od_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
+                }
             }
         });
     }
