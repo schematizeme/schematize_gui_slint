@@ -361,6 +361,20 @@ export global L {
     in-out property <string> compare-note;            // "Comparar NÃO sobrescreve nada"
     in-out property <string> compare-files;           // "Arquivos"
     in-out property <string> compare-loading;         // "Comparando…"
+
+    // ---- Conta (login via device flow) ----
+    in-out property <string> acc-section;              // título da seção "Conta"
+    in-out property <string> acc-login;                // "Entrar na plataforma"
+    in-out property <string> acc-logout;               // "Sair"
+    in-out property <string> acc-connected-as;         // "Conectado como" (prefixo do sub)
+    in-out property <string> acc-logged-out-hint;      // descrição do estado deslogado
+    in-out property <string> acc-modal-title;          // título do modal de login
+    in-out property <string> acc-code-label;           // "Digite este código no navegador:"
+    in-out property <string> acc-open-browser;         // "Abrir no navegador"
+    in-out property <string> acc-verification-at;      // "Acesse:" (rótulo da URL)
+    in-out property <string> acc-waiting;              // "Aguardando confirmação…"
+    in-out property <string> acc-cancel;               // "Cancelar"
+    in-out property <string> acc-indicator-tip;        // tooltip do indicador no header
 }
 
 // Paleta central — um único ponto de verdade para claro/escuro.
@@ -1339,6 +1353,22 @@ export component AppWindow inherits Window {
     callback cmp-request(string);                       // abre o painel + compare_update(slug) em thread
     callback cmp-close();                               // fecha o painel
 
+    // ==================== Conta (login via device flow) ====================
+    // Estado da sessão + do fluxo de login. O device flow roda em threads no Rust
+    // (device_start + loop de poll); a UI só reflete e o loop é cancelável.
+    in-out property <bool> acc-logged-in: false;        // há sessão persistida?
+    in-out property <string> acc-sub;                   // subject do usuário logado
+    in-out property <bool> acc-modal-open: false;       // modal do device flow aberto?
+    in-out property <bool> acc-polling: false;          // login em andamento (device_start/poll)
+    in-out property <string> acc-user-code;             // código a digitar no navegador (destaque)
+    in-out property <string> acc-verification-uri;      // URL curta pra mostrar
+    in-out property <string> acc-verification-uri-complete; // URL completa (botão "Abrir")
+    in-out property <string> acc-status;                // erro/info (negado/expirado/falha)
+    callback acc-login();                               // inicia o device flow (thread)
+    callback acc-logout();                              // encerra a sessão + atualiza UI
+    callback acc-cancel-login();                        // cancela o loop de poll + fecha o modal
+    callback acc-open-verify();                         // abre a verification_uri_complete no navegador
+
     // ---- aba Grafo (força-dirigida nativa) ----
     // Estado da transformação (dono no Rust; o Slint só lê pra renderizar).
     in property <[GraphNode]> graph-nodes;
@@ -1441,6 +1471,42 @@ export component AppWindow inherits Window {
                     }
                 }
                 Rectangle {}  // espaçador elástico
+                // indicador de sessão — pontinho verde clicável (vai pra Configurações),
+                // com tooltip. Só aparece logado; leve, sem poluir o header.
+                if root.acc-logged-in: VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 26px;
+                        height: 38px;
+                        Rectangle {
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 5px;
+                            background: Theme.good;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                        accdotta := TouchArea { mouse-cursor: pointer; clicked => { root.screen = 5; } }
+                        if accdotta.has-hover: Rectangle {
+                            y: parent.height + 2px;
+                            x: parent.width - self.width;
+                            height: 22px;
+                            width: acctip.preferred-width + 16px;
+                            border-radius: 6px;
+                            background: Theme.surface-2;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            acctip := Text {
+                                text: L.acc-indicator-tip;
+                                color: Theme.text;
+                                font-size: 11px;
+                                font-weight: 600;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
                 VerticalLayout {
                     alignment: center;
                     Bell {
@@ -1723,6 +1789,52 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     padding: 24px;
                     spacing: 20px;
+                    // ---- conta (login pela plataforma via device flow) ----
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.acc-section; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        // logado: "Conectado como <sub>" + Sair.
+                        if root.acc-logged-in: HorizontalLayout {
+                            spacing: 14px;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "\{L.acc-connected-as} \{root.acc-sub}";
+                                    font-size: 13.5px; font-weight: 700; color: Theme.text; overflow: elide;
+                                }
+                            }
+                            Rectangle {}
+                            VerticalLayout {
+                                alignment: center;
+                                Btn { label: L.acc-logout; small: true; danger: true; clicked => { root.acc-logout(); } }
+                            }
+                        }
+                        // deslogado: descrição + "Entrar na plataforma".
+                        if !root.acc-logged-in: HorizontalLayout {
+                            spacing: 14px;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: L.acc-logged-out-hint;
+                                    font-size: 12px; color: Theme.text-dim; wrap: word-wrap;
+                                }
+                            }
+                            Rectangle {}
+                            VerticalLayout {
+                                alignment: center;
+                                Btn {
+                                    label: L.acc-login; small: true; primary: true;
+                                    enabled: !root.acc-polling;
+                                    clicked => { root.acc-login(); }
+                                }
+                            }
+                        }
+                        if !root.acc-modal-open && root.acc-status != "": Text {
+                            text: root.acc-status;
+                            font-size: 12px; font-weight: 600; color: Theme.warn; wrap: word-wrap;
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
                     // ---- versão do app + self-update ----
                     VerticalLayout {
                         spacing: 8px;
@@ -3940,6 +4052,82 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- MODAL de login (device flow) ----------------------------------
+    // Mostra o user_code em destaque + a verification_uri e o botão de abrir no
+    // navegador. Enquanto aberto, o Rust roda o loop de poll numa thread; Cancelar
+    // levanta o flag de parada. Não fecha ao clicar fora (usa Cancelar de propósito).
+    if root.acc-modal-open: Rectangle {
+        background: #000000.transparentize(0.5);
+        TouchArea {}  // captura cliques do fundo (evita fechar sem cancelar o poll)
+        Rectangle {
+            width: Math.min(root.width - 48px, 460px);
+            height: Math.min(root.height - 80px, 440px);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            VerticalLayout {
+                padding: 24px;
+                spacing: 16px;
+                Text { text: L.acc-modal-title; font-size: 16px; font-weight: 800; color: Theme.text; }
+                Text { text: L.acc-code-label; font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap; }
+                // código em destaque.
+                Rectangle {
+                    height: 62px;
+                    border-radius: 10px;
+                    background: Theme.accent-soft;
+                    border-width: 1px;
+                    border-color: Theme.accent.transparentize(0.4);
+                    Text {
+                        text: root.acc-user-code;
+                        font-size: 30px;
+                        font-weight: 800;
+                        color: Theme.header-fg;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+                // URL de verificação.
+                HorizontalLayout {
+                    spacing: 6px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.acc-verification-at; font-size: 12px; color: Theme.text-dim; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: root.acc-verification-uri;
+                            font-size: 12.5px; font-weight: 700; color: Theme.text; overflow: elide;
+                        }
+                    }
+                    Rectangle {}
+                }
+                Btn { label: L.acc-open-browser; primary: true; clicked => { root.acc-open-verify(); } }
+                Rectangle {}  // empurra a base pra baixo
+                if root.acc-status != "": Text {
+                    text: root.acc-status;
+                    font-size: 12px; font-weight: 600; color: Theme.warn; wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.acc-waiting; font-size: 12px; color: Theme.text-dim; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.acc-cancel; small: true; clicked => { root.acc-cancel-login(); } }
                     }
                 }
             }
