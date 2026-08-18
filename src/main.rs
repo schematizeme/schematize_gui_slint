@@ -18,8 +18,9 @@ use schematize::agentrun;
 use schematize::i18n::{self, t, tf};
 use schematize::registry::{self, Item};
 use schematize::{
-    account, autostart, config, environments, githist, market, notifications, overdev, overdevdb,
-    panel, projects, selfupdate, settings, skilledit, skills, sshkeys, upgrade, usage, util,
+    account, autostart, config, debugreport, environments, githist, market, notifications, overdev,
+    overdevdb, panel, projects, selfupdate, settings, skilledit, skills, sshkeys, upgrade, usage,
+    util,
 };
 use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 use std::cell::RefCell;
@@ -260,6 +261,17 @@ fn install_i18n(app: &AppWindow) {
     l.set_cfg_manage(tor("gui.cfg_manage", "Gerenciar…").into());
     l.set_cfg_on(tor("gui.cfg_on", "ligado").into());
     l.set_cfg_off(tor("gui.cfg_off", "desligado").into());
+    // Diagnóstico (relatório de debug) — chaves NOVAS via `tor`.
+    l.set_cfg_debug_title(tor("gui.cfg_debug_title", "Diagnóstico").into());
+    l.set_cfg_debug_btn(tor("gui.cfg_debug_btn", "Gerar relatório de debug").into());
+    l.set_cfg_debug_generating(tor("gui.cfg_debug_generating", "Gerando…").into());
+    l.set_cfg_debug_open(tor("gui.cfg_debug_open", "Abrir pasta").into());
+    l.set_cfg_debug_note(tor(
+        "gui.cfg_debug_note",
+        "modo 600 · segredos redigidos · revise antes de compartilhar",
+    ).into());
+    l.set_cfg_debug_net(tor("gui.cfg_debug_net", "incluir diagnóstico de rede (mais lento)").into());
+    l.set_cfg_debug_saved(tor("gui.cfg_debug_saved", "Relatório gravado em").into());
     // Overdev — aditivos.
     l.set_od_history(tor("gui.od_history", "Histórico (cópia de segurança)").into());
     l.set_od_history_note(tor("gui.od_history_note", "O agente pode editar/apagar os arquivos do .overdev/ — este é o backup versionado deles.").into());
@@ -3491,6 +3503,68 @@ fn main() -> Result<(), slint::PlatformError> {
             if let Some(app) = weak.upgrade() {
                 app.set_dev_modal_open(true);
             }
+        });
+    }
+    // Diagnóstico: alterna o diagnóstico de rede (online) — mais lento quando ligado.
+    {
+        let weak = app.as_weak();
+        app.on_cfg_debug_toggle_online(move || {
+            if let Some(app) = weak.upgrade() {
+                app.set_cfg_debug_online(!app.get_cfg_debug_online());
+            }
+        });
+    }
+    // Diagnóstico: gera o relatório de debug numa THREAD (não trava a UI). Só dados
+    // Send cruzam a fronteira — o caminho volta como String via invoke_from_event_loop.
+    // Offline por default (rápido); com o toggle marcado passa online=true (mais lento).
+    {
+        let weak = app.as_weak();
+        app.on_cfg_debug_generate(move || {
+            let Some(app) = weak.upgrade() else { return };
+            if app.get_cfg_debug_running() {
+                return;
+            }
+            let online = app.get_cfg_debug_online();
+            // marca em andamento + limpa o resultado anterior.
+            app.set_cfg_debug_running(true);
+            app.set_cfg_debug_path(SharedString::new());
+            app.set_cfg_debug_summary(SharedString::new());
+            app.set_cfg_debug_error(SharedString::new());
+            let weak = app.as_weak();
+            std::thread::spawn(move || {
+                let res = debugreport::write_report(None, online); // Result<PathBuf,String> (Send)
+                let summary = debugreport::short_summary(); // String (Send)
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        app.set_cfg_debug_running(false);
+                        match res {
+                            Ok(path) => {
+                                app.set_cfg_debug_path(path.to_string_lossy().into_owned().into());
+                                app.set_cfg_debug_summary(summary.into());
+                                app.set_cfg_debug_error(SharedString::new());
+                            }
+                            Err(e) => {
+                                app.set_cfg_debug_error(tf("err.prefix", &[("e", &e)]).into());
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    }
+    // Diagnóstico: abre a PASTA do relatório no gerenciador de arquivos (reusa o
+    // mesmo mecanismo do "Abrir pasta" da barra de projeto: open_path_in_files).
+    {
+        let weak = app.as_weak();
+        app.on_cfg_debug_open_folder(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let path = app.get_cfg_debug_path().to_string();
+            if path.is_empty() {
+                return;
+            }
+            let p = Path::new(&path);
+            let dir = p.parent().unwrap_or(p);
+            open_path_in_files(dir);
         });
     }
 

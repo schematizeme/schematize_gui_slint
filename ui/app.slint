@@ -333,6 +333,14 @@ export global L {
     in-out property <string> cfg-manage;              // "Gerenciar…"
     in-out property <string> cfg-on;                  // "ligado"
     in-out property <string> cfg-off;                 // "desligado"
+    // ---- Diagnóstico (relatório de debug) ----
+    in-out property <string> cfg-debug-title;         // "Diagnóstico"
+    in-out property <string> cfg-debug-btn;           // "Gerar relatório de debug"
+    in-out property <string> cfg-debug-generating;    // "Gerando…"
+    in-out property <string> cfg-debug-open;          // "Abrir pasta"
+    in-out property <string> cfg-debug-note;          // "modo 600 · segredos redigidos · revise antes de compartilhar"
+    in-out property <string> cfg-debug-net;           // "incluir diagnóstico de rede (mais lento)"
+    in-out property <string> cfg-debug-saved;         // "Relatório gravado em"
     // ---- Overdev — aditivos (histórico DB + commits) ----
     in-out property <string> od-history;              // "Histórico (backup)"
     in-out property <string> od-history-note;         // explicação da cópia de segurança
@@ -1211,6 +1219,15 @@ export component AppWindow inherits Window {
     callback cfg-toggle-autostart();
     callback cfg-toggle-hooks();
     callback cfg-manage-dirs();          // abre o modal de dev_dirs/pins
+    // ---- Diagnóstico (relatório de debug) ----
+    in-out property <bool> cfg-debug-online: false;  // incluir diagnóstico de rede (mais lento)
+    in-out property <bool> cfg-debug-running: false; // geração em andamento (thread)
+    in-out property <string> cfg-debug-path;          // caminho do arquivo gravado ("" = nenhum)
+    in-out property <string> cfg-debug-summary;       // short_summary() do relatório
+    in-out property <string> cfg-debug-error;         // erro ("" = nenhum)
+    callback cfg-debug-generate();       // gera o relatório (write_report em thread)
+    callback cfg-debug-open-folder();    // abre a pasta do relatório no gerenciador de arquivos
+    callback cfg-debug-toggle-online();  // alterna o diagnóstico de rede
 
     // ==================== Overdev — aditivos ====================
     callback od-refresh-history();       // recarrega histórico do DB + commits do projeto atual
@@ -2028,6 +2045,64 @@ export component AppWindow inherits Window {
                         VerticalLayout {
                             alignment: center;
                             Btn { label: L.cfg-manage; small: true; clicked => { root.cfg-manage-dirs(); } }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- diagnóstico (relatório de debug) ----
+                    VerticalLayout {
+                        spacing: 10px;
+                        Text { text: L.cfg-debug-title; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        // toggle: incluir diagnóstico de rede (mais lento).
+                        HorizontalLayout {
+                            spacing: 10px;
+                            VerticalLayout {
+                                alignment: center;
+                                Check {
+                                    checked: root.cfg-debug-online;
+                                    enabled: !root.cfg-debug-running;
+                                    toggled => { root.cfg-debug-toggle-online(); }
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: L.cfg-debug-net; font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap; }
+                            }
+                            Rectangle {}
+                        }
+                        HorizontalLayout {
+                            alignment: start;
+                            Btn {
+                                label: root.cfg-debug-running ? L.cfg-debug-generating : L.cfg-debug-btn;
+                                primary: true;
+                                small: true;
+                                enabled: !root.cfg-debug-running;
+                                clicked => { root.cfg-debug-generate(); }
+                            }
+                        }
+                        // erro → mensagem em warn.
+                        if root.cfg-debug-error != "": Text {
+                            text: root.cfg-debug-error;
+                            font-size: 12.5px; font-weight: 600; color: Theme.warn; wrap: word-wrap;
+                        }
+                        // sucesso → caminho + resumo + Abrir pasta + nota.
+                        if root.cfg-debug-path != "": VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "\{L.cfg-debug-saved} \{root.cfg-debug-path}";
+                                font-size: 12.5px; font-weight: 600; color: Theme.good; wrap: word-wrap;
+                            }
+                            if root.cfg-debug-summary != "": Text {
+                                text: root.cfg-debug-summary;
+                                font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap;
+                            }
+                            HorizontalLayout {
+                                alignment: start;
+                                Btn { label: L.cfg-debug-open; small: true; clicked => { root.cfg-debug-open-folder(); } }
+                            }
+                            Text {
+                                text: L.cfg-debug-note;
+                                font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap;
+                            }
                         }
                     }
                     Rectangle {}
