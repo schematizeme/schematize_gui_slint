@@ -38,6 +38,10 @@ rfd = { version = "0.17", default-features = false, features = [
 # feature `clock` ligada) — declarar direto NÃO puxa crate novo, só libera
 # `chrono::Local` aqui. Sem isso teríamos de mostrar UTC (offset local não sai do std).
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Serialização do Schema do Database builder (carregar/salvar schema.json). O
+# `database::Schema` do lib deriva serde; aqui só precisamos do formato JSON. Já
+# está no grafo de deps (transitivo via `schematize`) — declarar não puxa crate novo.
+serde_json = "1"
 
 [build-dependencies]
 slint-build = "1.17"
