@@ -73,13 +73,18 @@ export struct SkillRow {
     rating: string,       // nota do marketplace ("★4.7 (12)"); vazio = sem nota (preenchido async)
 }
 
-// Uma linha da aba Environments: uma LINGUAGEM, seus métodos disponíveis nesta
-// máquina, o método escolhido pra instalar, e o status (instalado? por qual método).
+// Uma linha da aba Environments: uma LINGUAGEM ou FERRAMENTA de dev, seus métodos
+// disponíveis nesta máquina, o método escolhido pra instalar, e o status.
 // Preenchida pelo Rust a partir de `schematize::environments::status()`.
+// `category` ("language" | "tool") separa as duas seções; ferramentas não têm
+// seletor de método (methods vazio) — mostram só o `install-hint`.
 export struct EnvRow {
-    lang: string,           // slug ("go", "rust", ...) — vira o arg do `schematize env`
-    display: string,        // nome de exibição ("Go", "C# / .NET", ...)
-    methods: [string],      // métodos utilizáveis AQUI (docker|mise|distro|official)
+    lang: string,           // slug ("go", "rust", "claude", ...) — vira o arg do `schematize env`
+    display: string,        // nome de exibição ("Go", "C# / .NET", "Claude Code", ...)
+    category: string,       // "language" (runtime) | "tool" (ferramenta de dev)
+    install-hint: string,   // rótulo do caminho de instalação (ferramenta: "npm -g" / "official (curl|sh)")
+    section-title: string,  // não-vazio → esta linha ABRE uma seção com este título ("Linguagens"/"Ferramentas de dev")
+    methods: [string],      // métodos utilizáveis AQUI (docker|mise|distro|official); vazio p/ ferramenta
     method-sel: string,     // método escolhido pra instalar (chip selecionado)
     installed: bool,        // já instalado (por método detectado OU runtime no PATH)
     status-label: string,   // texto de status traduzido (instalado via X / instalado / não)
@@ -2835,7 +2840,18 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     padding: 16px;
                     spacing: 12px;
-                    for erow[ei] in root.env-rows: Rectangle {
+                    // Cada linha vem embrulhada: se `section-title` != "" ela ABRE uma
+                    // seção (título "Linguagens" / "Ferramentas de dev", computado no
+                    // Rust a partir do `category`), depois vem o card da linha.
+                    for erow[ei] in root.env-rows: VerticalLayout {
+                        spacing: 12px;
+                        if erow.section-title != "": Text {
+                            text: erow.section-title;
+                            font-size: 13px;
+                            font-weight: 700;
+                            color: Theme.text-dim;
+                        }
+                        Rectangle {
                         height: 96px;
                         border-radius: 12px;
                         background: Theme.surface;
@@ -2881,8 +2897,8 @@ export component AppWindow inherits Window {
                                     vertical-alignment: center;
                                 }
                             }
-                            // linha 2: método (chips) + ações
-                            HorizontalLayout {
+                            // linha 2 — LINGUAGEM: seletor de método (chips) + ações
+                            if erow.category != "tool": HorizontalLayout {
                                 spacing: 8px;
                                 VerticalLayout {
                                     alignment: center;
@@ -2930,6 +2946,41 @@ export component AppWindow inherits Window {
                                     }
                                 }
                             }
+                            // linha 2 — FERRAMENTA: sem seletor de método; mostra só o
+                            // caminho de instalação (install-hint) + as ações.
+                            if erow.category == "tool": HorizontalLayout {
+                                spacing: 8px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: erow.install-hint;
+                                        font-size: 12.5px;
+                                        color: Theme.text-dim;
+                                    }
+                                }
+                                Rectangle {}
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn {
+                                        label: L.act-install;
+                                        primary: true;
+                                        small: true;
+                                        enabled: !erow.installed;
+                                        clicked => { root.env-install(ei); }
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn {
+                                        label: L.act-remove;
+                                        danger: true;
+                                        small: true;
+                                        enabled: erow.installed;
+                                        clicked => { root.env-remove(ei); }
+                                    }
+                                }
+                            }
+                        }
                         }
                     }
                 }

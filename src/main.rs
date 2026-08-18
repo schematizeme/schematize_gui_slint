@@ -894,13 +894,18 @@ fn env_status_label(le: &environments::LangEnv) -> String {
     }
 }
 
-/// Constrói uma linha da aba Environments a partir do status do lib.
+/// Constrói uma linha da aba Environments a partir do status do lib. O
+/// `section_title` fica vazio aqui; quem monta a lista (build_env_rows_from) o
+/// preenche na PRIMEIRA linha de cada seção (linguagens × ferramentas).
 fn env_row(le: &environments::LangEnv) -> EnvRow {
     let methods: Vec<SharedString> = le.methods_available.iter().map(|m| m.slug().into()).collect();
     let method_sel = methods.first().cloned().unwrap_or_default();
     EnvRow {
         lang: le.lang.into(),
         display: le.display.into(),
+        category: le.category.into(),
+        install_hint: le.install_hint.as_str().into(),
+        section_title: SharedString::new(),
         methods: ModelRc::from(Rc::new(VecModel::from(methods))),
         method_sel,
         installed: le.is_installed(),
@@ -909,9 +914,35 @@ fn env_row(le: &environments::LangEnv) -> EnvRow {
     }
 }
 
+/// Título traduzido da seção de uma categoria ("language" | "tool").
+fn env_section_title(category: &str) -> String {
+    match category {
+        "tool" => tor("gui.env_tools_title", "Ferramentas de dev"),
+        _ => tor("gui.env_langs_title", "Linguagens"),
+    }
+}
+
+/// Monta as linhas a partir de um status já sondado, marcando o `section_title`
+/// na primeira linha de cada categoria (o `status()` do lib já lista linguagens
+/// primeiro e ferramentas depois). Assim a UI renderiza os dois blocos separados.
+fn build_env_rows_from(status: &[environments::LangEnv]) -> Vec<EnvRow> {
+    let mut last_cat = String::new();
+    status
+        .iter()
+        .map(|le| {
+            let mut row = env_row(le);
+            if le.category != last_cat {
+                last_cat = le.category.to_string();
+                row.section_title = env_section_title(le.category).into();
+            }
+            row
+        })
+        .collect()
+}
+
 /// Constrói o modelo inteiro da aba Environments a partir de `environments::status()`.
 fn build_env_rows() -> Vec<EnvRow> {
-    environments::status().iter().map(env_row).collect()
+    build_env_rows_from(&environments::status())
 }
 
 // ---------------------------------------------------------------------------
@@ -1086,13 +1117,21 @@ fn launch_terminal(inner: &str) -> bool {
 /// Monta o comando do terminal p/ `schematize env <action> <lang> --method <m>`.
 /// SEM `--yes`: o CLI mostra o plano e PEDE confirmação ali dentro (consentimento honesto).
 fn env_terminal_inner(bin: &str, action: &str, lang: &str, method: &str) -> String {
+    // Ferramentas não têm método (o CLI ignora `--method` pra elas) → omite o flag
+    // quando `method` vem vazio, pra não passar um `--method ` sem valor.
+    let (tag, method_arg) = if method.is_empty() {
+        (String::new(), String::new())
+    } else {
+        (format!(" ({method})"), format!(" --method {method}"))
+    };
     format!(
-        "echo '── schematize env {action} {lang} ({method}) ──'; echo; \
-         {bin} env {action} {lang} --method {method}; \
+        "echo '── schematize env {action} {lang}{tag} ──'; echo; \
+         {bin} env {action} {lang}{method_arg}; \
          echo; read -n1 -s -r -p '…'",
         action = action,
         lang = lang,
-        method = method,
+        tag = tag,
+        method_arg = method_arg,
         bin = bin
     )
 }
@@ -1105,7 +1144,8 @@ fn run_env_action(action: &str, lang: &str, method: &str) -> String {
     if launch_terminal(&inner) {
         t("gui.env_terminal_opened")
     } else {
-        let cmd = format!("{bin} env {action} {lang} --method {method}");
+        let method_arg = if method.is_empty() { String::new() } else { format!(" --method {method}") };
+        let cmd = format!("{bin} env {action} {lang}{method_arg}");
         tf("gui.env_no_terminal", &[("cmd", &cmd)])
     }
 }
@@ -1976,9 +2016,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // ---- aba Environments: modelo + índices auxiliares p/ o modal ----
     // Sonda a máquina UMA vez (local, rápido pra command -v). O refresh re-sonda.
     let env_status = environments::status();
-    let env_model = Rc::new(VecModel::from(
-        env_status.iter().map(env_row).collect::<Vec<EnvRow>>(),
-    ));
+    let env_model = Rc::new(VecModel::from(build_env_rows_from(&env_status)));
     app.set_env_rows(ModelRc::from(env_model.clone()));
     // lang → métodos disponíveis (slugs), pra o modal montar os chips sem re-sondar.
     let env_methods: Rc<std::collections::HashMap<String, Vec<String>>> = Rc::new(
@@ -1993,8 +2031,14 @@ fn main() -> Result<(), slint::PlatformError> {
             .collect(),
     );
     // conjunto das 7 linguagens que TÊM environment (pra decidir a oferta no modal).
-    let env_langs: Rc<std::collections::HashSet<String>> =
-        Rc::new(env_status.iter().map(|le| le.lang.to_string()).collect());
+    // Só categoria "language" — ferramentas (claude/code/codex) não entram na oferta.
+    let env_langs: Rc<std::collections::HashSet<String>> = Rc::new(
+        env_status
+            .iter()
+            .filter(|le| le.category == "language")
+            .map(|le| le.lang.to_string())
+            .collect(),
+    );
     // estado do modal de instalação (lado Rust).
     let modal = Rc::new(RefCell::new(ModalState::default()));
 
@@ -2252,7 +2296,8 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_env_install(move |idx| {
             let i = idx as usize;
             if let Some(mut r) = env_model.row_data(i) {
-                if r.method_sel.is_empty() {
+                // Linguagem exige método escolhido; ferramenta ("tool") não tem seletor.
+                if r.category != "tool" && r.method_sel.is_empty() {
                     return;
                 }
                 let label = run_env_action("install", &r.lang.to_string(), &r.method_sel.to_string());
@@ -2267,7 +2312,8 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_env_remove(move |idx| {
             let i = idx as usize;
             if let Some(mut r) = env_model.row_data(i) {
-                if r.method_sel.is_empty() {
+                // Linguagem exige método; ferramenta não (o CLI ignora `--method`).
+                if r.category != "tool" && r.method_sel.is_empty() {
                     return;
                 }
                 let label = run_env_action("remove", &r.lang.to_string(), &r.method_sel.to_string());
