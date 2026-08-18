@@ -187,6 +187,11 @@ fn install_i18n(app: &AppWindow) {
     l.set_g_export_obsidian(t("gui.export_obsidian").into());
     l.set_g_open_editor(t("gui.open_editor").into());
     l.set_g_no_loc(t("gui.no_loc").into());
+    // Botões/estados NOVOS da aba Grafo (reindexar + recarregar + nó sem descrição).
+    // Chaves novas com fallback pt-BR embutido via `tor` até entrarem no lib.
+    l.set_g_reindex(tor("gui.g_reindex", "Reindexar").into());
+    l.set_g_reload(tor("gui.g_reload", "Recarregar").into());
+    l.set_g_node_nodesc(tor("gui.g_node_nodesc", "(sem descrição no índice — rode Reindexar)").into());
     // Home + navegação (Fase 1) — chaves NOVAS, com fallback embutido via `tor`
     // até serem adicionadas ao lib. Ver lista no relatório de entrega.
     l.set_home(tor("gui.home", "Início").into());
@@ -1670,6 +1675,9 @@ struct GraphState {
     nodes: Vec<GNode>,
     edges: Vec<(usize, usize)>,
     project: Option<PathBuf>,
+    // Descrição por nó (nome -> "O quê"), vinda do índice/MAPA (§39). Carregada
+    // junto do grafo; consultada ao selecionar um nó pra mostrar no bloco lateral.
+    descs: HashMap<String, String>,
     sel: Option<usize>,
     search: String,
     scale: f32,
@@ -1839,11 +1847,15 @@ fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edg
             app.set_g_has_sel(true);
             app.set_g_sel_id(st.nodes[i].id.clone().into());
             app.set_g_sel_loc(st.nodes[i].loc.clone().unwrap_or_default().into());
+            // descrição do nó selecionado (por nome). "" → o Slint mostra a dica de reindexar.
+            let desc = st.descs.get(&st.nodes[i].id).cloned().unwrap_or_default();
+            app.set_g_sel_desc(desc.into());
         }
         None => {
             app.set_g_has_sel(false);
             app.set_g_sel_id(SharedString::new());
             app.set_g_sel_loc(SharedString::new());
+            app.set_g_sel_desc(SharedString::new());
         }
     }
     if nodes.row_count() == st.nodes.len() {
@@ -1867,6 +1879,7 @@ fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edg
 fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
     st.nodes.clear();
     st.edges.clear();
+    st.descs.clear();
     st.sel = None;
     st.search.clear();
     st.drag_node = None;
@@ -1880,6 +1893,8 @@ fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
         return;
     };
     let (nodes, edges, _idx) = panel::load_graph(p);
+    // descrições dos nós (nome -> "O quê") do índice/MAPA, guardadas p/ o bloco lateral.
+    st.descs = panel::node_descriptions(p);
     let mut id_to_idx: HashMap<String, usize> = HashMap::new();
     for (i, n) in nodes.iter().enumerate() {
         id_to_idx.insert(n.id.clone(), i);
@@ -3258,6 +3273,71 @@ fn main() -> Result<(), slint::PlatformError> {
             let proj = gs.borrow().project.clone();
             if let Some(p) = proj {
                 let _ = panel::open_in_browser(&p);
+            }
+        });
+    }
+    // "Reindexar" — chama a skill que organiza o grafo: dispara o índice §39 (prompt NL) num
+    // TERMINAL EXTERNO (processo próprio do `claude`, fora do app), numa thread. Só dados Send
+    // cruzam (PathBuf + String). Sucesso → banner "índice rodando no terminal <nome> — clique em
+    // Recarregar quando terminar."; erro → a msg da lib (claude/terminal ausente).
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        app.on_graph_reindex(move || {
+            let Some(root) = gs.borrow().project.clone() else {
+                return;
+            };
+            let w = weak.clone();
+            std::thread::spawn(move || {
+                let res = agentrun::launch_prompt_in_terminal(&root, &agentrun::reindex_prompt());
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = w.upgrade() {
+                        let msg = match res {
+                            Ok(term) => format!(
+                                "{}{}{}",
+                                tor("gui.g_reindex_pre", "índice rodando no terminal "),
+                                term,
+                                tor(
+                                    "gui.g_reindex_post",
+                                    " — clique em Recarregar quando terminar.",
+                                ),
+                            ),
+                            Err(e) => e,
+                        };
+                        app.set_g_reindex_status(msg.into());
+                    }
+                });
+            });
+        });
+    }
+    // "Recarregar grafo" — re-roda load_graph + node_descriptions e atualiza a UI (após o índice
+    // terminar no terminal). Limpa o banner do reindex.
+    {
+        let weak = app.as_weak();
+        let gt = graph_timer.clone();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_reload(move || {
+            let proj = gs.borrow().project.clone();
+            graph_load_and_kick(proj.as_deref(), &gt, &weak, &gs, &gn, &ge);
+            if let Some(app) = weak.upgrade() {
+                app.set_g_reindex_status(SharedString::new());
+            }
+        });
+    }
+    // "x" do bloco de info → deseleciona o nó (fecha o bloco) e ressincroniza.
+    {
+        let weak = app.as_weak();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_clear_sel(move || {
+            let mut st = gs.borrow_mut();
+            st.sel = None;
+            st.refresh_flags();
+            if let Some(app) = weak.upgrade() {
+                graph_sync(&app, &st, &gn, &ge);
             }
         });
     }

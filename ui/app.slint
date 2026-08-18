@@ -268,6 +268,9 @@ export global L {
     in-out property <string> g-export-obsidian;    // "exportar Obsidian"
     in-out property <string> g-open-editor;        // "abrir no editor"
     in-out property <string> g-no-loc;             // "sem arquivo:linha no índice"
+    in-out property <string> g-reindex;            // "Reindexar" (dispara o índice §39 num terminal)
+    in-out property <string> g-reload;             // "Recarregar" (re-roda load_graph + descrições)
+    in-out property <string> g-node-nodesc;        // "(sem descrição no índice — rode Reindexar)"
     // ---- Home + navegação (Fase 1 do redesenho) ----
     in-out property <string> home;                   // breadcrumb de volta ("Início")
     in-out property <string> home-title;             // "O que você quer fazer?"
@@ -1371,6 +1374,8 @@ export component AppWindow inherits Window {
     in-out property <bool> g-has-sel: false;
     in-out property <string> g-sel-id;
     in-out property <string> g-sel-loc;      // "" = nó sem arquivo:linha
+    in-out property <string> g-sel-desc;     // descrição do nó (do índice/MAPA); "" = sem descrição
+    in-out property <string> g-reindex-status; // banner: "índice rodando no terminal <nome>…" / erro
     // Ponteiro/roda → Rust (coords relativas ao canvas, em px). O Rust faz o
     // hit-test (mundo), decide pan-vs-arrasto-de-nó e escreve a transformação.
     callback graph-press(float, float);       // mouse-down (mx, my)
@@ -1383,6 +1388,9 @@ export component AppWindow inherits Window {
     callback graph-open-editor();             // abre o arquivo:linha do nó selecionado
     callback graph-export();                  // exporta o vault Obsidian
     callback graph-open-browser();            // abre o painel HTML no navegador
+    callback graph-reindex();                 // dispara o índice §39 num terminal externo (thread)
+    callback graph-reload();                  // re-roda load_graph + node_descriptions e atualiza a UI
+    callback graph-clear-sel();               // fecha o bloco de info do nó (deseleciona)
 
     // ---- modal de instalação do Marketplace ----
     callback mp-confirm();            // aplica: instala skill (+ base marcada) + (env em terminal se marcado)
@@ -2190,6 +2198,16 @@ export component AppWindow inherits Window {
                     Rectangle {}
                     VerticalLayout {
                         alignment: center;
+                        // "chama a skill que organiza o grafo" — roda o índice §39 num terminal externo.
+                        Btn { label: L.g-reindex; small: true; enabled: root.od-has-project; clicked => { root.graph-reindex(); } }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        // re-roda load_graph + node_descriptions e atualiza a UI (após reindexar).
+                        Btn { label: L.g-reload; small: true; enabled: root.od-has-project; clicked => { root.graph-reload(); } }
+                    }
+                    VerticalLayout {
+                        alignment: center;
                         Btn { label: L.g-fit; small: true; enabled: root.g-has-graph; clicked => { root.graph-fit(); } }
                     }
                     VerticalLayout {
@@ -2203,6 +2221,25 @@ export component AppWindow inherits Window {
                 }
             }
             Rectangle { height: 1px; background: Theme.border; }
+
+            // Banner do (re)index: mensagem de "índice rodando no terminal <nome>…" ou erro.
+            if root.g-reindex-status != "": Rectangle {
+                background: Theme.surface;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                    spacing: 10px;
+                    Text {
+                        text: root.g-reindex-status;
+                        font-size: 12px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: left;
+                    }
+                }
+            }
 
             // Empty-state: nenhum projeto escolhido.
             if !root.od-has-project: VerticalLayout {
@@ -2305,27 +2342,55 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // painel de info do nó selecionado (canto inferior esquerdo).
+                // painel/bloco de info do nó selecionado (canto inferior esquerdo):
+                // NOME + descrição (do índice/MAPA) + arquivo:linha. Um "x" fecha (deseleciona);
+                // clicar fora (no canvas vazio) também fecha, via o hit-test do release.
                 if root.g-has-sel: Rectangle {
                     x: 12px;
                     y: parent.height - self.height - 12px;
                     width: min(parent.width - 24px, 440px);
-                    height: 96px;
+                    height: ginfo.preferred-height;
                     border-radius: 10px;
                     background: Theme.surface;
                     border-width: 1px;
                     border-color: Theme.border;
                     // absorve cliques (não vaza pro canvas atrás).
                     TouchArea {}
-                    VerticalLayout {
+                    ginfo := VerticalLayout {
                         padding: 12px;
                         spacing: 6px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: root.g-sel-id;
+                                font-size: 14px;
+                                font-weight: 700;
+                                color: Theme.text;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                            // "x" — fecha o bloco (deseleciona o nó).
+                            close-ta := TouchArea {
+                                width: 20px;
+                                height: 20px;
+                                mouse-cursor: pointer;
+                                clicked => { root.graph-clear-sel(); }
+                                Text {
+                                    text: "✕";
+                                    font-size: 13px;
+                                    font-weight: 700;
+                                    color: close-ta.has-hover ? Theme.text : Theme.text-dim;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // descrição do ponto (coluna "O quê" do índice) — ou dica p/ reindexar.
                         Text {
-                            text: root.g-sel-id;
-                            font-size: 14px;
-                            font-weight: 700;
-                            color: Theme.text;
-                            overflow: elide;
+                            text: root.g-sel-desc != "" ? root.g-sel-desc : L.g-node-nodesc;
+                            font-size: 12px;
+                            color: root.g-sel-desc != "" ? Theme.text : Theme.text-dim;
+                            wrap: word-wrap;
                         }
                         if root.g-sel-loc != "": Text {
                             text: root.g-sel-loc;
