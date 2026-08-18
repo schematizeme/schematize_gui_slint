@@ -1568,7 +1568,7 @@ export component AppWindow inherits Window {
                 HomeCard {
                     title: L.home-environments;
                     desc: L.home-environments-desc;
-                    soon: true;
+                    clicked => { root.screen = 1; root.active-tab = 2; root.env-refresh(); }
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M12 3l8 4.6v8.8L12 21l-8-4.6V7.6z M4.2 7.8L12 12l7.8-4.2 M12 12v9";
