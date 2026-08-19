@@ -1075,12 +1075,11 @@ component ProjectBar inherits Rectangle {
     callback reload();
     callback manage-dirs();
     callback new-window();  // abre o projeto atual numa JANELA/processo próprio (overdev em paralelo)
-    height: 58px;
-    background: Theme.bg;
+    // Compacto/inline: sem altura fixa nem fundo — vive no CABEÇALHO, ao lado do "← Voltar".
     HorizontalLayout {
-        padding-left: 24px;
-        padding-right: 24px;
-        spacing: 10px;
+        padding-left: 0px;
+        padding-right: 0px;
+        spacing: 8px;
         VerticalLayout {
             alignment: center;
             Text { text: L.project; font-size: 13px; font-weight: 600; color: Theme.text-dim; }
@@ -1089,7 +1088,7 @@ component ProjectBar inherits Rectangle {
         VerticalLayout {
             alignment: center;
             Rectangle {
-                width: 300px;
+                width: 240px;
                 height: 34px;
                 border-radius: 8px;
                 background: sela.has-hover ? Theme.surface-2 : Theme.surface;
@@ -1865,6 +1864,20 @@ export component AppWindow inherits Window {
                             }
                         }
                         crumbta := TouchArea { mouse-cursor: pointer; clicked => { root.screen = 0; } }
+                    }
+                }
+                // Seletor de projeto + ícones INLINE no cabeçalho (Overdev/Grafo) — ao lado do Voltar.
+                if root.screen == 2 || root.screen == 3: VerticalLayout {
+                    alignment: center;
+                    ProjectBar {
+                        projects: root.od-projects;
+                        current: root.od-current;
+                        pick(p) => { root.od-pick-project(p); }
+                        open-folder => { root.od-open-project-folder(); }
+                        open-vscode => { root.od-open-vscode(); }
+                        reload => { root.od-reload(); }
+                        manage-dirs => { root.dev-modal-open = true; }
+                        new-window => { root.od-new-window(); }
                     }
                 }
                 Rectangle {}  // espaçador elástico
@@ -2954,18 +2967,7 @@ export component AppWindow inherits Window {
         // seletor de projeto da aba Overdev (od-projects/od-current/od-pick-project)
         // — o projeto escolhido alimenta as DUAS abas.
         if root.screen == 3: VerticalLayout {
-            // ---- barra de projeto ENXUTA (idêntica à do Overdev) ----
-            ProjectBar {
-                projects: root.od-projects;
-                current: root.od-current;
-                pick(p) => { root.od-pick-project(p); }
-                open-folder => { root.od-open-project-folder(); }
-                open-vscode => { root.od-open-vscode(); }
-                reload => { root.od-reload(); }
-                manage-dirs => { root.dev-modal-open = true; }
-                new-window => { root.od-new-window(); }
-            }
-            Rectangle { height: 1px; background: Theme.border; }
+            // (seletor de projeto agora vive no CABEÇALHO)
             // ---- linha de ferramentas do grafo (busca + nº nós + ações) ----
             Rectangle {
                 height: 50px;
@@ -3109,20 +3111,7 @@ export component AppWindow inherits Window {
         // dev_dirs, e renderiza o estado do overdev (objetivo, progresso, checklist
         // colorido, e as seções Decisões/Plano/Perguntas colapsáveis).
         if root.screen == 2: VerticalLayout {
-            // ---- barra de projeto ENXUTA (idêntica à do Grafo) ----
-            // Toda a gestão de dev_dirs saiu daqui e foi pro MODAL (manage-dirs).
-            ProjectBar {
-                projects: root.od-projects;
-                current: root.od-current;
-                pick(p) => { root.od-pick-project(p); }
-                open-folder => { root.od-open-project-folder(); }
-                open-vscode => { root.od-open-vscode(); }
-                reload => { root.od-reload(); }
-                manage-dirs => { root.dev-modal-open = true; }
-                new-window => { root.od-new-window(); }
-            }
-            Rectangle { height: 1px; background: Theme.border; }
-
+            // (seletor de projeto agora vive no CABEÇALHO, ao lado do "← Voltar")
             // ---- conteúdo do overdev ----
             // Empty-state: nenhum projeto escolhido.
             if !root.od-has-project: VerticalLayout {
@@ -3286,6 +3275,13 @@ export component AppWindow inherits Window {
                                 enabled: root.od-has-project && !root.od-session-running;
                                 clicked => { root.od-gen-from-archive(); }
                             }
+                            // Atualizar tokens — relê o uso do run sob demanda, INLINE nos controles.
+                            Btn {
+                                label: L.od-refresh-tokens;
+                                small: true;
+                                enabled: root.od-has-overdev;
+                                clicked => { root.od-refresh-tokens(); }
+                            }
                             // pill de estado (active/parado) enquanto o monitor vive.
                             if root.od-session-running: VerticalLayout {
                                 alignment: center;
@@ -3442,12 +3438,6 @@ export component AppWindow inherits Window {
                                 wrap: word-wrap;
                             }
                             Rectangle {}
-                            Btn {
-                                label: L.od-refresh-tokens;
-                                small: true;
-                                enabled: root.od-has-overdev;
-                                clicked => { root.od-refresh-tokens(); }
-                            }
                         }
                         // Log de CONCLUSÕES com data/hora (mais recentes embaixo). Atualiza
                         // junto com o monitor. Rola internamente (a aba já está num ScrollView).
