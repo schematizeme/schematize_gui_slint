@@ -50,22 +50,22 @@ pub(crate) fn refresh_od_history(
         Some(p) => {
             let snaps = overdevdb::history(p, 50).unwrap_or_default();
             let commits = githist::commits(p, 50);
-            app.set_od_upstream_line(fmt_upstream(githist::upstream(p)).into());
-            app.set_od_snap_total(snaps.len() as i32);
-            app.set_od_commit_total(commits.len() as i32);
-            app.set_od_snap_page(0);
-            app.set_od_commit_page(0);
+            app.global::<Od>().set_upstream_line(fmt_upstream(githist::upstream(p)).into());
+            app.global::<Od>().set_snap_total(snaps.len() as i32);
+            app.global::<Od>().set_commit_total(commits.len() as i32);
+            app.global::<Od>().set_snap_page(0);
+            app.global::<Od>().set_commit_page(0);
             snaps_model.set_vec(snap_rows_page(&snaps, 0));
             commits_model.set_vec(commit_rows_page(&commits, 0));
             *snaps_all.borrow_mut() = snaps;
             *commits_all.borrow_mut() = commits;
         }
         None => {
-            app.set_od_upstream_line(SharedString::new());
-            app.set_od_snap_total(0);
-            app.set_od_commit_total(0);
-            app.set_od_snap_page(0);
-            app.set_od_commit_page(0);
+            app.global::<Od>().set_upstream_line(SharedString::new());
+            app.global::<Od>().set_snap_total(0);
+            app.global::<Od>().set_commit_total(0);
+            app.global::<Od>().set_snap_page(0);
+            app.global::<Od>().set_commit_page(0);
             snaps_model.set_vec(Vec::new());
             commits_model.set_vec(Vec::new());
             snaps_all.borrow_mut().clear();

@@ -1,0 +1,34 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { NotifItem, CmpFile } from "types.slint";
+import { Btn, Chip, Check, Collapse, IconBtn } from "widgets.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Confirmação de RESTAURAÇÃO de um snapshot do overdev.
+export component SnapConfirmModal inherits Rectangle {
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { Od.snap-restore-cancel(); } }
+        Rectangle {
+            width: Math.min(root.width - 64px, 460px);
+            height: snapcard.preferred-height;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            snapcard := VerticalLayout {
+                padding: 22px;
+                spacing: 16px;
+                Text { text: Od.snap-confirm-msg; font-size: 14px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    Btn { label: L.mp-cancel; clicked => { Od.snap-restore-cancel(); } }
+                    Btn { label: L.od-restore; primary: true; danger: true; clicked => { Od.snap-restore-confirm(); } }
+                }
+            }
+        }
+}

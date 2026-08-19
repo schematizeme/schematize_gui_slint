@@ -1,0 +1,108 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { NotifItem, CmpFile } from "types.slint";
+import { Btn, Chip, Check, Collapse, IconBtn } from "widgets.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Painel do SININHO — notificações globais e pessoais.
+export component NotifModal inherits Rectangle {
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { Notif.open = false; } }
+        Rectangle {
+            width: Math.min(root.width - 48px, 420px);
+            height: Math.min(root.height - 110px, 520px);
+            x: parent.width - self.width - 20px;
+            y: 78px;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            VerticalLayout {
+                padding: 18px;
+                spacing: 12px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.notif-title; font-size: 15px; font-weight: 800; color: Theme.text; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.od-close; small: true; clicked => { Notif.open = false; } }
+                    }
+                }
+                Rectangle { height: 1px; background: Theme.border; }
+                if Notif.loading: Text { text: L.notif-loading; font-size: 12.5px; color: Theme.text-dim; }
+                if !Notif.loading && Notif.total == 0: VerticalLayout {
+                    alignment: center;
+                    Text {
+                        text: L.notif-empty;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        horizontal-alignment: center;
+                    }
+                }
+                if !Notif.loading && Notif.total > 0: ScrollView {
+                    VerticalLayout {
+                        spacing: 10px;
+                        // ---- Globais ----
+                        if Notif.global.length > 0: VerticalLayout {
+                            spacing: 8px;
+                            Text { text: L.notif-global; font-size: 11.5px; font-weight: 800; color: Theme.header-fg; }
+                            for n[ni] in Notif.global: Rectangle {
+                                border-radius: 9px;
+                                background: Theme.bg;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                VerticalLayout {
+                                    padding: 11px;
+                                    spacing: 5px;
+                                    Text { text: n.title; font-size: 13px; font-weight: 700; color: Theme.text; wrap: word-wrap; }
+                                    Text { text: n.body; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                                    if n.has-action: HorizontalLayout {
+                                        alignment: start;
+                                        Btn {
+                                            label: n.kind == "app_update" ? L.notif-do-update
+                                                 : n.kind == "news" ? L.notif-open
+                                                 : L.notif-go-installed;
+                                            small: true;
+                                            primary: n.kind == "app_update";
+                                            clicked => { Notif.action(n.kind, n.action); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // ---- Pessoais ----
+                        if Notif.personal.length > 0: VerticalLayout {
+                            spacing: 8px;
+                            Text { text: L.notif-personal; font-size: 11.5px; font-weight: 800; color: Theme.header-fg; }
+                            for n[ni] in Notif.personal: Rectangle {
+                                border-radius: 9px;
+                                background: Theme.bg;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                VerticalLayout {
+                                    padding: 11px;
+                                    spacing: 5px;
+                                    Text { text: n.title; font-size: 13px; font-weight: 700; color: Theme.text; wrap: word-wrap; }
+                                    Text { text: n.body; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                                    if n.has-action: HorizontalLayout {
+                                        alignment: start;
+                                        Btn {
+                                            label: n.kind == "skill_outdated" ? L.notif-go-installed : L.notif-open;
+                                            small: true;
+                                            clicked => { Notif.action(n.kind, n.action); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+}

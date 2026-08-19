@@ -1,0 +1,132 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { NotifItem, CmpFile } from "types.slint";
+import { Btn, Chip, Check, Collapse, IconBtn } from "widgets.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Modal de INSTALAÇÃO do Mercado — a skill mais, opcionalmente, a base
+// recomendada e o environment da linguagem (este num terminal, com consentimento).
+export component InstallModal inherits Rectangle {
+        // fundo escurecido cobrindo a janela (clique fora = cancelar).
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { Mp.cancel(); } }
+
+        // cartão central
+        Rectangle {
+            width: Math.min(root.width - 64px, 520px);
+            height: card.preferred-height;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            // absorve cliques (não fecha ao clicar dentro).
+            TouchArea {}
+            card := VerticalLayout {
+                padding: 22px;
+                spacing: 16px;
+                // título
+                Text {
+                    text: Mp.title;
+                    font-size: 18px;
+                    font-weight: 800;
+                    color: Theme.text;
+                }
+                // dependência opcional (skill base recomendada)
+                if Mp.rec-show: VerticalLayout {
+                    spacing: 8px;
+                    Text {
+                        text: L.mp-recommends-note;
+                        font-size: 12.5px;
+                        color: Theme.text-dim;
+                    }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        alignment: start;
+                        VerticalLayout {
+                            alignment: center;
+                            Check {
+                                checked: Mp.rec-check;
+                                toggled => { Mp.toggle-rec(); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: Mp.rec-label;
+                                font-size: 14px;
+                                font-weight: 600;
+                                color: Theme.text;
+                            }
+                        }
+                    }
+                }
+                // environment opcional da linguagem
+                if Mp.env-show: VerticalLayout {
+                    spacing: 8px;
+                    HorizontalLayout {
+                        spacing: 10px;
+                        alignment: start;
+                        VerticalLayout {
+                            alignment: center;
+                            Check {
+                                checked: Mp.env-check;
+                                toggled => { Mp.toggle-env(); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: Mp.env-label;
+                                font-size: 14px;
+                                font-weight: 600;
+                                color: Theme.text;
+                            }
+                        }
+                    }
+                    // escolha do método (só quando marca instalar o environment)
+                    if Mp.env-check: HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        VerticalLayout {
+                            alignment: center;
+                            Text { text: L.env-method; font-size: 12.5px; color: Theme.text-dim; }
+                        }
+                        if Mp.methods.length == 0: VerticalLayout {
+                            alignment: center;
+                            Text { text: L.env-no-methods; font-size: 12.5px; color: Theme.warn; }
+                        }
+                        for mm[mmi] in Mp.methods: Chip {
+                            label: mm;
+                            selected: mm == Mp.method-sel;
+                            clicked => { Mp.pick-method(mm); }
+                        }
+                    }
+                    if Mp.env-check: Text {
+                        text: L.mp-env-note;
+                        font-size: 11.5px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                    }
+                }
+                // ações
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+                    Btn {
+                        label: L.mp-cancel;
+                        clicked => { Mp.cancel(); }
+                    }
+                    Btn {
+                        label: L.mp-confirm;
+                        primary: true;
+                        // se marcou instalar o environment, exige um método escolhido
+                        enabled: !Mp.env-check || Mp.method-sel != "";
+                        clicked => { Mp.confirm(); }
+                    }
+                }
+            }
+        }
+}

@@ -164,10 +164,10 @@ pub(crate) fn build_rows(items: &[Item]) -> (Vec<SkillRow>, Vec<Option<Item>>) {
 
 /// Atualiza o marcador `forked` da linha de uma skill (por slug) no modelo do app —
 /// chamado após uma edição que forka uma skill oficial, pra o badge [fork] e o botão
-/// Comparar aparecerem sem recarregar a lista inteira. Opera sobre `app.get_rows()`
+/// Comparar aparecerem sem recarregar a lista inteira. Opera sobre `app.global::<Sk>().get_rows()`
 /// (roda no event loop; nada de Rc cruzando thread).
 pub(crate) fn mark_row_forked(app: &AppWindow, slug: &str, forked: bool) {
-    let rows = app.get_rows();
+    let rows = app.global::<Sk>().get_rows();
     for i in 0..rows.row_count() {
         if let Some(mut r) = rows.row_data(i) {
             if !r.is_header && r.slug == slug && r.forked != forked {
@@ -186,7 +186,7 @@ pub(crate) fn mark_row_forked(app: &AppWindow, slug: &str, forked: bool) {
 // loop (só usa o modelo do app; nada de dados !Send).
 // ---------------------------------------------------------------------------
 pub(crate) fn recompute_headers(app: &AppWindow) {
-    let rows = app.get_rows();
+    let rows = app.global::<Sk>().get_rows();
     let n = rows.row_count();
     for i in 0..n {
         let Some(mut h) = rows.row_data(i) else { continue };
@@ -221,7 +221,7 @@ pub(crate) fn recompute_headers(app: &AppWindow) {
 // ---------------------------------------------------------------------------
 pub(crate) fn recompute_pagination(app: &AppWindow) {
     let tab = app.get_active_tab();
-    let rows = app.get_rows();
+    let rows = app.global::<Sk>().get_rows();
     let n = rows.row_count();
     let mut idx = 0i32;
     for i in 0..n {
@@ -243,14 +243,14 @@ pub(crate) fn recompute_pagination(app: &AppWindow) {
             rows.set_row_data(i, r);
         }
     }
-    app.set_mkt_total(idx);
+    app.global::<Mp>().set_total(idx);
 }
 
 // ---------------------------------------------------------------------------
 // Status global (contagem de pendências) — mesma regra do egui.
 // ---------------------------------------------------------------------------
 pub(crate) fn update_status(app: &AppWindow) {
-    let rows = app.get_rows();
+    let rows = app.global::<Sk>().get_rows();
     let mut pending = 0usize;
     for i in 0..rows.row_count() {
         if let Some(r) = rows.row_data(i) {
@@ -264,7 +264,7 @@ pub(crate) fn update_status(app: &AppWindow) {
     } else {
         tf("gui.n_pending", &[("n", &pending.to_string())])
     };
-    app.set_status(status.into());
+    app.global::<Sk>().set_status(status.into());
 }
 
 /// Coleta ops (idx, install?, Item) das linhas que casam com o predicado.
@@ -275,7 +275,7 @@ pub(crate) fn collect_ops(
     install: bool,
     pred: impl Fn(&SkillRow) -> bool,
 ) -> Vec<(usize, bool, Item)> {
-    let rows = app.get_rows();
+    let rows = app.global::<Sk>().get_rows();
     let mut ops = Vec::new();
     for (idx, maybe) in row_items.iter().enumerate() {
         if let Some(it) = maybe {

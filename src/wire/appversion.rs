@@ -16,29 +16,29 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // concluir, sugere reiniciar (o restart já existe: relança a janela nova).
     {
         let weak = app.as_weak();
-        app.on_app_check_update(move || {
+        app.global::<App>().on_check_update(move || {
             let Some(app) = weak.upgrade() else { return };
-            if app.get_app_checking() || app.get_app_updating() {
+            if app.global::<App>().get_checking() || app.global::<App>().get_updating() {
                 return;
             }
-            app.set_app_checking(true);
-            app.set_app_update_status(SharedString::new());
+            app.global::<App>().set_checking(true);
+            app.global::<App>().set_update_status(SharedString::new());
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = upgrade::app_update_available();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.set_app_checking(false);
+                        app.global::<App>().set_checking(false);
                         match res {
                             Some((_cur, new)) => {
-                                app.set_app_has_update(true);
-                                app.set_app_update_status(
+                                app.global::<App>().set_has_update(true);
+                                app.global::<App>().set_update_status(
                                     format!("{} v{new}", tor("gui.app_new_version", "Nova versão disponível:")).into(),
                                 );
                             }
                             None => {
-                                app.set_app_has_update(false);
-                                app.set_app_update_status(tor("gui.app_up_to_date", "Você está atualizado").into());
+                                app.global::<App>().set_has_update(false);
+                                app.global::<App>().set_update_status(tor("gui.app_up_to_date", "Você está atualizado").into());
                             }
                         }
                     }
@@ -48,27 +48,27 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     }
     {
         let weak = app.as_weak();
-        app.on_app_do_update(move || {
+        app.global::<App>().on_do_update(move || {
             let Some(app) = weak.upgrade() else { return };
-            if app.get_app_updating() {
+            if app.global::<App>().get_updating() {
                 return;
             }
-            app.set_app_updating(true);
-            app.set_app_update_status(tor("gui.app_updating", "Atualizando…").into());
+            app.global::<App>().set_updating(true);
+            app.global::<App>().set_update_status(tor("gui.app_updating", "Atualizando…").into());
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = selfupdate::run();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.set_app_updating(false);
+                        app.global::<App>().set_updating(false);
                         match res {
                             Ok(msg) => {
-                                app.set_app_update_done(true);
-                                app.set_app_has_update(false);
-                                app.set_app_update_status(msg.into());
+                                app.global::<App>().set_update_done(true);
+                                app.global::<App>().set_has_update(false);
+                                app.global::<App>().set_update_status(msg.into());
                             }
                             Err(e) => {
-                                app.set_app_update_status(tf("err.prefix", &[("e", &e)]).into());
+                                app.global::<App>().set_update_status(tf("err.prefix", &[("e", &e)]).into());
                             }
                         }
                     }
@@ -82,27 +82,27 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // central não roda. O botão baixa o binário do updater (ensure_updater) numa thread.
     {
         let weak = app.as_weak();
-        app.on_install_updater(move || {
+        app.global::<App>().on_install_updater(move || {
             let Some(app) = weak.upgrade() else { return };
-            if app.get_updater_installing() {
+            if app.global::<App>().get_updater_installing() {
                 return;
             }
-            app.set_updater_installing(true);
-            app.set_updater_status(SharedString::new());
+            app.global::<App>().set_updater_installing(true);
+            app.global::<App>().set_updater_status(SharedString::new());
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = selfupdate::ensure_updater();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.set_updater_installing(false);
+                        app.global::<App>().set_updater_installing(false);
                         match res {
                             Ok(_p) => {
-                                app.set_updater_missing(false);
-                                app.set_updater_status(
+                                app.global::<App>().set_updater_missing(false);
+                                app.global::<App>().set_updater_status(
                                     tor("gui.updater_installed", "Gestor de atualizações instalado.").into(),
                                 );
                             }
-                            Err(e) => app.set_updater_status(tf("err.prefix", &[("e", &e)]).into()),
+                            Err(e) => app.global::<App>().set_updater_status(tf("err.prefix", &[("e", &e)]).into()),
                         }
                     }
                 });
@@ -110,7 +110,7 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
         });
     }
     // Estado inicial do prompt: o updater está presente?
-    app.set_updater_missing(selfupdate::updater_bin().is_none());
+    app.global::<App>().set_updater_missing(selfupdate::updater_bin().is_none());
     // Startup: checa update do app em background pra a bolinha de update do header (versão) acender
     // sozinha, sem o usuário precisar clicar "Verificar atualização".
     {
@@ -119,7 +119,7 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let has = upgrade::app_update_available().is_some();
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(app) = weak.upgrade() {
-                    app.set_app_has_update(has);
+                    app.global::<App>().set_has_update(has);
                 }
             });
         });
@@ -129,19 +129,19 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // Os modelos (Global/Pessoal) são REMONTADOS no event loop a cada abertura (não
     // cruzam a fronteira da thread — padrão thread→UI do resto da GUI). A ação de
     // cada item viaja pelo próprio callback (kind, action), sem estado Rust extra.
-    app.set_notif_global(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
-    app.set_notif_personal(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
+    app.global::<Notif>().set_global(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
+    app.global::<Notif>().set_personal(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
 
     // recompute só a contagem (badge) — barato de disparar, roda em thread.
     {
         let weak = app.as_weak();
-        app.on_notif_refresh(move || {
+        app.global::<Notif>().on_refresh(move || {
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let n = notifications::count();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.set_notif_count(n as i32);
+                        app.global::<Notif>().set_count(n as i32);
                     }
                 });
             });
@@ -151,14 +151,14 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // os dois modelos (Global/Pessoal) no event loop e atualiza o badge.
     {
         let weak = app.as_weak();
-        app.on_notif_toggle(move || {
+        app.global::<Notif>().on_toggle(move || {
             let Some(app) = weak.upgrade() else { return };
-            let open = !app.get_notif_open();
-            app.set_notif_open(open);
+            let open = !app.global::<Notif>().get_open();
+            app.global::<Notif>().set_open(open);
             if !open {
                 return;
             }
-            app.set_notif_loading(true);
+            app.global::<Notif>().set_loading(true);
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let notifs = notifications::collect();
@@ -197,11 +197,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                 pv.push(item);
                             }
                         }
-                        app.set_notif_global(ModelRc::from(Rc::new(VecModel::from(gv))));
-                        app.set_notif_personal(ModelRc::from(Rc::new(VecModel::from(pv))));
-                        app.set_notif_total(total as i32);
-                        app.set_notif_count(total as i32);
-                        app.set_notif_loading(false);
+                        app.global::<Notif>().set_global(ModelRc::from(Rc::new(VecModel::from(gv))));
+                        app.global::<Notif>().set_personal(ModelRc::from(Rc::new(VecModel::from(pv))));
+                        app.global::<Notif>().set_total(total as i32);
+                        app.global::<Notif>().set_count(total as i32);
+                        app.global::<Notif>().set_loading(false);
                     }
                 });
             });
@@ -210,15 +210,15 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // executar a ação de uma notificação — (kind, action) vêm do próprio item.
     {
         let weak = app.as_weak();
-        app.on_notif_action(move |kind, action| {
+        app.global::<Notif>().on_action(move |kind, action| {
             let Some(app) = weak.upgrade() else { return };
             match kind.as_str() {
                 // nova versão do app → fecha o painel, vai pra Configurações e dispara o update.
                 "app_update" => {
-                    app.set_notif_open(false);
+                    app.global::<Notif>().set_open(false);
                     app.set_screen(5);
-                    app.set_app_has_update(true);
-                    app.invoke_app_do_update();
+                    app.global::<App>().set_has_update(true);
+                    app.global::<App>().invoke_do_update();
                 }
                 // post do blog → abre a URL no navegador.
                 "news" => {
@@ -229,10 +229,10 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                 }
                 // skill desatualizada → leva pra aba Instaladas do Mercado.
                 "skill_outdated" => {
-                    app.set_notif_open(false);
+                    app.global::<Notif>().set_open(false);
                     app.set_screen(1);
                     app.set_active_tab(0);
-                    app.set_mkt_page(0);
+                    app.global::<Mp>().set_page(0);
                     recompute_pagination(&app);
                 }
                 _ => {}
@@ -240,13 +240,13 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
         });
     }
     // contagem inicial + refresh periódico (a cada 90s) do badge, em thread.
-    app.invoke_notif_refresh();
+    app.global::<Notif>().invoke_refresh();
     let notif_timer = Rc::new(slint::Timer::default());
     {
         let weak = app.as_weak();
         notif_timer.start(TimerMode::Repeated, Duration::from_secs(90), move || {
             if let Some(app) = weak.upgrade() {
-                app.invoke_notif_refresh();
+                app.global::<Notif>().invoke_refresh();
             }
         });
     }
@@ -254,23 +254,23 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // ==================== Comparar fork vs oficial ====================
     // "Comparar com oficial" → compare_update(slug) em thread; abre o painel com
     // base→nova, arquivos (status) e o diff. NÃO sobrescreve nada.
-    app.set_cmp_files(ModelRc::from(Rc::new(VecModel::<CmpFile>::from(Vec::new()))));
+    app.global::<Cmp>().set_files(ModelRc::from(Rc::new(VecModel::<CmpFile>::from(Vec::new()))));
     {
         let weak = app.as_weak();
-        app.on_cmp_request(move |slug| {
+        app.global::<Cmp>().on_request(move |slug| {
             let Some(app) = weak.upgrade() else { return };
             let slug = slug.to_string();
             if slug.is_empty() {
                 return;
             }
-            app.set_cmp_open(true);
-            app.set_cmp_loading(true);
-            app.set_cmp_error(SharedString::new());
-            app.set_cmp_diff(SharedString::new());
-            app.set_cmp_versions(SharedString::new());
-            app.set_cmp_slug(slug.clone().into());
-            app.set_cmp_title(format!("{} {slug}", tor("gui.compare_title", "Comparar:")).into());
-            app.set_cmp_files(ModelRc::from(Rc::new(VecModel::<CmpFile>::from(Vec::new()))));
+            app.global::<Cmp>().set_open(true);
+            app.global::<Cmp>().set_loading(true);
+            app.global::<Cmp>().set_error(SharedString::new());
+            app.global::<Cmp>().set_diff(SharedString::new());
+            app.global::<Cmp>().set_versions(SharedString::new());
+            app.global::<Cmp>().set_slug(slug.clone().into());
+            app.global::<Cmp>().set_title(format!("{} {slug}", tor("gui.compare_title", "Comparar:")).into());
+            app.global::<Cmp>().set_files(ModelRc::from(Rc::new(VecModel::<CmpFile>::from(Vec::new()))));
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = skills::compare_update(&slug);
@@ -286,23 +286,23 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     });
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.set_cmp_loading(false);
+                        app.global::<Cmp>().set_loading(false);
                         match out {
                             Ok((base, new, files, diff)) => {
-                                app.set_cmp_versions(format!("v{base} → v{new}").into());
-                                app.set_cmp_diff(if diff.trim().is_empty() {
+                                app.global::<Cmp>().set_versions(format!("v{base} → v{new}").into());
+                                app.global::<Cmp>().set_diff(if diff.trim().is_empty() {
                                     tor("gui.compare_identical", "(sem diferenças de conteúdo)").into()
                                 } else {
                                     diff.into()
                                 });
-                                app.set_cmp_files(ModelRc::from(Rc::new(VecModel::from(
+                                app.global::<Cmp>().set_files(ModelRc::from(Rc::new(VecModel::from(
                                     files
                                         .into_iter()
                                         .map(|(path, status)| CmpFile { path: path.into(), status: status.into() })
                                         .collect::<Vec<CmpFile>>(),
                                 ))));
                             }
-                            Err(e) => app.set_cmp_error(e.into()),
+                            Err(e) => app.global::<Cmp>().set_error(e.into()),
                         }
                     }
                 });
@@ -311,9 +311,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     }
     {
         let weak = app.as_weak();
-        app.on_cmp_close(move || {
+        app.global::<Cmp>().on_close(move || {
             if let Some(app) = weak.upgrade() {
-                app.set_cmp_open(false);
+                app.global::<Cmp>().set_open(false);
             }
         });
     }

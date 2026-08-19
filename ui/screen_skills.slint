@@ -1,0 +1,358 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import {
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
+    LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
+    DbTableRow,
+} from "types.slint";
+import {
+    VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
+    SkillName, AuthorCell, HomeCard, ReloadIcon, IconBtn,
+} from "widgets.slint";
+import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Aba SKILLS (Mercado > Instaladas/Marketplace) — a tabela de skills, as ações
+// em massa e os modais (instalação, comparar fork, conta, notificações).
+export component SkillsScreen inherits VerticalLayout {
+    in-out property <int> active-tab;
+            // ---- barra de ações (difere por página) -----------------------
+            Rectangle {
+                height: 62px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    spacing: 10px;
+
+                    // --- ações da página INSTALADAS ---
+                    if root.active-tab == 0: HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            alignment: center;
+                            // "Atualizar tudo": SÓ instaladas-desatualizadas. Nunca instala nova.
+                            Btn {
+                                label: L.update-all;
+                                primary: true;
+                                enabled: !Sk.busy;
+                                clicked => { Sk.update-all(); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: L.update-installed-only;
+                                font-size: 11px;
+                                color: Theme.text-dim;
+                                wrap: word-wrap;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Btn {
+                                label: L.update-sel;
+                                enabled: !Sk.busy;
+                                clicked => { Sk.update-selected(); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Btn {
+                                label: L.remove-sel;
+                                danger: true;
+                                enabled: !Sk.busy;
+                                clicked => { Sk.remove-selected(); }
+                            }
+                        }
+                    }
+
+                    // --- ações da página MARKETPLACE ---
+                    if root.active-tab == 1: HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            alignment: center;
+                            Btn {
+                                label: L.install-sel-market;
+                                primary: true;
+                                enabled: !Sk.busy;
+                                clicked => { Sk.install-selected(); }
+                            }
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        Btn {
+                            label: L.check;
+                            enabled: !Sk.busy;
+                            clicked => { Sk.check(); }
+                        }
+                    }
+                    Rectangle {}  // espaçador
+                    VerticalLayout {
+                        alignment: center;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: end;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: L.sel-label;
+                                    font-size: 12.5px;
+                                    color: Theme.text-dim;
+                                }
+                            }
+                            Btn { label: L.sel-all; small: true; enabled: !Sk.busy; clicked => { Sk.select-all(); } }
+                            // "Selecionar pendentes" só faz sentido em Instaladas (desatualizadas).
+                            if root.active-tab == 0: Btn { label: L.sel-pending; small: true; enabled: !Sk.busy; clicked => { Sk.select-pending(); } }
+                            Btn { label: L.sel-none; small: true; enabled: !Sk.busy; clicked => { Sk.select-none(); } }
+                        }
+                    }
+                }
+            }
+            // ---- linha de status/toast ------------------------------------
+            Rectangle {
+                height: 26px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    Text {
+                        text: Sk.status;
+                        font-size: 12.5px;
+                        color: Theme.text-dim;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            // ---- cabeçalho de colunas (difere por página) -----------------
+            Rectangle {
+                height: 34px;
+                background: Theme.surface-2;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    spacing: 0px;
+                    Rectangle { width: 34px; }
+                    Text { width: 260px; text: L.col-skill; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { width: 170px; text: L.col-author; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    if root.active-tab == 0: Text { width: 90px; text: L.col-installed; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { width: 90px; text: L.col-latest; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    if root.active-tab == 0: Text { width: 150px; text: L.col-state; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: L.col-actions; font-weight: 700; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+
+            // ---- lista rolável (modelo único, filtrado por página) --------
+            ScrollView {
+                VerticalLayout {
+                    padding-bottom: 16px;
+                    spacing: 0px;
+                    for row[i] in Sk.rows: Rectangle {
+                        // Visível quando: cabeçalho da página ativa com itens,
+                        // ou skill cujo ESTADO casa com a página ativa.
+                        //   tab 0 (Instaladas)  → state != "missing"
+                        //   tab 1 (Marketplace) → state == "missing"
+                        property <bool> on-page: row.is-header
+                            ? (row.count > 0 && root.active-tab == row.page)
+                            : (root.active-tab == 0 ? row.state != "missing"
+                               : root.active-tab == 1 ? row.state == "missing"
+                               : false);
+                        // Paginação: cabeçalho segue as regras de página; skill só
+                        // aparece se seu índice de exibição cai na janela atual (20/página).
+                        property <bool> show: row.is-header
+                            ? on-page
+                            : (on-page && row.disp >= Mp.page * 20 && row.disp < (Mp.page + 1) * 20);
+                        height: show ? (row.is-header ? 48px : 56px) : 0px;
+                        visible: show;
+                        background: row.is-header
+                            ? Theme.bg
+                            : (Math.mod(i, 2) == 0 ? Theme.stripe : Theme.bg);
+
+                        // --- cabeçalho de categoria ---
+                        if row.is-header && show: HorizontalLayout {
+                            padding-left: 24px;
+                            padding-top: 18px;
+                            Text {
+                                text: row.header-label;
+                                font-size: 14px;
+                                font-weight: 800;
+                                color: Theme.header-fg;
+                            }
+                        }
+
+                        // --- linha de skill ---
+                        if !row.is-header && show: HorizontalLayout {
+                            padding-left: 24px;
+                            padding-right: 24px;
+                            spacing: 0px;
+                            // checkbox
+                            VerticalLayout {
+                                width: 34px;
+                                alignment: center;
+                                Check {
+                                    checked: row.selected;
+                                    enabled: !Sk.busy;
+                                    toggled => { Sk.toggle(i); }
+                                }
+                            }
+                            // skill + selo (+ badge [fork] quando forkada)
+                            VerticalLayout {
+                                width: 260px;
+                                alignment: center;
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    SkillName { slug: row.slug; verified: row.verified; }
+                                    if row.forked: Rectangle {
+                                        width: forktxt.preferred-width + 12px;
+                                        height: 18px;
+                                        border-radius: 5px;
+                                        background: Theme.accent-soft;
+                                        border-width: 1px;
+                                        border-color: Theme.accent.transparentize(0.55);
+                                        forktxt := Text {
+                                            text: L.fork-badge;
+                                            font-size: 10.5px;
+                                            font-weight: 800;
+                                            color: Theme.header-fg;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                    // Nota do marketplace (discreta): "★4.7 (12)". Vazio → some.
+                                    if row.rating != "": Text {
+                                        text: row.rating;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        color: #d9a406;
+                                        vertical-alignment: center;
+                                    }
+                                    Rectangle {}
+                                }
+                            }
+                            // autor
+                            VerticalLayout {
+                                width: 170px;
+                                alignment: center;
+                                AuthorCell {
+                                    author: row.author;
+                                    author-url: row.author-url;
+                                    clicked => { Sk.open-author(i); }
+                                }
+                            }
+
+                            // ===== colunas + ações da página INSTALADAS =====
+                            if root.active-tab == 0: HorizontalLayout {
+                                spacing: 0px;
+                                VerticalLayout {
+                                    width: 90px;
+                                    alignment: center;
+                                    Text { text: row.installed; font-size: 13.5px; color: Theme.text; }
+                                }
+                                VerticalLayout {
+                                    width: 90px;
+                                    alignment: center;
+                                    Text { text: row.latest; font-size: 13.5px; color: Theme.text-dim; }
+                                }
+                                VerticalLayout {
+                                    width: 150px;
+                                    alignment: center;
+                                    HorizontalLayout {
+                                        alignment: start;
+                                        StatePill { state: row.state; label: row.state-label; }
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    if row.busy || row.op-label != "": HorizontalLayout {
+                                        alignment: start;
+                                        Text {
+                                            text: row.op-label;
+                                            font-size: 12px;
+                                            font-weight: 600;
+                                            color: row.op-error ? Theme.warn : Theme.text-dim;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                    if !row.busy && row.op-label == "": HorizontalLayout {
+                                        spacing: 6px;
+                                        alignment: start;
+                                        // Atualizar: habilitado só se desatualizada.
+                                        Btn {
+                                            label: L.act-update; small: true; primary: true;
+                                            enabled: !Sk.busy && row.state == "outdated";
+                                            clicked => { Sk.row-update(i); }
+                                        }
+                                        // Comparar com a oficial nova (só skills forkadas).
+                                        if row.forked: Btn {
+                                            label: L.compare-official; small: true;
+                                            enabled: !Sk.busy;
+                                            clicked => { Cmp.request(row.slug); }
+                                        }
+                                        // Desinstalar sempre disponível numa instalada.
+                                        Btn {
+                                            label: L.act-remove; small: true; danger: true;
+                                            enabled: !Sk.busy;
+                                            clicked => { Sk.row-remove(i); }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ===== colunas + ação da página MARKETPLACE =====
+                            if root.active-tab == 1: HorizontalLayout {
+                                spacing: 0px;
+                                VerticalLayout {
+                                    width: 90px;
+                                    alignment: center;
+                                    Text { text: row.latest; font-size: 13.5px; color: Theme.text-dim; }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    if row.busy || row.op-label != "": HorizontalLayout {
+                                        alignment: start;
+                                        Text {
+                                            text: row.op-label;
+                                            font-size: 12px;
+                                            font-weight: 600;
+                                            color: row.op-error ? Theme.warn : Theme.text-dim;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                    // Botão Instalar grande/óbvio.
+                                    if !row.busy && row.op-label == "": HorizontalLayout {
+                                        alignment: start;
+                                        Btn {
+                                            label: L.act-install; primary: true;
+                                            enabled: !Sk.busy;
+                                            clicked => { Sk.row-install(i); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // separador fino sob cada skill visível
+                        if !row.is-header && show: Rectangle {
+                            y: parent.height - 1px;
+                            height: 1px;
+                            background: Theme.border.transparentize(0.5);
+                        }
+                    }
+                }
+            }
+            // paginação (só quando passa de uma página)
+            if Mp.total > 20: Rectangle {
+                height: 44px;
+                background: Theme.bg;
+                Pager {
+                    page: Mp.page;
+                    total: Mp.total;
+                    prev => { Mp.page = Mp.page - 1; }
+                    next => { Mp.page = Mp.page + 1; }
+                }
+            }
+}

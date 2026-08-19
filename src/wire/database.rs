@@ -19,17 +19,17 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     let db_graph_nodes = Rc::new(VecModel::<GraphNode>::from(Vec::new()));
     let db_graph_edges = Rc::new(VecModel::<GraphEdge>::from(Vec::new()));
     let db_graph_timer = Rc::new(slint::Timer::default());
-    app.set_db_graph_nodes(ModelRc::from(db_graph_nodes.clone()));
-    app.set_db_graph_edges(ModelRc::from(db_graph_edges.clone()));
+    app.global::<Db>().set_graph_nodes(ModelRc::from(db_graph_nodes.clone()));
+    app.global::<Db>().set_graph_edges(ModelRc::from(db_graph_edges.clone()));
     db_rebuild(&app, &db_schema.lock().unwrap());
 
     // escolher arquivo SQLite (picker nativo).
     {
         let weak = app.as_weak();
-        app.on_db_pick_sqlite(move || {
+        app.global::<Db>().on_pick_sqlite(move || {
             if let Some(path) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_file() {
                 if let Some(app) = weak.upgrade() {
-                    app.set_db_sqlite_path(path.to_string_lossy().into_owned().into());
+                    app.global::<Db>().set_sqlite_path(path.to_string_lossy().into_owned().into());
                 }
             }
         });
@@ -39,22 +39,22 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_introspect_sqlite(move || {
+        app.global::<Db>().on_introspect_sqlite(move || {
             let Some(app) = weak.upgrade() else { return };
-            let path = app.get_db_sqlite_path().to_string();
+            let path = app.global::<Db>().get_sqlite_path().to_string();
             if path.is_empty() {
                 return;
             }
-            app.set_db_error(SharedString::new());
+            app.global::<Db>().set_error(SharedString::new());
             match database::introspect_sqlite(Path::new(&path)) {
                 Ok(schema) => {
                     let n = schema.tables.len();
                     *sh.lock().unwrap() = schema;
                     db_rebuild(&app, &sh.lock().unwrap());
-                    app.set_db_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
-                    app.set_db_view(1);
+                    app.global::<Db>().set_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
+                    app.global::<Db>().set_view(1);
                 }
-                Err(e) => app.set_db_error(e.into()),
+                Err(e) => app.global::<Db>().set_error(e.into()),
             }
         });
     }
@@ -63,34 +63,34 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_introspect_postgres(move || {
+        app.global::<Db>().on_introspect_postgres(move || {
             let Some(app) = weak.upgrade() else { return };
-            if app.get_db_busy() {
+            if app.global::<Db>().get_busy() {
                 return;
             }
-            let conn = app.get_db_pg_conn().to_string();
+            let conn = app.global::<Db>().get_pg_conn().to_string();
             if conn.trim().is_empty() {
                 return;
             }
-            app.set_db_busy(true);
-            app.set_db_error(SharedString::new());
-            app.set_db_status(SharedString::new());
+            app.global::<Db>().set_busy(true);
+            app.global::<Db>().set_error(SharedString::new());
+            app.global::<Db>().set_status(SharedString::new());
             let weak = weak.clone();
             let sh = sh.clone();
             std::thread::spawn(move || {
                 let res = database::introspect_postgres(&conn);
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.set_db_busy(false);
+                        app.global::<Db>().set_busy(false);
                         match res {
                             Ok(schema) => {
                                 let n = schema.tables.len();
                                 *sh.lock().unwrap() = schema;
                                 db_rebuild(&app, &sh.lock().unwrap());
-                                app.set_db_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
-                                app.set_db_view(1);
+                                app.global::<Db>().set_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
+                                app.global::<Db>().set_view(1);
                             }
-                            Err(e) => app.set_db_error(e.into()),
+                            Err(e) => app.global::<Db>().set_error(e.into()),
                         }
                     }
                 });
@@ -101,12 +101,12 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_load_json(move || {
+        app.global::<Db>().on_load_json(move || {
             let Some(app) = weak.upgrade() else { return };
             let Some(path) = rfd::FileDialog::new().add_filter("schema", &["json"]).pick_file() else {
                 return;
             };
-            app.set_db_error(SharedString::new());
+            app.global::<Db>().set_error(SharedString::new());
             match std::fs::read_to_string(&path)
                 .map_err(|e| e.to_string())
                 .and_then(|s| serde_json::from_str::<database::Schema>(&s).map_err(|e| e.to_string()))
@@ -115,10 +115,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     let n = schema.tables.len();
                     *sh.lock().unwrap() = schema;
                     db_rebuild(&app, &sh.lock().unwrap());
-                    app.set_db_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
-                    app.set_db_view(1);
+                    app.global::<Db>().set_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
+                    app.global::<Db>().set_view(1);
                 }
-                Err(e) => app.set_db_error(tf("err.prefix", &[("e", &e)]).into()),
+                Err(e) => app.global::<Db>().set_error(tf("err.prefix", &[("e", &e)]).into()),
             }
         });
     }
@@ -126,7 +126,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_save_json(move || {
+        app.global::<Db>().on_save_json(move || {
             let Some(app) = weak.upgrade() else { return };
             let Some(path) = rfd::FileDialog::new()
                 .add_filter("schema", &["json"])
@@ -137,19 +137,19 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             };
             let json = serde_json::to_string_pretty(&*sh.lock().unwrap()).unwrap_or_default();
             match std::fs::write(&path, json) {
-                Ok(()) => app.set_db_status(
+                Ok(()) => app.global::<Db>().set_status(
                     format!("{} {}", tor("gui.db_saved", "schema.json salvo em"), path.display()).into(),
                 ),
-                Err(e) => app.set_db_error(tf("err.prefix", &[("e", &e.to_string())]).into()),
+                Err(e) => app.global::<Db>().set_error(tf("err.prefix", &[("e", &e.to_string())]).into()),
             }
         });
     }
     // escolher a tabela alvo do editor (coluna/FK).
     {
         let weak = app.as_weak();
-        app.on_db_pick_table(move |name| {
+        app.global::<Db>().on_pick_table(move |name| {
             if let Some(app) = weak.upgrade() {
-                app.set_db_sel_table(name);
+                app.global::<Db>().set_sel_table(name);
             }
         });
     }
@@ -157,23 +157,23 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_add_table(move || {
+        app.global::<Db>().on_add_table(move || {
             let Some(app) = weak.upgrade() else { return };
-            let name = app.get_db_new_table().to_string();
+            let name = app.global::<Db>().get_new_table().to_string();
             if name.trim().is_empty() {
                 return;
             }
             {
                 let mut s = sh.lock().unwrap();
                 if s.tables.iter().any(|t| t.name == name) {
-                    app.set_db_error(tor("gui.db_table_exists", "já existe uma tabela com esse nome").into());
+                    app.global::<Db>().set_error(tor("gui.db_table_exists", "já existe uma tabela com esse nome").into());
                     return;
                 }
                 s.tables.push(database::Table { name: name.clone(), ..Default::default() });
             }
-            app.set_db_error(SharedString::new());
-            app.set_db_new_table(SharedString::new());
-            app.set_db_sel_table(name.into());
+            app.global::<Db>().set_error(SharedString::new());
+            app.global::<Db>().set_new_table(SharedString::new());
+            app.global::<Db>().set_sel_table(name.into());
             db_rebuild(&app, &sh.lock().unwrap());
         });
     }
@@ -181,20 +181,20 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_add_column(move || {
+        app.global::<Db>().on_add_column(move || {
             let Some(app) = weak.upgrade() else { return };
-            let table = app.get_db_sel_table().to_string();
-            let name = app.get_db_new_col().to_string();
+            let table = app.global::<Db>().get_sel_table().to_string();
+            let name = app.global::<Db>().get_new_col().to_string();
             if table.is_empty() || name.trim().is_empty() {
                 return;
             }
-            let ty = app.get_db_new_col_type().to_string();
+            let ty = app.global::<Db>().get_new_col_type().to_string();
             let col = database::Column {
                 name: name.clone(),
                 ty: if ty.trim().is_empty() { "TEXT".into() } else { ty },
-                nullable: app.get_db_new_col_nullable(),
-                pk: app.get_db_new_col_pk(),
-                unique: app.get_db_new_col_unique(),
+                nullable: app.global::<Db>().get_new_col_nullable(),
+                pk: app.global::<Db>().get_new_col_pk(),
+                unique: app.global::<Db>().get_new_col_unique(),
             };
             {
                 let mut s = sh.lock().unwrap();
@@ -202,7 +202,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     t.columns.push(col);
                 }
             }
-            app.set_db_new_col(SharedString::new());
+            app.global::<Db>().set_new_col(SharedString::new());
             db_rebuild(&app, &sh.lock().unwrap());
         });
     }
@@ -210,12 +210,12 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_add_fk(move || {
+        app.global::<Db>().on_add_fk(move || {
             let Some(app) = weak.upgrade() else { return };
-            let table = app.get_db_sel_table().to_string();
-            let column = app.get_db_fk_col().to_string();
-            let ref_table = app.get_db_fk_reftable().to_string();
-            let ref_column = app.get_db_fk_refcol().to_string();
+            let table = app.global::<Db>().get_sel_table().to_string();
+            let column = app.global::<Db>().get_fk_col().to_string();
+            let ref_table = app.global::<Db>().get_fk_reftable().to_string();
+            let ref_column = app.global::<Db>().get_fk_refcol().to_string();
             if table.is_empty() || column.trim().is_empty() || ref_table.trim().is_empty() {
                 return;
             }
@@ -229,9 +229,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     });
                 }
             }
-            app.set_db_fk_col(SharedString::new());
-            app.set_db_fk_reftable(SharedString::new());
-            app.set_db_fk_refcol(SharedString::new());
+            app.global::<Db>().set_fk_col(SharedString::new());
+            app.global::<Db>().set_fk_reftable(SharedString::new());
+            app.global::<Db>().set_fk_refcol(SharedString::new());
             db_rebuild(&app, &sh.lock().unwrap());
         });
     }
@@ -239,11 +239,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_gen_sql(move || {
+        app.global::<Db>().on_gen_sql(move || {
             if let Some(app) = weak.upgrade() {
-                app.set_db_gen_title(tor("gui.db_gen_sql", "Gerar SQL").into());
-                app.set_db_gen_content(database::to_sql(&sh.lock().unwrap()).into());
-                app.set_db_gen_open(true);
+                app.global::<Db>().set_gen_title(tor("gui.db_gen_sql", "Gerar SQL").into());
+                app.global::<Db>().set_gen_content(database::to_sql(&sh.lock().unwrap()).into());
+                app.global::<Db>().set_gen_open(true);
             }
         });
     }
@@ -251,24 +251,24 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
-        app.on_db_gen_migration(move || {
+        app.global::<Db>().on_gen_migration(move || {
             if let Some(app) = weak.upgrade() {
-                app.set_db_gen_title(tor("gui.db_gen_migration", "Gerar migration").into());
-                app.set_db_gen_content(database::to_migration(&sh.lock().unwrap()).into());
-                app.set_db_gen_open(true);
+                app.global::<Db>().set_gen_title(tor("gui.db_gen_migration", "Gerar migration").into());
+                app.global::<Db>().set_gen_content(database::to_migration(&sh.lock().unwrap()).into());
+                app.global::<Db>().set_gen_open(true);
             }
         });
     }
     // salvar o conteúdo do visor num arquivo (picker nativo).
     {
         let weak = app.as_weak();
-        app.on_db_gen_save(move || {
+        app.global::<Db>().on_gen_save(move || {
             let Some(app) = weak.upgrade() else { return };
             let Some(path) = rfd::FileDialog::new().add_filter("sql", &["sql"]).set_file_name("schema.sql").save_file()
             else {
                 return;
             };
-            let _ = std::fs::write(&path, app.get_db_gen_content().to_string());
+            let _ = std::fs::write(&path, app.global::<Db>().get_gen_content().to_string());
         });
     }
     // (re)construir o grafo do schema atual (tabela=nó, FK=aresta) e ligar a física.
@@ -279,7 +279,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = db_graph_state.clone();
         let gn = db_graph_nodes.clone();
         let ge = db_graph_edges.clone();
-        app.on_db_show_graph(move || {
+        app.global::<Db>().on_show_graph(move || {
             let (nodes, edges, descs) = {
                 let s = sh.lock().unwrap();
                 let (n, e) = database::to_graph(&s);
@@ -297,14 +297,14 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_db_ai_generate(move || {
+        app.global::<Db>().on_ai_generate(move || {
             let Some(app) = weak.upgrade() else { return };
-            let desc = app.get_db_ai_desc().to_string();
+            let desc = app.global::<Db>().get_ai_desc().to_string();
             if desc.trim().is_empty() {
                 return;
             }
             let Some(root) = cur.borrow().clone() else {
-                app.set_db_ai_status(tor("gui.db_ai_no_project", "Selecione um projeto na tela Overdev/Grafo primeiro.").into());
+                app.global::<Db>().set_ai_status(tor("gui.db_ai_no_project", "Selecione um projeto na tela Overdev/Grafo primeiro.").into());
                 return;
             };
             let base = basename_of(&root);
@@ -323,7 +323,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                             ),
                             Err(e) => e,
                         };
-                        app.set_db_ai_status(msg.into());
+                        app.global::<Db>().set_ai_status(msg.into());
                     }
                 });
             });
@@ -335,7 +335,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = db_graph_state.clone();
         let gn = db_graph_nodes.clone();
         let ge = db_graph_edges.clone();
-        app.on_db_graph_canvas_resized(move |w, h| {
+        app.global::<Db>().on_graph_canvas_resized(move |w, h| {
             let mut st = gs.borrow_mut();
             st.canvas_w = w;
             st.canvas_h = h;
@@ -350,7 +350,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     }
     {
         let gs = db_graph_state.clone();
-        app.on_db_graph_press(move |mx, my| {
+        app.global::<Db>().on_graph_press(move |mx, my| {
             let mut st = gs.borrow_mut();
             let (wx, wy) = st.to_world(mx, my);
             st.last_ptr = (mx, my);
@@ -370,7 +370,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gn = db_graph_nodes.clone();
         let ge = db_graph_edges.clone();
         let gt = db_graph_timer.clone();
-        app.on_db_graph_move(move |mx, my| {
+        app.global::<Db>().on_graph_move(move |mx, my| {
             let need_kick;
             {
                 let mut st = gs.borrow_mut();
@@ -411,7 +411,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = db_graph_state.clone();
         let gn = db_graph_nodes.clone();
         let ge = db_graph_edges.clone();
-        app.on_db_graph_release(move || {
+        app.global::<Db>().on_graph_release(move || {
             let mut st = gs.borrow_mut();
             if !st.moved {
                 let (wx, wy) = st.to_world(st.last_ptr.0, st.last_ptr.1);
@@ -429,7 +429,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = db_graph_state.clone();
         let gn = db_graph_nodes.clone();
         let ge = db_graph_edges.clone();
-        app.on_db_graph_scroll(move |mx, my, dy| {
+        app.global::<Db>().on_graph_scroll(move |mx, my, dy| {
             let mut st = gs.borrow_mut();
             let cx = st.canvas_w / 2.0;
             let cy = st.canvas_h / 2.0;
@@ -448,7 +448,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = db_graph_state.clone();
         let gn = db_graph_nodes.clone();
         let ge = db_graph_edges.clone();
-        app.on_db_graph_fit(move || {
+        app.global::<Db>().on_graph_fit(move || {
             let mut st = gs.borrow_mut();
             st.fit();
             if let Some(app) = weak.upgrade() {
@@ -461,7 +461,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = db_graph_state.clone();
         let gn = db_graph_nodes.clone();
         let ge = db_graph_edges.clone();
-        app.on_db_graph_clear_sel(move || {
+        app.global::<Db>().on_graph_clear_sel(move || {
             let mut st = gs.borrow_mut();
             st.sel = None;
             st.refresh_flags();

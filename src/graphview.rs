@@ -34,28 +34,28 @@ pub(crate) fn graph_edge_row(st: &GraphState, a: usize, b: usize) -> GraphEdge {
 /// VecModel (nós/arestas). Atualiza in-place quando o tamanho casa (sem realloc
 /// no loop da física); senão troca o vec inteiro (carga/relayout).
 pub(crate) fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edges: &VecModel<GraphEdge>) {
-    app.set_g_scale(st.scale);
-    app.set_g_ox(st.ox);
-    app.set_g_oy(st.oy);
-    app.set_g_has_graph(!st.nodes.is_empty());
-    app.set_g_node_count(st.nodes.len() as i32);
+    app.global::<G>().set_scale(st.scale);
+    app.global::<G>().set_ox(st.ox);
+    app.global::<G>().set_oy(st.oy);
+    app.global::<G>().set_has_graph(!st.nodes.is_empty());
+    app.global::<G>().set_node_count(st.nodes.len() as i32);
     // Drill-down: `service` Some = vendo o grafo detalhado daquele microserviço.
-    app.set_g_in_service(st.service.is_some());
-    app.set_g_service_name(st.service.clone().unwrap_or_default().into());
+    app.global::<G>().set_in_service(st.service.is_some());
+    app.global::<G>().set_service_name(st.service.clone().unwrap_or_default().into());
     match st.sel {
         Some(i) => {
-            app.set_g_has_sel(true);
-            app.set_g_sel_id(st.nodes[i].id.clone().into());
-            app.set_g_sel_loc(st.nodes[i].loc.clone().unwrap_or_default().into());
+            app.global::<G>().set_has_sel(true);
+            app.global::<G>().set_sel_id(st.nodes[i].id.clone().into());
+            app.global::<G>().set_sel_loc(st.nodes[i].loc.clone().unwrap_or_default().into());
             // descrição do nó selecionado (por nome). "" → o Slint mostra a dica de reindexar.
             let desc = st.descs.get(&st.nodes[i].id).cloned().unwrap_or_default();
-            app.set_g_sel_desc(desc.into());
+            app.global::<G>().set_sel_desc(desc.into());
         }
         None => {
-            app.set_g_has_sel(false);
-            app.set_g_sel_id(SharedString::new());
-            app.set_g_sel_loc(SharedString::new());
-            app.set_g_sel_desc(SharedString::new());
+            app.global::<G>().set_has_sel(false);
+            app.global::<G>().set_sel_id(SharedString::new());
+            app.global::<G>().set_sel_loc(SharedString::new());
+            app.global::<G>().set_sel_desc(SharedString::new());
         }
     }
     if nodes.row_count() == st.nodes.len() {

@@ -31,14 +31,14 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gl = graph_loaded.clone();
-        app.on_od_pick_project(move |path| {
+        app.global::<Od>().on_pick_project(move |path| {
             if path.is_empty() {
                 return;
             }
             if let Some(app) = weak.upgrade() {
                 select_project(&app, &cl, &pm, &dm, &pnm, &cur, PathBuf::from(path.to_string()));
                 graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
-                app.invoke_od_refresh_history();
+                app.global::<Od>().invoke_refresh_history();
             }
         });
     }
@@ -51,12 +51,12 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gl = graph_loaded.clone();
-        app.on_od_open_folder(move || {
+        app.global::<Od>().on_open_folder(move || {
             if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_folder() {
                 if let Some(app) = weak.upgrade() {
                     select_project(&app, &cl, &pm, &dm, &pnm, &cur, dir);
                     graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
-                    app.invoke_od_refresh_history();
+                    app.global::<Od>().invoke_refresh_history();
                 }
             }
         });
@@ -64,7 +64,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // abrir a pasta do projeto ATUAL no gerenciador de arquivos (xdg-open <root>).
     {
         let cur = od_current.clone();
-        app.on_od_open_project_folder(move || {
+        app.global::<Od>().on_open_project_folder(move || {
             if let Some(p) = cur.borrow().as_ref() {
                 open_path_in_files(p);
             }
@@ -76,7 +76,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // já no projeto + aba Overdev.
     {
         let cur = od_current.clone();
-        app.on_od_new_window(move || {
+        app.global::<Od>().on_new_window(move || {
             let Some(p) = cur.borrow().clone() else { return };
             if let Ok(exe) = std::env::current_exe() {
                 let mut cmd = std::process::Command::new(exe);
@@ -90,7 +90,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // abrir o projeto ATUAL no VSCode (`code <root>` / vscode://file/<root>).
     {
         let cur = od_current.clone();
-        app.on_od_open_vscode(move || {
+        app.global::<Od>().on_open_vscode(move || {
             if let Some(p) = cur.borrow().as_ref() {
                 open_in_vscode(p);
             }
@@ -105,20 +105,20 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gl = graph_loaded.clone();
-        app.on_od_reload(move || {
+        app.global::<Od>().on_reload(move || {
             refresh_proj_models(&pm, &dm, &pnm);
             if let Some(app) = weak.upgrade() {
                 let p = cur.borrow().clone();
                 load_overdev_into(&app, &cl, p.as_deref());
                 graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
-                app.invoke_od_refresh_history();
+                app.global::<Od>().invoke_refresh_history();
             }
         });
     }
     // Governador de concorrência: "Rechecar" recomputa o teto (CPU/RAM/load − claudes-da-máquina).
     {
         let weak = app.as_weak();
-        app.on_od_refresh_agents(move || {
+        app.global::<Od>().on_refresh_agents(move || {
             if let Some(app) = weak.upgrade() {
                 apply_agent_budget(&app);
             }
@@ -129,15 +129,15 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_run_skill_action(move |command| {
+        app.global::<Od>().on_run_skill_action(move |command| {
             let Some(app) = weak.upgrade() else { return };
             let Some(project) = cur.borrow().clone() else {
-                app.set_od_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
+                app.global::<Od>().set_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
                 return;
             };
             match schematize::agentrun::launch_prompt_in_terminal(&project, command.as_str()) {
-                Ok(_) => app.set_od_run_status(format!("Rodando {command} num terminal externo…").into()),
-                Err(e) => app.set_od_run_status(format!("falhou ao rodar {command}: {e}").into()),
+                Ok(_) => app.global::<Od>().set_run_status(format!("Rodando {command} num terminal externo…").into()),
+                Err(e) => app.global::<Od>().set_run_status(format!("falhou ao rodar {command}: {e}").into()),
             }
         });
     }
@@ -146,16 +146,16 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_split(move |k, dispatch| {
+        app.global::<Od>().on_split(move |k, dispatch| {
             let Some(app) = weak.upgrade() else { return };
             let Some(project) = cur.borrow().clone() else {
-                app.set_od_split_status("Selecione um projeto primeiro.".into());
+                app.global::<Od>().set_split_status("Selecione um projeto primeiro.".into());
                 return;
             };
             let k = (k.max(2)) as usize;
             let b = schematize::agents::budget();
             if k > b.total_cap {
-                app.set_od_split_status(
+                app.global::<Od>().set_split_status(
                     format!("{k} claudes passa do teto seguro ({}). Reduza o K.", b.total_cap).into(),
                 );
                 return;
@@ -191,10 +191,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                             msg.push_str(&format!(" Lancei {ok}/{} claude(s).", res.parts.len()));
                         }
                     }
-                    app.set_od_split_status(msg.into());
+                    app.global::<Od>().set_split_status(msg.into());
                     apply_agent_budget(&app); // atualiza o "rodando/livre" após lançar
                 }
-                Err(e) => app.set_od_split_status(format!("split falhou: {e}").into()),
+                Err(e) => app.global::<Od>().set_split_status(format!("split falhou: {e}").into()),
             }
         });
     }
@@ -204,16 +204,16 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_gen_from_archive(move || {
+        app.global::<Od>().on_gen_from_archive(move || {
             let root = cur.borrow().clone();
             let Some(root) = root else {
                 if let Some(app) = weak.upgrade() {
-                    app.set_od_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
+                    app.global::<Od>().set_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
                 }
                 return;
             };
             if let Some(app) = weak.upgrade() {
-                app.set_od_run_status(
+                app.global::<Od>().set_run_status(
                     tor("gui.od_gen_running", "Gerando afazeres do archive num terminal externo…").into(),
                 );
             }
@@ -223,10 +223,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
                         match res {
-                            Ok(term) => app.set_od_run_status(
+                            Ok(term) => app.global::<Od>().set_run_status(
                                 format!("{} {}", tor("gui.od_gen_ok", "gerando no terminal"), term).into(),
                             ),
-                            Err(e) => app.set_od_run_status(e.into()),
+                            Err(e) => app.global::<Od>().set_run_status(e.into()),
                         }
                     }
                 });
@@ -238,7 +238,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
-        app.on_od_add_dev_dir(move || {
+        app.global::<Od>().on_add_dev_dir(move || {
             if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.add_dev_dir")).pick_folder() {
                 let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
                 config::add_dev_dir(&abs.to_string_lossy());
@@ -251,7 +251,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
-        app.on_od_remove_dev_dir(move |path| {
+        app.global::<Od>().on_remove_dev_dir(move |path| {
             config::remove_dev_dir(&path.to_string());
             refresh_proj_models(&pm, &dm, &pnm);
         });
@@ -262,7 +262,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
-        app.on_od_pin_folder(move || {
+        app.global::<Od>().on_pin_folder(move || {
             if let Some(dir) = rfd::FileDialog::new().set_title(tor("gui.pin_folder", "Fixar pasta…")).pick_folder() {
                 let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
                 config::pin_project(&abs.to_string_lossy());
@@ -275,7 +275,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
-        app.on_od_unpin(move |path| {
+        app.global::<Od>().on_unpin(move |path| {
             config::unpin_project(&path.to_string());
             refresh_proj_models(&pm, &dm, &pnm);
         });
@@ -283,7 +283,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // abrir o painel HTML do projeto atual no navegador.
     {
         let cur = od_current.clone();
-        app.on_od_open_browser(move || {
+        app.global::<Od>().on_open_browser(move || {
             if let Some(p) = cur.borrow().as_ref() {
                 let _ = panel::open_in_browser(p);
             }
@@ -295,7 +295,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let cl = od_cl.clone();
         let cur = od_current.clone();
-        app.on_od_mark_human(move |idx| {
+        app.global::<Od>().on_mark_human(move |idx| {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 let _ = mark_human_done_at(&p, idx);
@@ -309,9 +309,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cl = od_cl.clone();
-        app.on_od_cl_set_page(move |page| {
+        app.global::<Od>().on_cl_set_page(move |page| {
             if let Some(app) = weak.upgrade() {
-                app.set_od_cl_page(page);
+                app.global::<Od>().set_cl_page(page);
                 cl.apply(&app);
             }
         });
@@ -322,10 +322,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cl = od_cl.clone();
-        app.on_od_cl_set_filter(move |filter| {
+        app.global::<Od>().on_cl_set_filter(move |filter| {
             if let Some(app) = weak.upgrade() {
-                app.set_od_cl_filter(filter);
-                app.set_od_cl_page(0);
+                app.global::<Od>().set_cl_filter(filter);
+                app.global::<Od>().set_cl_page(0);
                 cl.apply(&app);
             }
         });
@@ -336,10 +336,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_editor_toggle(move || {
+        app.global::<Od>().on_editor_toggle(move || {
             let root = cur.borrow().clone();
             if let Some(app) = weak.upgrade() {
-                app.set_od_editor_open(!app.get_od_editor_open());
+                app.global::<Od>().set_editor_open(!app.global::<Od>().get_editor_open());
                 if let Some(p) = root {
                     load_editor_content(&app, &p);
                 }
@@ -350,10 +350,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_editor_open_external(move || {
+        app.global::<Od>().on_editor_open_external(move || {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                let target = app.get_od_editor_target().to_string();
+                let target = app.global::<Od>().get_editor_target().to_string();
                 open_in_vscode(&overdev_file_path(&p, &target));
             }
         });
@@ -362,10 +362,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_editor_pick(move |target| {
+        app.global::<Od>().on_editor_pick(move |target| {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                app.set_od_editor_target(target);
+                app.global::<Od>().set_editor_target(target);
                 load_editor_content(&app, &p);
             }
         });
@@ -376,36 +376,36 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let cl = od_cl.clone();
         let cur = od_current.clone();
-        app.on_od_editor_save(move || {
+        app.global::<Od>().on_editor_save(move || {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 // Guarda-corpo: com o editor FECHADO ou com o arquivo acima de
                 // EDITOR_MAX_BYTES o `od-editor-content` está VAZIO de propósito.
                 // Gravar aqui truncaria o PLAN/CHECKLIST do projeto — recusa.
-                if !app.get_od_editor_open() || app.get_od_editor_too_big() {
-                    app.set_od_editor_error(true);
-                    app.set_od_editor_status(
+                if !app.global::<Od>().get_editor_open() || app.global::<Od>().get_editor_too_big() {
+                    app.global::<Od>().set_editor_error(true);
+                    app.global::<Od>().set_editor_status(
                         tor("gui.od_editor_readonly", "Arquivo grande demais para editar aqui — abra no editor externo.").into(),
                     );
                     return;
                 }
-                let target = app.get_od_editor_target().to_string();
-                let content = app.get_od_editor_content().to_string();
+                let target = app.global::<Od>().get_editor_target().to_string();
+                let content = app.global::<Od>().get_editor_content().to_string();
                 let path = overdev_file_path(&p, &target);
                 match std::fs::write(&path, content) {
                     Ok(()) => {
-                        app.set_od_editor_error(false);
-                        app.set_od_editor_status(tor("gui.saved", "Salvo").into());
+                        app.global::<Od>().set_editor_error(false);
+                        app.global::<Od>().set_editor_status(tor("gui.saved", "Salvo").into());
                         // salvar o CHECKLIST.md muda o estado 2-níveis: recarrega.
                         if target == "CHECKLIST.md" {
                             load_overdev_into(&app, &cl, Some(&p));
-                            app.set_od_editor_error(false);
-                            app.set_od_editor_status(tor("gui.saved", "Salvo").into());
+                            app.global::<Od>().set_editor_error(false);
+                            app.global::<Od>().set_editor_status(tor("gui.saved", "Salvo").into());
                         }
                     }
                     Err(e) => {
-                        app.set_od_editor_error(true);
-                        app.set_od_editor_status(e.to_string().into());
+                        app.global::<Od>().set_editor_error(true);
+                        app.global::<Od>().set_editor_status(e.to_string().into());
                     }
                 }
             }
@@ -415,12 +415,12 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_add_note(move |texto| {
+        app.global::<Od>().on_add_note(move |texto| {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 if !texto.trim().is_empty() {
                     let _ = overdev::add_note(&p, "task", &texto);
-                    app.set_od_notes(overdev::read_notes(&p).into());
+                    app.global::<Od>().set_notes(overdev::read_notes(&p).into());
                 }
             }
         });
@@ -429,12 +429,12 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_add_correction(move |texto| {
+        app.global::<Od>().on_add_correction(move |texto| {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 if !texto.trim().is_empty() {
                     let _ = overdev::add_note(&p, "correcao", &texto);
-                    app.set_od_notes(overdev::read_notes(&p).into());
+                    app.global::<Od>().set_notes(overdev::read_notes(&p).into());
                 }
             }
         });
@@ -444,25 +444,25 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // mini-modal de confirmação. O disparo real (launch_in_terminal) é no `od-run-confirm`.
     {
         let weak = app.as_weak();
-        app.on_od_run_request(move || {
+        app.global::<Od>().on_run_request(move || {
             if let Some(app) = weak.upgrade() {
-                app.set_od_agent_cmdline(
+                app.global::<Od>().set_agent_cmdline(
                     tor(
                         "gui.od_agent_cmdline",
                         "claude --dangerously-skip-permissions \"<prompt do overdev>\"  (terminal externo, processo próprio)",
                     )
                     .into(),
                 );
-                app.set_od_confirm_open(true);
+                app.global::<Od>().set_confirm_open(true);
             }
         });
     }
     // ---- Fase 4: guardrail — CANCELAR (fecha sem disparar) ----
     {
         let weak = app.as_weak();
-        app.on_od_run_cancel(move || {
+        app.global::<Od>().on_run_cancel(move || {
             if let Some(app) = weak.upgrade() {
-                app.set_od_confirm_open(false);
+                app.global::<Od>().set_confirm_open(false);
             }
         });
     }
@@ -474,22 +474,22 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let cur = od_current.clone();
         let stop = od_stop_flag.clone();
-        app.on_od_run_confirm(move || {
+        app.global::<Od>().on_run_confirm(move || {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                if app.get_od_session_running() {
+                if app.global::<Od>().get_session_running() {
                     return; // já monitorando — não dispara outro
                 }
-                app.set_od_confirm_open(false);
-                app.set_od_run_status(SharedString::new());
-                app.set_od_run_done(0);
-                app.set_od_run_open(0);
-                app.set_od_mon_human(0);
-                app.set_od_mon_hold(0);
-                app.set_od_mon_iter(0);
-                app.set_od_mon_max(0);
-                app.set_od_mon_mode(SharedString::new());
-                app.set_od_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
+                app.global::<Od>().set_confirm_open(false);
+                app.global::<Od>().set_run_status(SharedString::new());
+                app.global::<Od>().set_run_done(0);
+                app.global::<Od>().set_run_open(0);
+                app.global::<Od>().set_mon_human(0);
+                app.global::<Od>().set_mon_hold(0);
+                app.global::<Od>().set_mon_iter(0);
+                app.global::<Od>().set_mon_max(0);
+                app.global::<Od>().set_mon_mode(SharedString::new());
+                app.global::<Od>().set_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
                 stop.store(false, Ordering::SeqCst);
                 let objetivo = overdev::objetivo_at(&p).unwrap_or_default();
                 let w = weak.clone();
@@ -499,7 +499,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                         let wu = w.clone();
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(app) = wu.upgrade() {
-                                app.set_od_session_running(true);
+                                app.global::<Od>().set_session_running(true);
                                 let msg = format!(
                                     "{}{}{}",
                                     tor("gui.od_launched_pre", "claude aberto no terminal "),
@@ -509,7 +509,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                                         " — o overdev roda fora do app; acompanhe abaixo.",
                                     ),
                                 );
-                                app.set_od_run_status(msg.into());
+                                app.global::<Od>().set_run_status(msg.into());
                             }
                         });
                         run_monitor(w, p, stop2, false);
@@ -517,8 +517,8 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     Err(e) => {
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(app) = w.upgrade() {
-                                app.set_od_session_running(false);
-                                app.set_od_run_status(e.into());
+                                app.global::<Od>().set_session_running(false);
+                                app.global::<Od>().set_run_status(e.into());
                             }
                         });
                     }
@@ -530,10 +530,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let stop = od_stop_flag.clone();
-        app.on_od_stop(move || {
+        app.global::<Od>().on_stop(move || {
             stop.store(true, Ordering::SeqCst);
             if let Some(app) = weak.upgrade() {
-                app.set_od_run_status(tor("gui.od_stop", "Parar").into());
+                app.global::<Od>().set_run_status(tor("gui.od_stop", "Parar").into());
             }
         });
     }
@@ -547,35 +547,35 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let cur = od_current.clone();
         let stop = od_stop_flag.clone();
-        app.on_od_attach(move || {
+        app.global::<Od>().on_attach(move || {
             let root = cur.borrow().clone();
             let Some(app) = weak.upgrade() else { return };
             let Some(p) = root else {
-                app.set_od_run_status(tor("gui.od_pick_first", "Selecione um projeto primeiro.").into());
+                app.global::<Od>().set_run_status(tor("gui.od_pick_first", "Selecione um projeto primeiro.").into());
                 return;
             };
             if !overdev_dir(&p).is_dir() {
-                app.set_od_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
+                app.global::<Od>().set_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
                 return;
             }
             // Já monitorando: não dispara outra thread (evita duplicata na mesma
             // `stop`); só reforça os tokens agora.
-            if app.get_od_session_running() {
+            if app.global::<Od>().get_session_running() {
                 spawn_usage(weak.clone(), p.clone());
-                app.set_od_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
+                app.global::<Od>().set_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
                 return;
             }
             // Zera o painel e liga o monitor anexado ao run externo.
-            app.set_od_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
-            app.set_od_run_done(0);
-            app.set_od_run_open(0);
-            app.set_od_mon_human(0);
-            app.set_od_mon_hold(0);
-            app.set_od_mon_iter(0);
-            app.set_od_mon_max(0);
-            app.set_od_mon_mode(SharedString::new());
-            app.set_od_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
-            app.set_od_session_running(true);
+            app.global::<Od>().set_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
+            app.global::<Od>().set_run_done(0);
+            app.global::<Od>().set_run_open(0);
+            app.global::<Od>().set_mon_human(0);
+            app.global::<Od>().set_mon_hold(0);
+            app.global::<Od>().set_mon_iter(0);
+            app.global::<Od>().set_mon_max(0);
+            app.global::<Od>().set_mon_mode(SharedString::new());
+            app.global::<Od>().set_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
+            app.global::<Od>().set_session_running(true);
             stop.store(false, Ordering::SeqCst);
             run_monitor(weak.clone(), p, stop.clone(), true);
         });
@@ -584,13 +584,13 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_refresh_tokens(move || {
+        app.global::<Od>().on_refresh_tokens(move || {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 if overdev_dir(&p).is_dir() {
                     spawn_usage(weak.clone(), p);
                 } else {
-                    app.set_od_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
+                    app.global::<Od>().set_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
                 }
             }
         });
@@ -607,7 +607,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
-        app.on_graph_enter(move || {
+        app.global::<G>().on_enter(move || {
             let p = cur.borrow().clone();
             graph_enter(p.as_deref(), &gl, &gt, &weak, &gs, &gn, &ge);
         });

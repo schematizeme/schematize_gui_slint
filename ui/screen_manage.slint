@@ -1,0 +1,216 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import {
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
+    LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
+    DbTableRow,
+} from "types.slint";
+import {
+    VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
+    SkillName, AuthorCell, HomeCard, ReloadIcon, IconBtn,
+} from "widgets.slint";
+import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Tela GERENCIAR (4) — criar skill do zero e forkar/editar uma instalada.
+export component ManageScreen inherits VerticalLayout {
+            Rectangle {
+                height: 58px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    spacing: 14px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.ssh-title; font-size: 16px; font-weight: 800; color: Theme.text; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.ssh-priv-note; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.check; small: true; clicked => { Ssh.refresh(); } }
+                    }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+            ScrollView {
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 16px;
+                    // ---- formulário Gerar ----
+                    Text { text: L.ssh-generate; font-size: 14px; font-weight: 800; color: Theme.text; }
+                    HorizontalLayout {
+                        spacing: 14px;
+                        alignment: start;
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: L.ssh-name; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 220px;
+                                placeholder-text: L.ssh-name;
+                                text: Ssh.gen-name;
+                                edited(s) => { Ssh.gen-name = s; }
+                            }
+                        }
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: L.ssh-kind; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Chip { label: "ed25519"; selected: Ssh.gen-kind == "ed25519"; clicked => { Ssh.gen-kind = "ed25519"; } }
+                                Chip { label: "rsa"; selected: Ssh.gen-kind == "rsa"; clicked => { Ssh.gen-kind = "rsa"; } }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 14px;
+                        alignment: start;
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: L.ssh-comment; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 300px;
+                                placeholder-text: L.ssh-comment;
+                                text: Ssh.gen-comment;
+                                edited(s) => { Ssh.gen-comment = s; }
+                            }
+                        }
+                        VerticalLayout {
+                            spacing: 5px;
+                            Text { text: L.ssh-passphrase; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 220px;
+                                input-type: InputType.password;
+                                placeholder-text: L.ssh-passphrase;
+                                text: Ssh.gen-passphrase;
+                                edited(s) => { Ssh.gen-passphrase = s; }
+                            }
+                        }
+                    }
+                    // Nota de entropia do tipo SELECIONADO (antes de gerar; atualiza ao trocar o
+                    // chip) + a regra da casa (ed25519 default forte / RSA exige >= 4096).
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: Ssh.gen-kind == "rsa" ? L.ssh-entropy-rsa : L.ssh-entropy-ed25519;
+                            font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap;
+                        }
+                        Text {
+                            text: L.ssh-kind-hint;
+                            font-size: 11.5px; font-weight: 700; color: Theme.text; wrap: word-wrap;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        Btn {
+                            label: L.ssh-generate; primary: true; small: true;
+                            enabled: Ssh.gen-name != "";
+                            clicked => { Ssh.generate(); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            if Ssh.gen-status != "": Text {
+                                text: Ssh.gen-status;
+                                font-size: 12.5px; font-weight: 600;
+                                color: Ssh.gen-error ? Theme.warn : Theme.good;
+                            }
+                        }
+                    }
+                    // PROVA da chave recém-gerada (ssh-keygen -l): bits · fingerprint · tipo.
+                    if Ssh.gen-proof != "": Rectangle {
+                        border-radius: 8px;
+                        background: Theme.good.transparentize(0.9);
+                        border-width: 1px;
+                        border-color: Theme.good.transparentize(0.6);
+                        VerticalLayout {
+                            padding: 10px;
+                            spacing: 3px;
+                            Text { text: L.ssh-proof-label; font-size: 11px; font-weight: 700; color: Theme.text-dim; }
+                            Text { text: Ssh.gen-proof; font-size: 12.5px; color: Theme.text; wrap: word-wrap; }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- lista de chaves ----
+                    Text { text: L.ssh-keys-title; font-size: 14px; font-weight: 800; color: Theme.text; }
+                    // Exportar p/ Bitwarden — nota de segurança + resultado da última exportação.
+                    Text { text: L.ssh-bw-note; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+                    if Ssh.bw-result != "": Rectangle {
+                        border-radius: 8px;
+                        background: Ssh.bw-error ? Theme.warn.transparentize(0.88) : Theme.good.transparentize(0.9);
+                        border-width: 1px;
+                        border-color: Ssh.bw-error ? Theme.warn.transparentize(0.6) : Theme.good.transparentize(0.6);
+                        VerticalLayout {
+                            padding: 10px;
+                            Text {
+                                text: Ssh.bw-result;
+                                font-size: 12px; wrap: word-wrap;
+                                color: Ssh.bw-error ? Theme.warn : Theme.text;
+                            }
+                        }
+                    }
+                    if Ssh.rows.length == 0: Text {
+                        text: L.ssh-empty; font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap;
+                    }
+                    for k[ki] in Ssh.rows: Rectangle {
+                        height: 92px;
+                        border-radius: 12px;
+                        background: Theme.surface;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        VerticalLayout {
+                            padding: 14px;
+                            spacing: 6px;
+                            HorizontalLayout {
+                                spacing: 10px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text { text: k.name; font-size: 14.5px; font-weight: 700; color: Theme.text; }
+                                }
+                                Rectangle {
+                                    y: (parent.height - self.height) / 2;
+                                    height: 22px;
+                                    width: ktxt.preferred-width + 18px;
+                                    border-radius: 11px;
+                                    background: Theme.accent.transparentize(0.85);
+                                    border-width: 1px;
+                                    border-color: Theme.accent.transparentize(0.5);
+                                    ktxt := Text {
+                                        text: k.kind; color: Theme.accent; font-size: 11px; font-weight: 700;
+                                        horizontal-alignment: center; vertical-alignment: center;
+                                    }
+                                }
+                                Rectangle {}
+                                if k.op-label != "": VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: k.op-label; font-size: 12px; font-weight: 600;
+                                        color: k.op-error ? Theme.warn : Theme.good;
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.ssh-export-bw; small: true; clicked => { Ssh.export-bw(ki); } }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.ssh-copy-pub; small: true; clicked => { Ssh.copy(ki); } }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.ssh-remove; small: true; danger: true; clicked => { Ssh.remove-request(ki); } }
+                                }
+                            }
+                            if k.comment != "": Text { text: k.comment; font-size: 12px; color: Theme.text-dim; overflow: elide; }
+                            Text { text: k.fingerprint; font-size: 11.5px; color: Theme.text-dim; overflow: elide; }
+                        }
+                    }
+                    Rectangle {}
+                }
+            }
+}

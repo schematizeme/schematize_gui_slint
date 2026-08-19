@@ -1,0 +1,101 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { NotifItem, CmpFile } from "types.slint";
+import { Btn, Chip, Check, Collapse, IconBtn } from "widgets.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Modal COMPARAR fork vs oficial — versões e diff por arquivo.
+export component CompareModal inherits Rectangle {
+        background: #000000.transparentize(0.5);
+        TouchArea { clicked => { Cmp.close(); } }
+        Rectangle {
+            width: Math.min(root.width - 48px, 820px);
+            height: Math.min(root.height - 80px, 640px);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        Text { text: Cmp.title; font-size: 15px; font-weight: 800; color: Theme.text; overflow: elide; }
+                        if Cmp.versions != "": Text { text: Cmp.versions; font-size: 12.5px; font-weight: 700; color: Theme.header-fg; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.od-close; small: true; clicked => { Cmp.close(); } }
+                    }
+                }
+                Text { text: L.compare-note; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+                if Cmp.loading: Text { text: L.compare-loading; font-size: 12.5px; color: Theme.text-dim; }
+                if !Cmp.loading && Cmp.error != "": Text { text: Cmp.error; font-size: 12.5px; font-weight: 600; color: Theme.warn; wrap: word-wrap; }
+                if !Cmp.loading && Cmp.error == "": HorizontalLayout {
+                    spacing: 12px;
+                    // ---- lista de arquivos (status) ----
+                    Rectangle {
+                        width: 240px;
+                        border-radius: 8px;
+                        background: Theme.bg;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        VerticalLayout {
+                            padding: 8px;
+                            spacing: 6px;
+                            Text { text: L.compare-files; font-size: 11.5px; font-weight: 800; color: Theme.text-dim; }
+                            ScrollView {
+                                VerticalLayout {
+                                    spacing: 2px;
+                                    for cf[cfi] in Cmp.files: HorizontalLayout {
+                                        spacing: 6px;
+                                        Rectangle {
+                                            width: statustxt.preferred-width + 12px;
+                                            height: 17px;
+                                            border-radius: 5px;
+                                            background: cf.status == "mudou" ? Theme.warn.transparentize(0.75)
+                                                     : cf.status == "novo" ? Theme.good.transparentize(0.75)
+                                                     : cf.status == "removido" ? #ff6b6b.transparentize(0.78)
+                                                     : Theme.surface-2;
+                                            statustxt := Text {
+                                                text: cf.status;
+                                                font-size: 10px;
+                                                font-weight: 700;
+                                                color: Theme.text;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                        Text { text: cf.path; font-size: 11.5px; color: Theme.text; overflow: elide; vertical-alignment: center; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // ---- diff unificado (mono, read-only) ----
+                    Rectangle {
+                        border-radius: 8px;
+                        background: Theme.bg;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        TextEdit {
+                            width: 100%;
+                            height: 100%;
+                            read-only: true;
+                            text: Cmp.diff;
+                            font-size: 12px;
+                            wrap: no-wrap;
+                        }
+                    }
+                }
+            }
+        }
+}

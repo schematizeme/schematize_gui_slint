@@ -15,19 +15,19 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // devolvem à UI via `invoke_from_event_loop` (padrão thread→UI do Slint). O
     // estado do form/editor mora em propriedades do app (nada de Rc !Send cruzando
     // a fronteira da thread — os modelos são REMONTADOS no event loop).
-    app.set_mg_skills(strings_model(installed_skill_slugs()));
-    app.set_mg_files(strings_model(Vec::new()));
+    app.global::<Mg>().set_skills(strings_model(installed_skill_slugs()));
+    app.global::<Mg>().set_files(strings_model(Vec::new()));
 
     // re-sondar as skills instaladas (dropdown do modo Editar).
     {
         let weak = app.as_weak();
-        app.on_mg_refresh_skills(move || {
+        app.global::<Mg>().on_refresh_skills(move || {
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let slugs = installed_skill_slugs();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.set_mg_skills(strings_model(slugs));
+                        app.global::<Mg>().set_skills(strings_model(slugs));
                     }
                 });
             });
@@ -37,17 +37,17 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // validar o slug a cada tecla (puro/rápido — sem IO). Atualiza slug + erro inline.
     {
         let weak = app.as_weak();
-        app.on_mg_slug_edited(move |s| {
+        app.global::<Mg>().on_slug_edited(move |s| {
             if let Some(app) = weak.upgrade() {
                 let slug = s.to_string();
-                app.set_mg_slug(s);
+                app.global::<Mg>().set_slug(s);
                 // vazio → sem erro (só desabilita o botão); inválido → mostra o hint.
                 let err = if slug.is_empty() || skilledit::validate_slug(&slug).is_ok() {
                     String::new()
                 } else {
                     tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito")
                 };
-                app.set_mg_slug_error(err.into());
+                app.global::<Mg>().set_slug_error(err.into());
             }
         });
     }
@@ -56,14 +56,14 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // e re-sonda o dropdown; erro (ex.: já existe) mostra a mensagem.
     {
         let weak = app.as_weak();
-        app.on_mg_create(move || {
+        app.global::<Mg>().on_create(move || {
             let Some(app) = weak.upgrade() else { return };
-            let slug = app.get_mg_slug().to_string();
-            let name = app.get_mg_name().to_string();
-            let desc = app.get_mg_desc().to_string();
+            let slug = app.global::<Mg>().get_slug().to_string();
+            let name = app.global::<Mg>().get_name().to_string();
+            let desc = app.global::<Mg>().get_desc().to_string();
             // trava dupla: valida antes de spawnar (feedback imediato).
             if skilledit::validate_slug(&slug).is_err() {
-                app.set_mg_slug_error(
+                app.global::<Mg>().set_slug_error(
                     tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito").into(),
                 );
                 return;
@@ -78,8 +78,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     if let Some(app) = weak.upgrade() {
                         match res {
                             Ok(path) => {
-                                app.set_mg_create_error(false);
-                                app.set_mg_create_result(
+                                app.global::<Mg>().set_create_error(false);
+                                app.global::<Mg>().set_create_result(
                                     format!(
                                         "{} {}",
                                         tor("gui.skill_created", "Skill criada em"),
@@ -87,20 +87,20 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                     )
                                     .into(),
                                 );
-                                app.set_mg_created_slug(created.into());
+                                app.global::<Mg>().set_created_slug(created.into());
                                 if let Some(s) = slugs {
-                                    app.set_mg_skills(strings_model(s));
+                                    app.global::<Mg>().set_skills(strings_model(s));
                                 }
                             }
                             Err(e) => {
-                                app.set_mg_create_error(true);
+                                app.global::<Mg>().set_create_error(true);
                                 // "já existe" ganha mensagem amigável; senão a msg do lib.
                                 let msg = if e.contains("já existe") {
                                     tor("gui.skill_exists", "essa skill já existe")
                                 } else {
                                     e
                                 };
-                                app.set_mg_create_result(msg.into());
+                                app.global::<Mg>().set_create_result(msg.into());
                             }
                         }
                     }
@@ -112,28 +112,28 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // pós-criar: pula pro modo Editar já com a skill recém-criada carregada.
     {
         let weak = app.as_weak();
-        app.on_mg_edit_created(move || {
+        app.global::<Mg>().on_edit_created(move || {
             let Some(app) = weak.upgrade() else { return };
-            let slug = app.get_mg_created_slug().to_string();
+            let slug = app.global::<Mg>().get_created_slug().to_string();
             if slug.is_empty() {
                 return;
             }
-            app.set_mg_mode(1);
-            app.invoke_mg_pick_skill(slug.into()); // reusa o pick p/ listar os arquivos
+            app.global::<Mg>().set_mode(1);
+            app.global::<Mg>().invoke_pick_skill(slug.into()); // reusa o pick p/ listar os arquivos
         });
     }
 
     // escolher uma skill → lista os arquivos editáveis (skilledit::list_files).
     {
         let weak = app.as_weak();
-        app.on_mg_pick_skill(move |s| {
+        app.global::<Mg>().on_pick_skill(move |s| {
             let Some(app) = weak.upgrade() else { return };
             let slug = s.to_string();
-            app.set_mg_sel_skill(s);
+            app.global::<Mg>().set_sel_skill(s);
             // troca de skill zera a seleção de arquivo/editor/feedback.
-            app.set_mg_sel_file(SharedString::new());
-            app.set_mg_content(SharedString::new());
-            app.set_mg_save_result(SharedString::new());
+            app.global::<Mg>().set_sel_file(SharedString::new());
+            app.global::<Mg>().set_content(SharedString::new());
+            app.global::<Mg>().set_save_result(SharedString::new());
             let weak = weak.clone();
             std::thread::spawn(move || {
                 // lista os arquivos + status de FORK (oficial? já forkada?) da skill escolhida.
@@ -142,9 +142,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                 let forked = skills::load_state().skills.get(&slug).map(|e| e.forked).unwrap_or(false);
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.set_mg_files(strings_model(files));
-                        app.set_mg_sel_official(official);
-                        app.set_mg_sel_forked(forked);
+                        app.global::<Mg>().set_files(strings_model(files));
+                        app.global::<Mg>().set_sel_official(official);
+                        app.global::<Mg>().set_sel_forked(forked);
                     }
                 });
             });
@@ -154,23 +154,23 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // escolher um arquivo → carrega o conteúdo no editor (skilledit::read_file).
     {
         let weak = app.as_weak();
-        app.on_mg_pick_file(move |f| {
+        app.global::<Mg>().on_pick_file(move |f| {
             let Some(app) = weak.upgrade() else { return };
-            let slug = app.get_mg_sel_skill().to_string();
+            let slug = app.global::<Mg>().get_sel_skill().to_string();
             let rel = f.to_string();
-            app.set_mg_sel_file(f);
-            app.set_mg_save_result(SharedString::new());
+            app.global::<Mg>().set_sel_file(f);
+            app.global::<Mg>().set_save_result(SharedString::new());
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = skilledit::read_file(&slug, &rel);
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
                         match res {
-                            Ok(content) => app.set_mg_content(content.into()),
+                            Ok(content) => app.global::<Mg>().set_content(content.into()),
                             Err(e) => {
-                                app.set_mg_content(SharedString::new());
-                                app.set_mg_save_error(true);
-                                app.set_mg_save_result(tf("err.prefix", &[("e", &e)]).into());
+                                app.global::<Mg>().set_content(SharedString::new());
+                                app.global::<Mg>().set_save_error(true);
+                                app.global::<Mg>().set_save_result(tf("err.prefix", &[("e", &e)]).into());
                             }
                         }
                     }
@@ -184,11 +184,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // salvar, relemos o estado de fork e refletimos no banner + no badge [fork] da lista.
     {
         let weak = app.as_weak();
-        app.on_mg_save(move || {
+        app.global::<Mg>().on_save(move || {
             let Some(app) = weak.upgrade() else { return };
-            let slug = app.get_mg_sel_skill().to_string();
-            let rel = app.get_mg_sel_file().to_string();
-            let content = app.get_mg_content().to_string();
+            let slug = app.global::<Mg>().get_sel_skill().to_string();
+            let rel = app.global::<Mg>().get_sel_file().to_string();
+            let content = app.global::<Mg>().get_content().to_string();
             if slug.is_empty() || rel.is_empty() {
                 return;
             }
@@ -203,14 +203,14 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     if let Some(app) = weak.upgrade() {
                         match res {
                             Ok(()) => {
-                                app.set_mg_save_error(false);
-                                app.set_mg_save_result(tor("gui.saved", "Salvo").into());
-                                app.set_mg_sel_forked(forked);
+                                app.global::<Mg>().set_save_error(false);
+                                app.global::<Mg>().set_save_result(tor("gui.saved", "Salvo").into());
+                                app.global::<Mg>().set_sel_forked(forked);
                                 mark_row_forked(&app, &slug2, forked);
                             }
                             Err(e) => {
-                                app.set_mg_save_error(true);
-                                app.set_mg_save_result(tf("err.prefix", &[("e", &e)]).into());
+                                app.global::<Mg>().set_save_error(true);
+                                app.global::<Mg>().set_save_result(tf("err.prefix", &[("e", &e)]).into());
                             }
                         }
                     }

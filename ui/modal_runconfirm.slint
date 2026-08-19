@@ -1,0 +1,68 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { NotifItem, CmpFile } from "types.slint";
+import { Btn, Chip, Check, Collapse, IconBtn } from "widgets.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// GUARDRAIL do "Executar overdev": mostra exatamente o comando que vai abrir
+// no terminal EXTERNO antes de disparar.
+export component RunConfirmModal inherits Rectangle {
+        background: #000000.transparentize(0.45);
+        TouchArea { clicked => { Od.run-cancel(); } }  // clique fora = cancela
+
+        Rectangle {
+            width: Math.min(root.width - 64px, 560px);
+            height: Math.min(root.height - 96px, 400px);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 14px;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.border;
+            TouchArea {}  // absorve cliques dentro
+            VerticalLayout {
+                padding: 22px;
+                spacing: 14px;
+                Text { text: L.od-run; font-size: 18px; font-weight: 800; color: Theme.text; }
+                // aviso do disparo
+                Text {
+                    text: L.od-confirm-run;
+                    font-size: 13px;
+                    color: Theme.text-dim;
+                    wrap: word-wrap;
+                }
+                // projeto alvo
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: L.project; font-size: 12.5px; font-weight: 700; color: Theme.text-dim; }
+                    Text { text: Od.current; font-size: 12.5px; font-weight: 700; color: Theme.text; overflow: elide; }
+                }
+                // comando do agente (monospace)
+                Text { text: L.od-agent-cmd; font-size: 12.5px; font-weight: 700; color: Theme.text-dim; }
+                Rectangle {
+                    border-radius: 8px;
+                    background: Theme.surface-2;
+                    border-width: 1px;
+                    border-color: Theme.border;
+                    VerticalLayout {
+                        padding: 12px;
+                        Text {
+                            text: Od.agent-cmdline;
+                            font-size: 12px;
+                            font-family: "monospace";
+                            color: Theme.text;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+                Rectangle {}  // empurra o rodapé
+                HorizontalLayout {
+                    spacing: 10px;
+                    Rectangle {}
+                    Btn { label: L.mp-cancel; small: true; clicked => { Od.run-cancel(); } }
+                    Btn { label: L.od-run; primary: true; small: true; clicked => { Od.run-confirm(); } }
+                }
+            }
+        }
+}

@@ -20,32 +20,32 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // Só dados `Send` (String/PathBuf/Arc) cruzam a fronteira.
     let acc_stop: Rc<RefCell<Arc<AtomicBool>>> = Rc::new(RefCell::new(Arc::new(AtomicBool::new(false))));
     // Estado inicial: reflete a sessão persistida em disco.
-    app.set_acc_logged_in(account::is_logged_in());
-    app.set_acc_sub(account::account_sub().unwrap_or_default().into());
+    app.global::<Acc>().set_logged_in(account::is_logged_in());
+    app.global::<Acc>().set_sub(account::account_sub().unwrap_or_default().into());
 
     // iniciar o device flow.
     {
         let weak = app.as_weak();
         let acc_stop = acc_stop.clone();
-        app.on_acc_login(move || {
+        app.global::<Acc>().on_login(move || {
             let Some(app) = weak.upgrade() else { return };
-            if app.get_acc_polling() {
+            if app.global::<Acc>().get_polling() {
                 return; // já há um login em andamento
             }
             // levanta o flag antigo (encerra thread remanescente) e cria um novo.
             acc_stop.borrow().store(true, Ordering::SeqCst);
             let stop = Arc::new(AtomicBool::new(false));
             *acc_stop.borrow_mut() = stop.clone();
-            app.set_acc_polling(true);
-            app.set_acc_status(SharedString::new());
+            app.global::<Acc>().set_polling(true);
+            app.global::<Acc>().set_status(SharedString::new());
             let weak = weak.clone();
             std::thread::spawn(move || {
                 match account::device_start() {
                     Err(e) => {
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(app) = weak.upgrade() {
-                                app.set_acc_polling(false);
-                                app.set_acc_status(
+                                app.global::<Acc>().set_polling(false);
+                                app.global::<Acc>().set_status(
                                     format!("{} {e}", tor("gui.acc_start_error", "Falha ao iniciar o login:")).into(),
                                 );
                             }
@@ -60,11 +60,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                             let weak = weak.clone();
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(app) = weak.upgrade() {
-                                    app.set_acc_user_code(user_code.into());
-                                    app.set_acc_verification_uri(verification_uri.into());
-                                    app.set_acc_verification_uri_complete(verification_complete.into());
-                                    app.set_acc_status(SharedString::new());
-                                    app.set_acc_modal_open(true);
+                                    app.global::<Acc>().set_user_code(user_code.into());
+                                    app.global::<Acc>().set_verification_uri(verification_uri.into());
+                                    app.global::<Acc>().set_verification_uri_complete(verification_complete.into());
+                                    app.global::<Acc>().set_status(SharedString::new());
+                                    app.global::<Acc>().set_modal_open(true);
                                 }
                             });
                         }
@@ -79,9 +79,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                 let weak = weak.clone();
                                 let _ = slint::invoke_from_event_loop(move || {
                                     if let Some(app) = weak.upgrade() {
-                                        app.set_acc_modal_open(false);
-                                        app.set_acc_polling(false);
-                                        app.set_acc_status(
+                                        app.global::<Acc>().set_modal_open(false);
+                                        app.global::<Acc>().set_polling(false);
+                                        app.global::<Acc>().set_status(
                                             tor("gui.acc_expired", "O código expirou. Tente novamente.").into(),
                                         );
                                     }
@@ -104,9 +104,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                     let weak = weak.clone();
                                     let _ = slint::invoke_from_event_loop(move || {
                                         if let Some(app) = weak.upgrade() {
-                                            app.set_acc_modal_open(false);
-                                            app.set_acc_polling(false);
-                                            app.set_acc_status(
+                                            app.global::<Acc>().set_modal_open(false);
+                                            app.global::<Acc>().set_polling(false);
+                                            app.global::<Acc>().set_status(
                                                 tor("gui.acc_denied", "Acesso negado. Tente novamente.").into(),
                                             );
                                         }
@@ -117,9 +117,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                     let weak = weak.clone();
                                     let _ = slint::invoke_from_event_loop(move || {
                                         if let Some(app) = weak.upgrade() {
-                                            app.set_acc_modal_open(false);
-                                            app.set_acc_polling(false);
-                                            app.set_acc_status(
+                                            app.global::<Acc>().set_modal_open(false);
+                                            app.global::<Acc>().set_polling(false);
+                                            app.global::<Acc>().set_status(
                                                 tor("gui.acc_expired", "O código expirou. Tente novamente.").into(),
                                             );
                                         }
@@ -132,18 +132,18 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                     let weak = weak.clone();
                                     let _ = slint::invoke_from_event_loop(move || {
                                         if let Some(app) = weak.upgrade() {
-                                            app.set_acc_modal_open(false);
-                                            app.set_acc_polling(false);
+                                            app.global::<Acc>().set_modal_open(false);
+                                            app.global::<Acc>().set_polling(false);
                                             match save_err {
                                                 None => {
-                                                    app.set_acc_logged_in(true);
-                                                    app.set_acc_sub(sub.into());
-                                                    app.set_acc_status(SharedString::new());
+                                                    app.global::<Acc>().set_logged_in(true);
+                                                    app.global::<Acc>().set_sub(sub.into());
+                                                    app.global::<Acc>().set_status(SharedString::new());
                                                     // recomputa o badge do sino (notificações do
                                                     // servidor aparecem quando logado).
-                                                    app.invoke_notif_refresh();
+                                                    app.global::<Notif>().invoke_refresh();
                                                 }
-                                                Some(e) => app.set_acc_status(
+                                                Some(e) => app.global::<Acc>().set_status(
                                                     format!("{} {e}", tor("gui.acc_save_error", "Falha ao salvar a sessão:")).into(),
                                                 ),
                                             }
@@ -164,9 +164,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // abrir a verification_uri_complete no navegador.
     {
         let weak = app.as_weak();
-        app.on_acc_open_verify(move || {
+        app.global::<Acc>().on_open_verify(move || {
             if let Some(app) = weak.upgrade() {
-                let url = app.get_acc_verification_uri_complete().to_string();
+                let url = app.global::<Acc>().get_verification_uri_complete().to_string();
                 if !url.is_empty() {
                     util::open_url(&url);
                 }
@@ -178,12 +178,12 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     {
         let weak = app.as_weak();
         let acc_stop = acc_stop.clone();
-        app.on_acc_cancel_login(move || {
+        app.global::<Acc>().on_cancel_login(move || {
             acc_stop.borrow().store(true, Ordering::SeqCst);
             if let Some(app) = weak.upgrade() {
-                app.set_acc_modal_open(false);
-                app.set_acc_polling(false);
-                app.set_acc_status(SharedString::new());
+                app.global::<Acc>().set_modal_open(false);
+                app.global::<Acc>().set_polling(false);
+                app.global::<Acc>().set_status(SharedString::new());
             }
         });
     }
@@ -192,18 +192,18 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     {
         let weak = app.as_weak();
         let acc_stop = acc_stop.clone();
-        app.on_acc_logout(move || {
+        app.global::<Acc>().on_logout(move || {
             // por segurança, para qualquer poll em andamento.
             acc_stop.borrow().store(true, Ordering::SeqCst);
             account::logout();
             if let Some(app) = weak.upgrade() {
-                app.set_acc_logged_in(false);
-                app.set_acc_sub(SharedString::new());
-                app.set_acc_polling(false);
-                app.set_acc_modal_open(false);
-                app.set_acc_status(SharedString::new());
+                app.global::<Acc>().set_logged_in(false);
+                app.global::<Acc>().set_sub(SharedString::new());
+                app.global::<Acc>().set_polling(false);
+                app.global::<Acc>().set_modal_open(false);
+                app.global::<Acc>().set_status(SharedString::new());
                 // notificações do servidor somem quando deslogado → recomputa o badge.
-                app.invoke_notif_refresh();
+                app.global::<Notif>().invoke_refresh();
             }
         });
     }

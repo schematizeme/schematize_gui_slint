@@ -1,0 +1,360 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import {
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
+    LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
+    DbTableRow,
+} from "types.slint";
+import {
+    VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
+    SkillName, AuthorCell, HomeCard, ReloadIcon, IconBtn,
+} from "widgets.slint";
+import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Tela CONFIGURAÇÕES (5) — idioma, tema, autostart, hooks, versão/self-update
+// e o relatório de debug.
+export component SettingsScreen inherits VerticalLayout {
+            Rectangle {
+                height: 58px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    VerticalLayout {
+                        alignment: center;
+                        Text { text: L.cfg-title; font-size: 16px; font-weight: 800; color: Theme.text; }
+                    }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+            ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 20px;
+                    // ---- conta (login pela plataforma via device flow) ----
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.acc-section; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        // logado: "Conectado como <sub>" + Sair.
+                        if Acc.logged-in: HorizontalLayout {
+                            spacing: 14px;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "\{L.acc-connected-as} \{Acc.sub}";
+                                    font-size: 13.5px; font-weight: 700; color: Theme.text; overflow: elide;
+                                }
+                            }
+                            Rectangle {}
+                            VerticalLayout {
+                                alignment: center;
+                                Btn { label: L.acc-logout; small: true; danger: true; clicked => { Acc.logout(); } }
+                            }
+                        }
+                        // deslogado: descrição + "Entrar na plataforma".
+                        if !Acc.logged-in: HorizontalLayout {
+                            spacing: 14px;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: L.acc-logged-out-hint;
+                                    font-size: 12px; color: Theme.text-dim; wrap: word-wrap;
+                                }
+                            }
+                            Rectangle {}
+                            VerticalLayout {
+                                alignment: center;
+                                Btn {
+                                    label: L.acc-login; small: true; primary: true;
+                                    enabled: !Acc.polling;
+                                    clicked => { Acc.login(); }
+                                }
+                            }
+                        }
+                        if !Acc.modal-open && Acc.status != "": Text {
+                            text: Acc.status;
+                            font-size: 12px; font-weight: 600; color: Theme.warn; wrap: word-wrap;
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- versão do app + self-update ----
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.app-version-title; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        HorizontalLayout {
+                            spacing: 14px;
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: App.version; font-size: 13.5px; font-weight: 700; color: Theme.text; }
+                            }
+                            Rectangle {}
+                            VerticalLayout {
+                                alignment: center;
+                                Btn {
+                                    label: App.checking ? L.app-checking : L.app-check-update;
+                                    small: true;
+                                    enabled: !App.checking && !App.updating;
+                                    clicked => { App.check-update(); }
+                                }
+                            }
+                        }
+                        // Gestor de atualizações ausente → pede pra instalar (na abertura o app seta
+                        // updater-missing). Cobre instalação limpa E update: sem ele, o update central falha.
+                        if App.updater-missing: Rectangle {
+                            background: Theme.surface-2;
+                            border-radius: 8px;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 8px;
+                                Text {
+                                    text: L.updater-missing-msg;
+                                    font-size: 12.5px;
+                                    font-weight: 600;
+                                    color: Theme.text;
+                                    wrap: word-wrap;
+                                }
+                                if App.updater-status != "": Text {
+                                    text: App.updater-status;
+                                    font-size: 12px;
+                                    color: Theme.text-dim;
+                                    wrap: word-wrap;
+                                }
+                                HorizontalLayout {
+                                    alignment: start;
+                                    Btn {
+                                        label: App.updater-installing ? L.app-updating : L.updater-install-btn;
+                                        primary: true;
+                                        small: true;
+                                        enabled: !App.updater-installing;
+                                        clicked => { App.install-updater(); }
+                                    }
+                                }
+                            }
+                        }
+                        // resultado da checagem (atualizado / erro / nova versão).
+                        if App.update-status != "": Text {
+                            text: App.update-status;
+                            font-size: 12.5px;
+                            font-weight: 600;
+                            color: App.has-update ? Theme.header-fg : Theme.text-dim;
+                            wrap: word-wrap;
+                        }
+                        // há update → botão Atualizar app (ou hint de reiniciar quando pronto).
+                        if App.has-update && !App.update-done: HorizontalLayout {
+                            alignment: start;
+                            Btn {
+                                label: App.updating ? L.app-updating : L.app-update-btn;
+                                primary: true;
+                                small: true;
+                                enabled: !App.updating;
+                                clicked => { App.do-update(); }
+                            }
+                        }
+                        if App.update-done: HorizontalLayout {
+                            spacing: 12px;
+                            alignment: start;
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: L.app-restart-hint; font-size: 12.5px; font-weight: 600; color: Theme.good; wrap: word-wrap; }
+                            }
+                            Btn { label: L.app-restart; small: true; primary: true; clicked => { App.restart(); } }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- idioma ----
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.cfg-language; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        Rectangle {
+                            width: 260px;
+                            height: 34px;
+                            border-radius: 8px;
+                            background: lgdd.has-hover ? Theme.surface-2 : Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 8px;
+                                Text {
+                                    text: Cfg.lang-name != "" ? Cfg.lang-name : Cfg.lang-code;
+                                    color: Theme.text; font-size: 13.5px; font-weight: 600;
+                                    vertical-alignment: center; overflow: elide;
+                                }
+                                Rectangle {}
+                                Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                            }
+                            lgdd := TouchArea { mouse-cursor: pointer; clicked => { lgpop.show(); } }
+                            lgpop := PopupWindow {
+                                // Sem isto, a política padrão `close-on-click` fecha o popup no PRESS e
+                                // o Flickable do ScrollView engole o gesto — o `clicked` (release) do
+                                // item nunca dispara e o idioma não troca. `close-on-click-outside`
+                                // só fecha ao clicar FORA, deixando o clique no item chegar ao callback.
+                                close-policy: close-on-click-outside;
+                                x: 0;
+                                y: parent.height + 4px;
+                                width: 260px;
+                                Rectangle {
+                                    background: Theme.surface;
+                                    border-width: 1px;
+                                    border-color: Theme.border;
+                                    border-radius: 10px;
+                                    ScrollView {
+                                        height: 280px;
+                                        VerticalLayout {
+                                            padding: 6px;
+                                            spacing: 1px;
+                                            for lg[lgi] in Cfg.langs: Rectangle {
+                                                height: 30px;
+                                                border-radius: 6px;
+                                                background: lg.current
+                                                    ? Theme.accent-soft
+                                                    : (lgita.has-hover ? Theme.surface-2 : transparent);
+                                                HorizontalLayout {
+                                                    padding-left: 8px;
+                                                    padding-right: 8px;
+                                                    Text {
+                                                        text: lg.name;
+                                                        font-size: 13px;
+                                                        font-weight: lg.current ? 700 : 500;
+                                                        color: lg.current ? Theme.header-fg : Theme.text;
+                                                        vertical-alignment: center;
+                                                        overflow: elide;
+                                                    }
+                                                }
+                                                lgita := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => { Cfg.set-lang(lg.code); }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- tema ----
+                    HorizontalLayout {
+                        spacing: 12px;
+                        VerticalLayout {
+                            alignment: center;
+                            Text { text: L.cfg-theme; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        }
+                        Rectangle {}
+                        ThemeToggle { clicked => { Theme.dark = !Theme.dark; } }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- autostart do agente ----
+                    HorizontalLayout {
+                        spacing: 14px;
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 3px;
+                            Text { text: L.cfg-autostart; font-size: 14px; font-weight: 800; color: Theme.text; }
+                            Text { text: L.cfg-autostart-desc; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                        }
+                        Rectangle {}
+                        VerticalLayout {
+                            alignment: center;
+                            Check { checked: Cfg.autostart-on; toggled => { Cfg.toggle-autostart(); } }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- hooks do overdev ----
+                    HorizontalLayout {
+                        spacing: 14px;
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 3px;
+                            Text { text: L.cfg-hooks; font-size: 14px; font-weight: 800; color: Theme.text; }
+                            Text { text: L.cfg-hooks-desc; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                        }
+                        Rectangle {}
+                        VerticalLayout {
+                            alignment: center;
+                            Check { checked: Cfg.hooks-on; toggled => { Cfg.toggle-hooks(); } }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- diretórios de dev + projetos fixados ----
+                    HorizontalLayout {
+                        spacing: 14px;
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 3px;
+                            Text { text: L.cfg-dirs; font-size: 14px; font-weight: 800; color: Theme.text; }
+                            Text { text: L.cfg-dirs-desc; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                        }
+                        Rectangle {}
+                        VerticalLayout {
+                            alignment: center;
+                            Btn { label: L.cfg-manage; small: true; clicked => { Cfg.manage-dirs(); } }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- diagnóstico (relatório de debug) ----
+                    VerticalLayout {
+                        spacing: 10px;
+                        Text { text: L.cfg-debug-title; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        // toggle: incluir diagnóstico de rede (mais lento).
+                        HorizontalLayout {
+                            spacing: 10px;
+                            VerticalLayout {
+                                alignment: center;
+                                Check {
+                                    checked: Cfg.debug-online;
+                                    enabled: !Cfg.debug-running;
+                                    toggled => { Cfg.debug-toggle-online(); }
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Text { text: L.cfg-debug-net; font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap; }
+                            }
+                            Rectangle {}
+                        }
+                        HorizontalLayout {
+                            alignment: start;
+                            Btn {
+                                label: Cfg.debug-running ? L.cfg-debug-generating : L.cfg-debug-btn;
+                                primary: true;
+                                small: true;
+                                enabled: !Cfg.debug-running;
+                                clicked => { Cfg.debug-generate(); }
+                            }
+                        }
+                        // erro → mensagem em warn.
+                        if Cfg.debug-error != "": Text {
+                            text: Cfg.debug-error;
+                            font-size: 12.5px; font-weight: 600; color: Theme.warn; wrap: word-wrap;
+                        }
+                        // sucesso → caminho + resumo + Abrir pasta + nota.
+                        if Cfg.debug-path != "": VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "\{L.cfg-debug-saved} \{Cfg.debug-path}";
+                                font-size: 12.5px; font-weight: 600; color: Theme.good; wrap: word-wrap;
+                            }
+                            if Cfg.debug-summary != "": Text {
+                                text: Cfg.debug-summary;
+                                font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap;
+                            }
+                            HorizontalLayout {
+                                alignment: start;
+                                Btn { label: L.cfg-debug-open; small: true; clicked => { Cfg.debug-open-folder(); } }
+                            }
+                            Text {
+                                text: L.cfg-debug-note;
+                                font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap;
+                            }
+                        }
+                    }
+                    Rectangle {}
+                }
+            }
+}

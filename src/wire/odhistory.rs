@@ -24,7 +24,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let sm = od_snaps_model.clone();
         let ca = od_commits_all.clone();
         let cm = od_commits_model.clone();
-        app.on_od_refresh_history(move || {
+        app.global::<Od>().on_refresh_history(move || {
             if let Some(app) = weak.upgrade() {
                 let p = cur.borrow().clone();
                 refresh_od_history(&app, &sa, &sm, &ca, &cm, p.as_deref());
@@ -36,10 +36,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let all = od_snaps_all.clone();
         let m = od_snaps_model.clone();
-        app.on_od_snap_page_prev(move || {
+        app.global::<Od>().on_snap_page_prev(move || {
             if let Some(app) = weak.upgrade() {
-                let p = (app.get_od_snap_page() - 1).max(0);
-                app.set_od_snap_page(p);
+                let p = (app.global::<Od>().get_snap_page() - 1).max(0);
+                app.global::<Od>().set_snap_page(p);
                 m.set_vec(snap_rows_page(&all.borrow(), p));
             }
         });
@@ -48,11 +48,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let all = od_snaps_all.clone();
         let m = od_snaps_model.clone();
-        app.on_od_snap_page_next(move || {
+        app.global::<Od>().on_snap_page_next(move || {
             if let Some(app) = weak.upgrade() {
-                let p = app.get_od_snap_page() + 1;
+                let p = app.global::<Od>().get_snap_page() + 1;
                 if (p as usize) * PAGE < all.borrow().len() {
-                    app.set_od_snap_page(p);
+                    app.global::<Od>().set_snap_page(p);
                     m.set_vec(snap_rows_page(&all.borrow(), p));
                 }
             }
@@ -61,58 +61,58 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // Ver: conteúdo do snapshot num visor read-only.
     {
         let weak = app.as_weak();
-        app.on_od_snap_view(move |id| {
+        app.global::<Od>().on_snap_view(move |id| {
             let Some(app) = weak.upgrade() else { return };
             match overdevdb::get(id as i64) {
                 Ok(content) => {
-                    app.set_od_snap_view_title(format!("snapshot #{id}").into());
-                    app.set_od_snap_view_content(content.into());
+                    app.global::<Od>().set_snap_view_title(format!("snapshot #{id}").into());
+                    app.global::<Od>().set_snap_view_content(content.into());
                 }
                 Err(e) => {
-                    app.set_od_snap_view_title(format!("snapshot #{id}").into());
-                    app.set_od_snap_view_content(e.into());
+                    app.global::<Od>().set_snap_view_title(format!("snapshot #{id}").into());
+                    app.global::<Od>().set_snap_view_content(e.into());
                 }
             }
-            app.set_od_snap_view_open(true);
+            app.global::<Od>().set_snap_view_open(true);
         });
     }
     // Restaurar: pede confirmação.
     {
         let weak = app.as_weak();
-        app.on_od_snap_restore_request(move |id| {
+        app.global::<Od>().on_snap_restore_request(move |id| {
             let Some(app) = weak.upgrade() else { return };
-            app.set_od_snap_confirm_id(id);
-            app.set_od_snap_confirm_msg(
+            app.global::<Od>().set_snap_confirm_id(id);
+            app.global::<Od>().set_snap_confirm_msg(
                 format!("{} #{id}?", tor("gui.od_restore_confirm", "Restaurar o snapshot")).into(),
             );
-            app.set_od_snap_confirm_open(true);
+            app.global::<Od>().set_snap_confirm_open(true);
         });
     }
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
-        app.on_od_snap_restore_confirm(move || {
+        app.global::<Od>().on_snap_restore_confirm(move || {
             let Some(app) = weak.upgrade() else { return };
-            let id = app.get_od_snap_confirm_id();
-            app.set_od_snap_confirm_open(false);
+            let id = app.global::<Od>().get_snap_confirm_id();
+            app.global::<Od>().set_snap_confirm_open(false);
             let root = cur.borrow().clone();
             if let (Some(p), true) = (root, id >= 0) {
                 match overdevdb::restore(id as i64, &p) {
-                    Ok(dest) => app.set_od_run_status(
+                    Ok(dest) => app.global::<Od>().set_run_status(
                         format!("{} {}", tor("gui.od_restored", "restaurado:"), dest.display()).into(),
                     ),
-                    Err(e) => app.set_od_run_status(e.into()),
+                    Err(e) => app.global::<Od>().set_run_status(e.into()),
                 }
                 // recarrega overdev (checklist) + histórico refletindo o disco.
-                app.invoke_od_reload();
+                app.global::<Od>().invoke_reload();
             }
         });
     }
     {
         let weak = app.as_weak();
-        app.on_od_snap_restore_cancel(move || {
+        app.global::<Od>().on_snap_restore_cancel(move || {
             if let Some(app) = weak.upgrade() {
-                app.set_od_snap_confirm_open(false);
+                app.global::<Od>().set_snap_confirm_open(false);
             }
         });
     }
@@ -121,10 +121,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let all = od_commits_all.clone();
         let m = od_commits_model.clone();
-        app.on_od_commit_page_prev(move || {
+        app.global::<Od>().on_commit_page_prev(move || {
             if let Some(app) = weak.upgrade() {
-                let p = (app.get_od_commit_page() - 1).max(0);
-                app.set_od_commit_page(p);
+                let p = (app.global::<Od>().get_commit_page() - 1).max(0);
+                app.global::<Od>().set_commit_page(p);
                 m.set_vec(commit_rows_page(&all.borrow(), p));
             }
         });
@@ -133,11 +133,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let all = od_commits_all.clone();
         let m = od_commits_model.clone();
-        app.on_od_commit_page_next(move || {
+        app.global::<Od>().on_commit_page_next(move || {
             if let Some(app) = weak.upgrade() {
-                let p = app.get_od_commit_page() + 1;
+                let p = app.global::<Od>().get_commit_page() + 1;
                 if (p as usize) * PAGE < all.borrow().len() {
-                    app.set_od_commit_page(p);
+                    app.global::<Od>().set_commit_page(p);
                     m.set_vec(commit_rows_page(&all.borrow(), p));
                 }
             }

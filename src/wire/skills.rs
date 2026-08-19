@@ -20,12 +20,12 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // de sair). Hoje o self-update NÃO está fiado nesta GUI Slint (mora no módulo
     // egui do lib, fora do alcance daqui), então nada dispara `restart()` ainda;
     // quando o self-update for portado pra cá, é só invocar `root.restart()`.
-    app.on_restart(move || restart_app());
+    app.global::<App>().on_restart(move || restart_app());
 
     // ---- toggle de seleção de uma linha ----
     {
         let model = model.clone();
-        app.on_toggle(move |idx| {
+        app.global::<Sk>().on_toggle(move |idx| {
             let i = idx as usize;
             if let Some(mut row) = model.row_data(i) {
                 row.selected = !row.selected;
@@ -40,7 +40,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let model = model.clone();
-        app.on_select_all(move || {
+        app.global::<Sk>().on_select_all(move || {
             let tab = weak.upgrade().map(|a| a.get_active_tab()).unwrap_or(0);
             for i in 0..model.row_count() {
                 if let Some(mut r) = model.row_data(i) {
@@ -59,7 +59,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // ---- selecionar pendentes (só Instaladas): instaladas-DESATUALIZADAS ----
     {
         let model = model.clone();
-        app.on_select_pending(move || {
+        app.global::<Sk>().on_select_pending(move || {
             for i in 0..model.row_count() {
                 if let Some(mut r) = model.row_data(i) {
                     if !r.is_header {
@@ -72,7 +72,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     }
     {
         let model = model.clone();
-        app.on_select_none(move || {
+        app.global::<Sk>().on_select_none(move || {
             for i in 0..model.row_count() {
                 if let Some(mut r) = model.row_data(i) {
                     if !r.is_header && r.selected {
@@ -87,7 +87,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // ---- abrir o site do autor (sponsor.url) ----
     {
         let model = model.clone();
-        app.on_open_author(move |idx| {
+        app.global::<Sk>().on_open_author(move |idx| {
             if let Some(r) = model.row_data(idx as usize) {
                 if !r.author_url.is_empty() {
                     util::open_url(&r.author_url);
@@ -107,7 +107,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let env_langs = env_langs.clone();
         let env_methods = env_methods.clone();
         let modal = modal.clone();
-        app.on_row_install(move |idx| {
+        app.global::<Sk>().on_row_install(move |idx| {
             let i = idx as usize;
             let Some(Some(it)) = row_items.get(i) else {
                 return;
@@ -136,21 +136,21 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 rec_slug: rec_slug.clone(),
                 env_lang: env_lang.clone(),
             };
-            app.set_mp_title(tf("gui.mp_install_title", &[("slug", &it.slug)]).into());
-            app.set_mp_idx(i as i32);
+            app.global::<Mp>().set_title(tf("gui.mp_install_title", &[("slug", &it.slug)]).into());
+            app.global::<Mp>().set_idx(i as i32);
             // dependência opcional (base recomendada) — NUNCA marcada por padrão.
             let rec_show = !rec_slug.is_empty();
-            app.set_mp_rec_show(rec_show);
-            app.set_mp_rec_check(false);
+            app.global::<Mp>().set_rec_show(rec_show);
+            app.global::<Mp>().set_rec_check(false);
             if rec_show {
-                app.set_mp_rec_label(tf("gui.mp_with_recommended", &[("slug", &rec_slug)]).into());
+                app.global::<Mp>().set_rec_label(tf("gui.mp_with_recommended", &[("slug", &rec_slug)]).into());
             }
             // environment opcional — NUNCA marcado por padrão.
             let env_show = !env_lang.is_empty();
-            app.set_mp_env_show(env_show);
-            app.set_mp_env_check(false);
+            app.global::<Mp>().set_env_show(env_show);
+            app.global::<Mp>().set_env_check(false);
             if env_show {
-                app.set_mp_env_label(tf("gui.mp_with_env", &[("lang", &env_lang)]).into());
+                app.global::<Mp>().set_env_label(tf("gui.mp_with_env", &[("lang", &env_lang)]).into());
                 let methods: Vec<SharedString> = env_methods
                     .get(&env_lang)
                     .cloned()
@@ -159,10 +159,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     .map(|m| m.into())
                     .collect();
                 let sel = methods.first().cloned().unwrap_or_default();
-                app.set_mp_methods(ModelRc::from(Rc::new(VecModel::from(methods))));
-                app.set_mp_method_sel(sel);
+                app.global::<Mp>().set_methods(ModelRc::from(Rc::new(VecModel::from(methods))));
+                app.global::<Mp>().set_method_sel(sel);
             }
-            app.set_mp_open(true);
+            app.global::<Mp>().set_open(true);
         });
     }
 
@@ -170,7 +170,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
-        app.on_row_update(move |idx| {
+        app.global::<Sk>().on_row_update(move |idx| {
             let i = idx as usize;
             if let Some(Some(it)) = row_items.get(i) {
                 run_batch(weak.clone(), vec![(i, true, it.clone())]);
@@ -182,7 +182,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
-        app.on_row_remove(move |idx| {
+        app.global::<Sk>().on_row_remove(move |idx| {
             let i = idx as usize;
             if let Some(Some(it)) = row_items.get(i) {
                 run_batch(weak.clone(), vec![(i, false, it.clone())]);
@@ -194,7 +194,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
-        app.on_install_selected(move || {
+        app.global::<Sk>().on_install_selected(move || {
             if let Some(app) = weak.upgrade() {
                 let ops = collect_ops(&app, &row_items, true, |r| r.selected && is_missing(r));
                 run_batch(weak.clone(), ops);
@@ -206,7 +206,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
-        app.on_update_selected(move || {
+        app.global::<Sk>().on_update_selected(move || {
             if let Some(app) = weak.upgrade() {
                 let ops = collect_ops(&app, &row_items, true, |r| r.selected && is_outdated(r));
                 run_batch(weak.clone(), ops);
@@ -218,7 +218,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
-        app.on_remove_selected(move || {
+        app.global::<Sk>().on_remove_selected(move || {
             if let Some(app) = weak.upgrade() {
                 let ops = collect_ops(&app, &row_items, false, |r| r.selected && is_installed(r));
                 run_batch(weak.clone(), ops);
@@ -232,7 +232,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
-        app.on_update_all(move || {
+        app.global::<Sk>().on_update_all(move || {
             if let Some(app) = weak.upgrade() {
                 let ops = collect_ops(&app, &row_items, true, is_outdated);
                 run_batch(weak.clone(), ops);
@@ -244,7 +244,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
-        app.on_check(move || {
+        app.global::<Sk>().on_check(move || {
             kick_resolve_all(&weak, &row_items);
             kick_market_ratings(weak.clone());
         });
@@ -254,7 +254,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // Recomputa os índices de exibição (disp) quando a sub-aba muda.
     {
         let weak = app.as_weak();
-        app.on_mkt_recompute(move || {
+        app.global::<Mp>().on_recompute(move || {
             if let Some(app) = weak.upgrade() {
                 recompute_pagination(&app);
             }

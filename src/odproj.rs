@@ -179,11 +179,11 @@ pub(crate) fn skill_action_rows() -> Vec<SkillAction> {
 pub(crate) fn apply_agent_budget(app: &AppWindow) {
     let b = schematize::agents::budget();
     let _ = schematize::agents::persist(&b);
-    app.set_od_agent_cap(b.total_cap as i32);
-    app.set_od_agent_avail(b.available as i32);
-    app.set_od_agent_running(b.snap.running_claudes as i32);
-    app.set_od_agent_load(format!("{:.2}", b.snap.load1).into());
+    app.global::<Od>().set_agent_cap(b.total_cap as i32);
+    app.global::<Od>().set_agent_avail(b.available as i32);
+    app.global::<Od>().set_agent_running(b.snap.running_claudes as i32);
+    app.global::<Od>().set_agent_load(format!("{:.2}", b.snap.load1).into());
     let cap = (b.total_cap as i32).max(2);
-    let k = app.get_od_split_k().clamp(2, cap);
-    app.set_od_split_k(k);
+    let k = app.global::<Od>().get_split_k().clamp(2, cap);
+    app.global::<Od>().set_split_k(k);
 }

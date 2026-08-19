@@ -5,18 +5,18 @@ use crate::prelude::*;
 
 pub(crate) fn load_overdev_into(app: &AppWindow, cl: &ChecklistView, proj: Option<&Path>) {
     let Some(p) = proj else {
-        app.set_od_has_project(false);
-        app.set_od_has_overdev(false);
-        app.set_od_current(SharedString::new());
-        app.set_od_editor_content(SharedString::new());
-        app.set_od_editor_status(SharedString::new());
-        app.set_od_notes(SharedString::new());
+        app.global::<Od>().set_has_project(false);
+        app.global::<Od>().set_has_overdev(false);
+        app.global::<Od>().set_current(SharedString::new());
+        app.global::<Od>().set_editor_content(SharedString::new());
+        app.global::<Od>().set_editor_status(SharedString::new());
+        app.global::<Od>().set_notes(SharedString::new());
         cl.clear(app);
         return;
     };
-    app.set_od_has_project(true);
+    app.global::<Od>().set_has_project(true);
     apply_agent_budget(app); // linha do governador (teto/livre/load) na aba Overdev
-    app.set_od_current(basename_of(p).into());
+    app.global::<Od>().set_current(basename_of(p).into());
     let ov = panel::load_overdev(p);
     // Checklist 2-níveis parseado direto (o panel::load_overdev do lib ignora os
     // marcadores humanos `- [H ]`/`- [H x]`; aqui a GUI precisa deles).
@@ -25,22 +25,22 @@ pub(crate) fn load_overdev_into(app: &AppWindow, cl: &ChecklistView, proj: Optio
     cl.set_all(app, parse_checklist_items(p));
     // Sem run: objetivo vazio E sem itens (mesma regra do egui).
     let has = !(ov.objetivo.trim().is_empty() && cl.is_empty());
-    app.set_od_has_overdev(has);
+    app.global::<Od>().set_has_overdev(has);
     if !has {
         cl.clear(app);
-        app.set_od_editor_content(SharedString::new());
-        app.set_od_editor_status(SharedString::new());
-        app.set_od_notes(SharedString::new());
+        app.global::<Od>().set_editor_content(SharedString::new());
+        app.global::<Od>().set_editor_status(SharedString::new());
+        app.global::<Od>().set_notes(SharedString::new());
         return;
     }
-    app.set_od_objetivo(ov.objetivo.clone().into());
-    app.set_od_mode(ov.mode.clone().into());
-    app.set_od_decisoes(ov.decisoes.clone().into());
-    app.set_od_plano(ov.plano.clone().into());
-    app.set_od_perguntas(ov.perguntas.clone().into());
+    app.global::<Od>().set_objetivo(ov.objetivo.clone().into());
+    app.global::<Od>().set_mode(ov.mode.clone().into());
+    app.global::<Od>().set_decisoes(ov.decisoes.clone().into());
+    app.global::<Od>().set_plano(ov.plano.clone().into());
+    app.global::<Od>().set_perguntas(ov.perguntas.clone().into());
     // Editor (arquivo atualmente escolhido) + notas do humano.
     load_editor_content(app, p);
-    app.set_od_notes(overdev::read_notes(p).into());
+    app.global::<Od>().set_notes(overdev::read_notes(p).into());
 }
 
 /// Teto do que entra no `TextEdit` do editor acoplado. O `TextEdit` do Slint NÃO é
@@ -59,25 +59,25 @@ pub(crate) const EDITOR_MAX_BYTES: usize = 96 * 1024;
 /// toa. Acima de [`EDITOR_MAX_BYTES`] marca `od-editor-too-big` e NÃO carrega —
 /// a UI mostra o tamanho e o botão de abrir no editor externo.
 pub(crate) fn load_editor_content(app: &AppWindow, root: &Path) {
-    app.set_od_editor_status(SharedString::new());
-    app.set_od_editor_error(false);
-    if !app.get_od_editor_open() {
-        app.set_od_editor_content(SharedString::new());
-        app.set_od_editor_too_big(false);
-        app.set_od_editor_size(SharedString::new());
+    app.global::<Od>().set_editor_status(SharedString::new());
+    app.global::<Od>().set_editor_error(false);
+    if !app.global::<Od>().get_editor_open() {
+        app.global::<Od>().set_editor_content(SharedString::new());
+        app.global::<Od>().set_editor_too_big(false);
+        app.global::<Od>().set_editor_size(SharedString::new());
         return;
     }
-    let target = app.get_od_editor_target().to_string();
+    let target = app.global::<Od>().get_editor_target().to_string();
     let content = std::fs::read_to_string(overdev_file_path(root, &target)).unwrap_or_default();
     if content.len() > EDITOR_MAX_BYTES {
-        app.set_od_editor_too_big(true);
-        app.set_od_editor_size(fmt_size(content.len() as i64).into());
-        app.set_od_editor_content(SharedString::new());
+        app.global::<Od>().set_editor_too_big(true);
+        app.global::<Od>().set_editor_size(fmt_size(content.len() as i64).into());
+        app.global::<Od>().set_editor_content(SharedString::new());
         return;
     }
-    app.set_od_editor_too_big(false);
-    app.set_od_editor_size(SharedString::new());
-    app.set_od_editor_content(content.into());
+    app.global::<Od>().set_editor_too_big(false);
+    app.global::<Od>().set_editor_size(SharedString::new());
+    app.global::<Od>().set_editor_content(content.into());
 }
 
 /// Escolhe um projeto: canoniza, persiste como recente e carrega o overdev.

@@ -20,7 +20,7 @@ pub(crate) fn post_completions(weak: &Weak<AppWindow>, lines: Vec<String>) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = w.upgrade() {
             let rows: Vec<SharedString> = lines.into_iter().map(SharedString::from).collect();
-            app.set_od_completions(ModelRc::from(Rc::new(VecModel::from(rows))));
+            app.global::<Od>().set_completions(ModelRc::from(Rc::new(VecModel::from(rows))));
         }
     });
 }
@@ -30,7 +30,7 @@ pub(crate) fn post_usage(weak: &Weak<AppWindow>, line: String) {
     let w = weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = w.upgrade() {
-            app.set_od_usage_line(line.into());
+            app.global::<Od>().set_usage_line(line.into());
         }
     });
 }
@@ -50,15 +50,15 @@ pub(crate) fn post_monitor(weak: &Weak<AppWindow>, prog: overdev::Progress, item
     let w = weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = w.upgrade() {
-            app.set_od_run_done(prog.done as i32);
-            app.set_od_run_open(prog.open as i32);
-            app.set_od_mon_human(prog.human as i32);
-            app.set_od_mon_hold(prog.hold as i32);
-            app.set_od_mon_iter(prog.iterations as i32);
-            app.set_od_mon_max(prog.max_iters as i32);
-            app.set_od_mon_mode(prog.mode.into());
+            app.global::<Od>().set_run_done(prog.done as i32);
+            app.global::<Od>().set_run_open(prog.open as i32);
+            app.global::<Od>().set_mon_human(prog.human as i32);
+            app.global::<Od>().set_mon_hold(prog.hold as i32);
+            app.global::<Od>().set_mon_iter(prog.iterations as i32);
+            app.global::<Od>().set_mon_max(prog.max_iters as i32);
+            app.global::<Od>().set_mon_mode(prog.mode.into());
             let rows: Vec<SharedString> = items.into_iter().map(SharedString::from).collect();
-            app.set_od_mon_items(ModelRc::from(Rc::new(VecModel::from(rows))));
+            app.global::<Od>().set_mon_items(ModelRc::from(Rc::new(VecModel::from(rows))));
         }
     });
 }
@@ -69,9 +69,9 @@ pub(crate) fn post_monitor_end(weak: &Weak<AppWindow>, mode: String) {
     let w = weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = w.upgrade() {
-            app.set_od_session_running(false);
-            app.set_od_mon_mode(mode.into());
-            app.invoke_od_reload();
+            app.global::<Od>().set_session_running(false);
+            app.global::<Od>().set_mon_mode(mode.into());
+            app.global::<Od>().invoke_reload();
         }
     });
 }

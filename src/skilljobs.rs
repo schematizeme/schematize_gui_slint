@@ -9,7 +9,7 @@ use crate::prelude::*;
 pub(crate) fn post_versions(weak: Weak<AppWindow>, idx: usize, installed: Option<String>, latest: Option<String>) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
-            let rows = app.get_rows();
+            let rows = app.global::<Sk>().get_rows();
             if let Some(mut r) = rows.row_data(idx) {
                 let (state, label) = compute_state(&installed, &latest);
                 r.installed = installed.clone().unwrap_or_else(|| "—".into()).into();
@@ -28,7 +28,7 @@ pub(crate) fn post_versions(weak: Weak<AppWindow>, idx: usize, installed: Option
 pub(crate) fn post_row_busy(weak: Weak<AppWindow>, idx: usize, label: String) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
-            let rows = app.get_rows();
+            let rows = app.global::<Sk>().get_rows();
             if let Some(mut r) = rows.row_data(idx) {
                 r.busy = true;
                 r.op_label = label.into();
@@ -45,7 +45,7 @@ pub(crate) fn post_row_busy(weak: Weak<AppWindow>, idx: usize, label: String) {
 pub(crate) fn post_row_result(weak: Weak<AppWindow>, idx: usize, install: bool, res: Result<String, String>) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
-            let rows = app.get_rows();
+            let rows = app.global::<Sk>().get_rows();
             if let Some(mut r) = rows.row_data(idx) {
                 r.busy = false;
                 match res {
@@ -80,9 +80,9 @@ pub(crate) fn post_row_result(weak: Weak<AppWindow>, idx: usize, install: bool, 
 pub(crate) fn post_batch_done(weak: Weak<AppWindow>, ok: usize, err: usize) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
-            app.set_busy(false);
+            app.global::<Sk>().set_busy(false);
             let toast = tf("gui.batch_done", &[("ok", &ok.to_string()), ("err", &err.to_string())]);
-            app.set_status(toast.into());
+            app.global::<Sk>().set_status(toast.into());
             recompute_headers(&app);
         }
     });
@@ -104,7 +104,7 @@ pub(crate) fn spawn_resolve(weak: Weak<AppWindow>, idx: usize, item: Item) {
 /// skill; são poucas). Antes, zera a coluna latest de volta pra "…".
 pub(crate) fn kick_resolve_all(weak: &Weak<AppWindow>, row_items: &Rc<Vec<Option<Item>>>) {
     if let Some(app) = weak.upgrade() {
-        let rows = app.get_rows();
+        let rows = app.global::<Sk>().get_rows();
         for (idx, maybe) in row_items.iter().enumerate() {
             if let Some(it) = maybe {
                 if let Some(mut r) = rows.row_data(idx) {
@@ -132,7 +132,7 @@ pub(crate) fn kick_market_ratings(weak: Weak<AppWindow>) {
         let ratings = market::market_ratings_all(); // HashMap<String,(f32,u32)> (Send)
         let _ = slint::invoke_from_event_loop(move || {
             if let Some(app) = weak.upgrade() {
-                let rows = app.get_rows();
+                let rows = app.global::<Sk>().get_rows();
                 for i in 0..rows.row_count() {
                     if let Some(mut r) = rows.row_data(i) {
                         if r.is_header {
@@ -158,10 +158,10 @@ pub(crate) fn run_batch(weak: Weak<AppWindow>, ops: Vec<(usize, bool, Item)>) {
         return;
     }
     if let Some(app) = weak.upgrade() {
-        if app.get_busy() {
+        if app.global::<Sk>().get_busy() {
             return; // já tem lote rodando
         }
-        app.set_busy(true);
+        app.global::<Sk>().set_busy(true);
     }
     std::thread::spawn(move || {
         let ok = AtomicUsize::new(0);

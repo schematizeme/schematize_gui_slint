@@ -52,13 +52,13 @@ pub(crate) fn build_db_table_rows(schema: &database::Schema) -> Vec<DbTableRow> 
 /// Reflete o `database::Schema` na UI: modelo de tabelas + nomes (dropdown) + flag
 /// has-schema. Mantém a tabela alvo do editor se ainda existir; senão pega a 1ª.
 pub(crate) fn db_rebuild(app: &AppWindow, schema: &database::Schema) {
-    app.set_db_tables(ModelRc::from(Rc::new(VecModel::from(build_db_table_rows(schema)))));
+    app.global::<Db>().set_tables(ModelRc::from(Rc::new(VecModel::from(build_db_table_rows(schema)))));
     let names: Vec<String> = schema.tables.iter().map(|t| t.name.clone()).collect();
-    app.set_db_table_names(strings_model(names.clone()));
-    app.set_db_has_schema(!schema.tables.is_empty());
-    let sel = app.get_db_sel_table().to_string();
+    app.global::<Db>().set_table_names(strings_model(names.clone()));
+    app.global::<Db>().set_has_schema(!schema.tables.is_empty());
+    let sel = app.global::<Db>().get_sel_table().to_string();
     if !names.iter().any(|n| n == &sel) {
-        app.set_db_sel_table(names.first().cloned().unwrap_or_default().into());
+        app.global::<Db>().set_sel_table(names.first().cloned().unwrap_or_default().into());
     }
 }
 
@@ -115,22 +115,22 @@ pub(crate) fn load_db_graph_into(
 /// Como `graph_sync`, mas escreve as propriedades `db-g-*` do grafo do SCHEMA (sem
 /// arquivo:linha — tabela não tem local no código; só nome + descrição das colunas).
 pub(crate) fn db_graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edges: &VecModel<GraphEdge>) {
-    app.set_db_g_scale(st.scale);
-    app.set_db_g_ox(st.ox);
-    app.set_db_g_oy(st.oy);
-    app.set_db_g_has_graph(!st.nodes.is_empty());
-    app.set_db_g_node_count(st.nodes.len() as i32);
+    app.global::<Db>().set_g_scale(st.scale);
+    app.global::<Db>().set_g_ox(st.ox);
+    app.global::<Db>().set_g_oy(st.oy);
+    app.global::<Db>().set_g_has_graph(!st.nodes.is_empty());
+    app.global::<Db>().set_g_node_count(st.nodes.len() as i32);
     match st.sel {
         Some(i) => {
-            app.set_db_g_has_sel(true);
-            app.set_db_g_sel_id(st.nodes[i].id.clone().into());
+            app.global::<Db>().set_g_has_sel(true);
+            app.global::<Db>().set_g_sel_id(st.nodes[i].id.clone().into());
             let desc = st.descs.get(&st.nodes[i].id).cloned().unwrap_or_default();
-            app.set_db_g_sel_desc(desc.into());
+            app.global::<Db>().set_g_sel_desc(desc.into());
         }
         None => {
-            app.set_db_g_has_sel(false);
-            app.set_db_g_sel_id(SharedString::new());
-            app.set_db_g_sel_desc(SharedString::new());
+            app.global::<Db>().set_g_has_sel(false);
+            app.global::<Db>().set_g_sel_id(SharedString::new());
+            app.global::<Db>().set_g_sel_desc(SharedString::new());
         }
     }
     if nodes.row_count() == st.nodes.len() {

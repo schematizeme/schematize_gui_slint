@@ -1,0 +1,154 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import {
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
+    LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
+    DbTableRow,
+} from "types.slint";
+import {
+    VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
+    SkillName, AuthorCell, HomeCard, ReloadIcon, IconBtn,
+} from "widgets.slint";
+import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Tela GRAFO (3) — o canvas do grafo do índice §39 com busca, drill e reindex.
+export component GraphScreen inherits VerticalLayout {
+            // (seletor de projeto agora vive no CABEÇALHO)
+            // ---- linha de ferramentas do grafo (busca + nº nós + ações) ----
+            Rectangle {
+                height: 50px;
+                background: Theme.bg;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    spacing: 10px;
+                    VerticalLayout {
+                        alignment: center;
+                        gsearch := LineEdit {
+                            width: 190px;
+                            placeholder-text: L.g-search-hint;
+                            text: G.search;
+                            edited(s) => { G.search-changed(s); }
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: G.node-count + " " + L.g-nodes-suffix;
+                            font-size: 12.5px;
+                            color: Theme.text-dim;
+                        }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        // "chama a skill que organiza o grafo" — roda o índice §39 num terminal externo.
+                        Btn { label: L.g-reindex; small: true; enabled: Od.has-project; clicked => { G.reindex(); } }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        // re-roda load_graph + node_descriptions e atualiza a UI (após reindexar).
+                        Btn { label: L.g-reload; small: true; enabled: Od.has-project; clicked => { G.reload(); } }
+                    }
+                    // Drill-down: abre o grafo detalhado do microserviço selecionado (só na visão global,
+                    // com um nó selecionado). Na visão por-serviço, vira o botão de VOLTAR ao global.
+                    if !G.in-service: VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.g-drill; small: true; enabled: G.has-sel; clicked => { G.drill(); } }
+                    }
+                    if G.in-service: VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.g-global; small: true; enabled: true; clicked => { G.global(); } }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.g-fit; small: true; enabled: G.has-graph; clicked => { G.fit(); } }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.g-export-obsidian; small: true; enabled: G.has-graph; clicked => { G.export(); } }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.open-browser; small: true; enabled: G.has-graph; clicked => { G.open-browser(); } }
+                    }
+                }
+            }
+            Rectangle { height: 1px; background: Theme.border; }
+
+            // Banner do (re)index: mensagem de "índice rodando no terminal <nome>…" ou erro.
+            if G.reindex-status != "": Rectangle {
+                background: Theme.surface;
+                HorizontalLayout {
+                    padding-left: 24px;
+                    padding-right: 24px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                    spacing: 10px;
+                    Text {
+                        text: G.reindex-status;
+                        font-size: 12px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: left;
+                    }
+                }
+            }
+
+            // Empty-state: nenhum projeto escolhido.
+            if !Od.has-project: VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    alignment: center;
+                    padding: 24px;
+                    Text {
+                        text: L.no-project;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+            // Empty-state: projeto sem índice/grafo.
+            if Od.has-project && !G.has-graph: VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    alignment: center;
+                    padding: 24px;
+                    Text {
+                        text: L.g-no-graph;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+
+            // ---- canvas do grafo (componente reusável) ----
+            if Od.has-project && G.has-graph: GraphCanvas {
+                nodes: G.nodes;
+                edges: G.edges;
+                scale: G.scale;
+                ox: G.ox;
+                oy: G.oy;
+                has-sel: G.has-sel;
+                sel-id: G.sel-id;
+                sel-desc: G.sel-desc;
+                sel-loc: G.sel-loc;
+                show-loc: true;
+                nodesc-label: L.g-node-nodesc;
+                noloc-label: L.g-no-loc;
+                open-editor-label: L.g-open-editor;
+                press(a, b) => { G.press(a, b); }
+                move(a, b) => { G.move(a, b); }
+                release => { G.release(); }
+                scroll(a, b, d) => { G.scroll(a, b, d); }
+                resized(w, h) => { G.canvas-resized(w, h); }
+                clear-sel => { G.clear-sel(); }
+                open-editor => { G.open-editor(); }
+            }
+}

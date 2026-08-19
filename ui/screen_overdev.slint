@@ -1,0 +1,689 @@
+import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import {
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
+    LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
+    DbTableRow,
+} from "types.slint";
+import {
+    VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
+    SkillName, AuthorCell, HomeCard, ReloadIcon, IconBtn,
+} from "widgets.slint";
+import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+
+// Tela OVERDEV (2) — objetivo, progresso, checklist FATIADO, editor acoplado,
+// tarefas/notas, monitor do run e o histórico (snapshots + commits).
+export component OverdevScreen inherits VerticalLayout {
+            // (seletor de projeto agora vive no CABEÇALHO, ao lado do "← Voltar")
+            // ---- conteúdo do overdev ----
+            // Empty-state: nenhum projeto escolhido.
+            if !Od.has-project: VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    alignment: center;
+                    padding: 24px;
+                    Text {
+                        text: L.no-project;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+            }
+            // Empty-state: projeto sem run de overdev — oferece GERAR afazeres do archive recuperável.
+            // Ações declaradas por skills instaladas (Q.A., Pentest, …) — aparecem quando a skill
+            // tem gui.json. Visível sempre que há um projeto (com ou sem overdev).
+            if Od.has-project && !Od.has-overdev && Od.skill-actions.length > 0: VerticalLayout {
+                padding-left: 20px;
+                padding-right: 20px;
+                padding-top: 14px;
+                spacing: 8px;
+                Text {
+                    text: "Ações de skills";
+                    font-size: 12px; font-weight: 700; color: Theme.text-dim;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    for a in Od.skill-actions: Btn {
+                        label: a.label;
+                        small: true;
+                        enabled: !a.needs-project || Od.has-project;
+                        clicked => { Od.run-skill-action(a.command); }
+                    }
+                    Rectangle {}
+                }
+            }
+            if Od.has-project && !Od.has-overdev: VerticalLayout {
+                alignment: center;
+                spacing: 14px;
+                padding: 24px;
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: L.no-overdev;
+                        font-size: 13px;
+                        color: Theme.text-dim;
+                        wrap: word-wrap;
+                        horizontal-alignment: center;
+                    }
+                }
+                HorizontalLayout {
+                    alignment: center;
+                    Btn {
+                        label: L.od-gen-archive;
+                        primary: true;
+                        small: true;
+                        enabled: Od.has-project;
+                        clicked => { Od.gen-from-archive(); }
+                    }
+                }
+                if Od.run-status != "": HorizontalLayout {
+                    alignment: center;
+                    Text { text: Od.run-status; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; horizontal-alignment: center; }
+                }
+            }
+            // Estado do overdev: objetivo + progresso + checklist + seções.
+            if Od.has-project && Od.has-overdev: ScrollView {
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 12px;
+                    // objetivo + pill de mode
+                    HorizontalLayout {
+                        spacing: 12px;
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: Od.objetivo;
+                                font-size: 18px;
+                                font-weight: 800;
+                                color: Theme.text;
+                                wrap: word-wrap;
+                            }
+                        }
+                        Rectangle {}
+                        VerticalLayout {
+                            alignment: center;
+                            Rectangle {
+                                height: 24px;
+                                width: modetxt.preferred-width + 20px;
+                                border-radius: 12px;
+                                property <color> tone: Od.mode == "active" ? Theme.good : Theme.text-dim;
+                                background: tone.transparentize(0.85);
+                                border-width: 1px;
+                                border-color: tone.transparentize(0.5);
+                                modetxt := Text {
+                                    text: Od.mode;
+                                    color: parent.tone;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                    // progresso: feitos / máquina-abertos / on-hold / humanos-abertos
+                    HorizontalLayout {
+                        spacing: 20px;
+                        alignment: start;
+                        Text { text: "✓ \{Od.done}"; font-size: 13.5px; font-weight: 700; color: Theme.good; }
+                        Text { text: "○ \{Od.open}"; font-size: 13.5px; font-weight: 700; color: Theme.text-dim; }
+                        Text { text: "~ \{Od.hold}"; font-size: 13.5px; font-weight: 700; color: Theme.warn; }
+                        Text { text: "\{L.od-human} \{Od.human-open}"; font-size: 13.5px; font-weight: 700; color: Theme.accent; }
+                        Rectangle {}
+                        Btn { label: L.open-browser; small: true; clicked => { Od.open-browser(); } }
+                    }
+                    // ---- Fase 4: overdev em terminal externo + MONITOR leve ----
+                    // O `claude` roda num terminal do sistema (processo próprio, RAM dele,
+                    // fora do app). Aqui é só o botão de disparo + um monitor que relê o
+                    // `.overdev/` a cada ~3s. O "não pare" é do Stop hook do overdev.
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        property <bool> od-show-monitor: Od.session-running || Od.mon-mode != "";
+                        HorizontalLayout {
+                            spacing: 12px;
+                            Btn {
+                                label: L.od-run;
+                                primary: true;
+                                small: true;
+                                // só com .overdev/ presente E nenhum monitor ativo.
+                                enabled: Od.has-overdev && !Od.session-running;
+                                clicked => { Od.run-request(); }
+                            }
+                            Btn {
+                                label: L.od-stop;
+                                small: true;
+                                danger: true;
+                                enabled: Od.session-running;
+                                clicked => { Od.stop(); }
+                            }
+                            // Anexa o monitor a um overdev que já roda POR FORA (terminal),
+                            // sem ter clicado "Executar overdev". Desligado enquanto um
+                            // monitor deste app já está vivo (evita thread duplicada).
+                            Btn {
+                                label: L.od-attach;
+                                small: true;
+                                enabled: !Od.session-running;
+                                clicked => { Od.attach(); }
+                            }
+                            // Regenera/complementa os afazeres do overdev a partir do histórico
+                            // recuperável do archive (dispara a skill schematize-archive num
+                            // terminal). Disponível MESMO com overdev já existente (antes só
+                            // aparecia no empty-state), pra enriquecer o checklist a qualquer hora.
+                            Btn {
+                                label: L.od-gen-archive;
+                                small: true;
+                                enabled: Od.has-project && !Od.session-running;
+                                clicked => { Od.gen-from-archive(); }
+                            }
+                            // Atualizar tokens — relê o uso do run sob demanda, INLINE nos controles.
+                            Btn {
+                                label: L.od-refresh-tokens;
+                                small: true;
+                                enabled: Od.has-overdev;
+                                clicked => { Od.refresh-tokens(); }
+                            }
+                            // pill de estado (active/parado) enquanto o monitor vive.
+                            if Od.session-running: VerticalLayout {
+                                alignment: center;
+                                Rectangle {
+                                    height: 22px;
+                                    width: runtxt.preferred-width + 18px;
+                                    border-radius: 11px;
+                                    background: Theme.good.transparentize(0.85);
+                                    border-width: 1px;
+                                    border-color: Theme.good.transparentize(0.5);
+                                    runtxt := Text {
+                                        text: Od.mon-mode == "active" ? L.od-mon-active : L.od-running;
+                                        color: Theme.good;
+                                        font-size: 11.5px;
+                                        font-weight: 700;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+                            Rectangle {}
+                            if Od.run-status != "": VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: Od.run-status;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                    color: Theme.text-dim;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                        // ---- 3 colunas: Ações de skills · Multiagents · Sistema ----
+                        Rectangle { height: 1px; background: Theme.border; }
+                        HorizontalLayout {
+                            spacing: 16px;
+                            // COL 1 — Ações de skills (Q.A., Pentest, … via gui.json)
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 8px;
+                                Text { text: "Ações de skills"; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    for a in Od.skill-actions: Btn {
+                                        label: a.label;
+                                        small: true;
+                                        enabled: !a.needs-project || Od.has-project;
+                                        clicked => { Od.run-skill-action(a.command); }
+                                    }
+                                    Rectangle {}
+                                }
+                            }
+                            // COL 2 — Multiagents (split)
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 8px;
+                                Text { text: "Multiagents (split)"; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    Text { text: "dividir em"; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                                    Btn { label: "−"; small: true; enabled: Od.split-k > 2; clicked => { Od.split-k = max(2, Od.split-k - 1); } }
+                                    Text { text: "\{Od.split-k}"; font-size: 15px; font-weight: 700; color: Theme.text; vertical-alignment: center; }
+                                    Btn { label: "+"; small: true; enabled: Od.split-k < Od.agent-cap; clicked => { Od.split-k = min(Od.agent-cap, Od.split-k + 1); } }
+                                    Btn { label: "Dividir"; small: true; enabled: Od.has-overdev && !Od.session-running; clicked => { Od.split(Od.split-k, false); } }
+                                    Btn { label: "Dividir + lançar"; primary: true; small: true; enabled: Od.has-overdev && !Od.session-running && Od.agent-avail >= Od.split-k; clicked => { Od.split(Od.split-k, true); } }
+                                    Rectangle {}
+                                }
+                                if Od.split-status != "": Text { text: Od.split-status; font-size: 11px; color: Theme.text-dim; wrap: word-wrap; }
+                            }
+                            // COL 3 — Sistema (governador de concorrência)
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 6px;
+                                Text { text: "Sistema"; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                                Text { text: "teto \{Od.agent-cap} · livre \{Od.agent-avail}"; font-size: 12px; font-weight: 600; color: Theme.text; }
+                                Text { text: "load \{Od.agent-load} · \{Od.agent-running} rodando"; font-size: 11.5px; color: Theme.text-dim; }
+                                HorizontalLayout {
+                                    Btn { label: L.g-reload; small: true; clicked => { Od.refresh-agents(); } }
+                                    Rectangle {}
+                                }
+                            }
+                        }
+                        // rótulo: o claude é um processo próprio num terminal externo.
+                        if Od.session-running: Text {
+                            text: L.od-ext-terminal;
+                            font-size: 11.5px;
+                            font-weight: 600;
+                            color: Theme.text-dim;
+                            wrap: word-wrap;
+                        }
+                        // contadores do monitor: feitos / abertos / humano / on-hold + iterações.
+                        if od-show-monitor: HorizontalLayout {
+                            spacing: 18px;
+                            alignment: start;
+                            Text { text: "✓ \{Od.run-done}"; font-size: 13px; font-weight: 700; color: Theme.good; }
+                            Text { text: "○ \{Od.run-open}"; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
+                            Text { text: "\{L.od-human} \{Od.mon-human}"; font-size: 13px; font-weight: 700; color: Theme.accent; }
+                            Text { text: "~ \{Od.mon-hold}"; font-size: 13px; font-weight: 700; color: Theme.warn; }
+                            Rectangle {}
+                            Text {
+                                text: "\{L.od-mon-iters} \{Od.mon-iter}/\{Od.mon-max}";
+                                font-size: 13px;
+                                font-weight: 700;
+                                color: Theme.text-dim;
+                            }
+                        }
+                        // barra de progresso (feitos / feitos+abertos) + percentual.
+                        if od-show-monitor: HorizontalLayout {
+                            spacing: 10px;
+                            Rectangle {
+                                vertical-stretch: 0;
+                                height: 8px;
+                                border-radius: 4px;
+                                background: Theme.surface-2;
+                                Rectangle {
+                                    x: 0;
+                                    height: 100%;
+                                    width: parent.width * Od.run-done / max(1, Od.run-done + Od.run-open);
+                                    border-radius: 4px;
+                                    background: Theme.good;
+                                    animate width { duration: 240ms; }
+                                }
+                            }
+                            Text {
+                                text: "\{round(100 * Od.run-done / max(1, Od.run-done + Od.run-open))}%";
+                                font-size: 12px;
+                                font-weight: 700;
+                                color: Theme.text-dim;
+                                vertical-alignment: center;
+                            }
+                        }
+                        // lista dos itens abertos (máquina) — o que ainda trava o run.
+                        if Od.mon-items.length > 0: VerticalLayout {
+                            spacing: 4px;
+                            Text { text: L.od-mon-open-title; font-size: 12.5px; font-weight: 700; color: Theme.text-dim; }
+                            for item in Od.mon-items: HorizontalLayout {
+                                spacing: 6px;
+                                alignment: start;
+                                Text { text: "○"; font-size: 12px; font-weight: 800; color: Theme.text-dim; }
+                                Text { text: item; font-size: 12px; color: Theme.text; wrap: word-wrap; }
+                            }
+                        }
+                        // Tokens + modelo (agent_usage) + botão pra reler sob demanda.
+                        // A linha só aparece quando já houve uma leitura (evita "0" enganoso).
+                        HorizontalLayout {
+                            spacing: 10px;
+                            alignment: start;
+                            if Od.usage-line != "": Text {
+                                text: Od.usage-line;
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: Theme.text-dim;
+                                vertical-alignment: center;
+                                wrap: word-wrap;
+                            }
+                            Rectangle {}
+                        }
+                        // Log de CONCLUSÕES com data/hora (mais recentes embaixo). Atualiza
+                        // junto com o monitor. Rola internamente (a aba já está num ScrollView).
+                        if Od.completions.length > 0: VerticalLayout {
+                            spacing: 4px;
+                            Text {
+                                text: "\{L.od-completions-title} (\{Od.completions.length})";
+                                font-size: 12.5px;
+                                font-weight: 700;
+                                color: Theme.text-dim;
+                            }
+                            ScrollView {
+                                height: 150px;
+                                VerticalLayout {
+                                    spacing: 3px;
+                                    for line in Od.completions: HorizontalLayout {
+                                        spacing: 6px;
+                                        alignment: start;
+                                        Text { text: "✓"; font-size: 12px; font-weight: 800; color: Theme.good; }
+                                        Text { text: line; font-size: 12px; color: Theme.text; wrap: word-wrap; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    // ---- checklist 2-níveis: barra de FILTRO + PAGINAÇÃO ----
+                    // O repeater abaixo NÃO é virtualizado (limitação do Slint), então o
+                    // Rust só entrega uma PÁGINA por vez. Sem isto, um projeto com 500+
+                    // itens instancia milhares de elementos de uma vez e trava o app.
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+                        Chip { label: L.od-cl-all;   selected: Od.cl-filter == 0; clicked => { Od.cl-set-filter(0); } }
+                        Chip { label: L.od-cl-open;  selected: Od.cl-filter == 1; clicked => { Od.cl-set-filter(1); } }
+                        Chip { label: L.od-cl-done;  selected: Od.cl-filter == 2; clicked => { Od.cl-set-filter(2); } }
+                        Chip { label: L.od-cl-hold;  selected: Od.cl-filter == 3; clicked => { Od.cl-set-filter(3); } }
+                        Chip { label: L.od-cl-human; selected: Od.cl-filter == 4; clicked => { Od.cl-set-filter(4); } }
+                    }
+                    if Od.cl-total == 0: Text {
+                        text: L.od-cl-empty;
+                        font-size: 12.5px;
+                        color: Theme.text-dim;
+                    }
+                    // itens HUMANOS ABERTOS ganham o botão "marcar como feito".
+                    for it[ii] in Od.items: HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        // ícone de estado (✓ feito · ~ on-hold · ○ aberto)
+                        VerticalLayout {
+                            alignment: start;
+                            Text {
+                                text: (it.kind == "done" || it.kind == "hdone") ? "✓" : it.kind == "hold" ? "~" : "○";
+                                font-size: 13px;
+                                font-weight: 800;
+                                color: (it.kind == "done" || it.kind == "hdone") ? Theme.good
+                                     : it.kind == "hold" ? Theme.warn
+                                     : it.machine ? Theme.text-dim : Theme.accent;
+                            }
+                        }
+                        // etiqueta de origem (MÁQUINA = agente · HUMANO = pessoa)
+                        Rectangle {
+                            y: 1px;
+                            height: 18px;
+                            width: tagtxt.preferred-width + 12px;
+                            border-radius: 5px;
+                            property <color> ttone: it.machine ? Theme.text-dim : Theme.accent;
+                            background: ttone.transparentize(0.86);
+                            border-width: 1px;
+                            border-color: ttone.transparentize(0.6);
+                            tagtxt := Text {
+                                text: it.machine ? L.od-machine : L.od-human;
+                                color: parent.ttone;
+                                font-size: 10px;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                        Text {
+                            text: it.text;
+                            font-size: 13px;
+                            color: (it.kind == "done" || it.kind == "hdone") ? Theme.good : Theme.text;
+                            wrap: word-wrap;
+                            horizontal-stretch: 1;
+                        }
+                        // só o HUMANO ABERTO é marcável pela GUI (máquina é do agente)
+                        if it.kind == "hopen": Btn {
+                            label: L.od-mark-human;
+                            small: true;
+                            clicked => { Od.mark-human(it.hindex); }
+                        }
+                    }
+                    // navegação de páginas — só aparece quando há mais de uma.
+                    if Od.cl-pages > 1: HorizontalLayout {
+                        spacing: 10px;
+                        alignment: start;
+                        Btn {
+                            label: "‹";
+                            small: true;
+                            enabled: Od.cl-page > 0;
+                            clicked => { Od.cl-set-page(Od.cl-page - 1); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: "\{Od.cl-from}–\{Od.cl-to} \{L.od-cl-of} \{Od.cl-total}";
+                                font-size: 12.5px;
+                                color: Theme.text-dim;
+                            }
+                        }
+                        Btn {
+                            label: "›";
+                            small: true;
+                            enabled: Od.cl-page < Od.cl-pages - 1;
+                            clicked => { Od.cl-set-page(Od.cl-page + 1); }
+                        }
+                    }
+                    Rectangle { height: 6px; }
+                    // ---- editor acoplado de PLAN.md / CHECKLIST.md ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text { text: L.od-editor; font-size: 14px; font-weight: 800; color: Theme.text; vertical-alignment: center; }
+                            Rectangle {}
+                            if Od.editor-open: Btn {
+                                label: "PLAN.md"; small: true;
+                                primary: Od.editor-target == "PLAN.md";
+                                clicked => { Od.editor-pick("PLAN.md"); }
+                            }
+                            if Od.editor-open: Btn {
+                                label: "CHECKLIST.md"; small: true;
+                                primary: Od.editor-target == "CHECKLIST.md";
+                                clicked => { Od.editor-pick("CHECKLIST.md"); }
+                            }
+                            // Abrir/fechar: o TextEdit do Slint faz layout do texto INTEIRO a
+                            // cada medida, então ele só existe enquanto o editor está aberto.
+                            Btn {
+                                label: Od.editor-open ? L.od-editor-hide : L.od-editor-show;
+                                small: true;
+                                clicked => { Od.editor-toggle(); }
+                            }
+                        }
+                        // arquivo acima do teto: não entra no TextEdit (travaria) — manda pro externo.
+                        if Od.editor-open && Od.editor-too-big: VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "\{L.od-editor-big} (\{Od.editor-size})";
+                                font-size: 12.5px;
+                                color: Theme.warn;
+                                wrap: word-wrap;
+                            }
+                            HorizontalLayout {
+                                alignment: start;
+                                Btn { label: L.od-editor-external; small: true; clicked => { Od.editor-open-external(); } }
+                            }
+                        }
+                        if Od.editor-open && !Od.editor-too-big: Rectangle {
+                            height: 220px;
+                            border-radius: 8px;
+                            background: Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            TextEdit {
+                                width: 100%;
+                                height: 100%;
+                                text: Od.editor-content;
+                                wrap: word-wrap;
+                                edited(s) => { Od.editor-content = s; }
+                            }
+                        }
+                        if Od.editor-open && !Od.editor-too-big: HorizontalLayout {
+                            spacing: 12px;
+                            alignment: start;
+                            Btn { label: L.od-save-plan; primary: true; small: true; clicked => { Od.editor-save(); } }
+                            if Od.editor-status != "": Text {
+                                text: Od.editor-status;
+                                font-size: 12.5px; font-weight: 600;
+                                color: Od.editor-error ? Theme.warn : Theme.good;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                    // ---- tarefas: adicionar um ponto/nota específico ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.od-tasks; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        Text { text: L.od-note; font-size: 12px; color: Theme.text-dim; }
+                        Rectangle {
+                            height: 66px; border-radius: 8px; background: Theme.surface;
+                            border-width: 1px; border-color: Theme.border;
+                            TextEdit {
+                                width: 100%; height: 100%;
+                                text: Od.note-input;
+                                wrap: word-wrap;
+                                edited(s) => { Od.note-input = s; }
+                            }
+                        }
+                        HorizontalLayout {
+                            alignment: start;
+                            Btn {
+                                label: L.od-add-note; small: true;
+                                enabled: Od.note-input != "";
+                                clicked => { Od.add-note(Od.note-input); Od.note-input = ""; }
+                            }
+                        }
+                    }
+                    // ---- prompt de correção do overdev ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.od-correction; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        Rectangle {
+                            height: 66px; border-radius: 8px; background: Theme.surface;
+                            border-width: 1px; border-color: Theme.border;
+                            TextEdit {
+                                width: 100%; height: 100%;
+                                text: Od.correction-input;
+                                wrap: word-wrap;
+                                edited(s) => { Od.correction-input = s; }
+                            }
+                        }
+                        HorizontalLayout {
+                            alignment: start;
+                            Btn {
+                                label: L.od-add-note; small: true; primary: true;
+                                enabled: Od.correction-input != "";
+                                clicked => { Od.add-correction(Od.correction-input); Od.correction-input = ""; }
+                            }
+                        }
+                    }
+                    Rectangle { height: 6px; }
+                    // ---- Histórico do DB do overdev (cópia de segurança) ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.od-history; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        Text { text: L.od-history-note; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
+                        if Od.snaps.length == 0: Text { text: L.od-snap-empty; font-size: 12px; color: Theme.text-dim; }
+                        for s[si] in Od.snaps: Rectangle {
+                            height: 44px;
+                            border-radius: 8px;
+                            background: Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 12px;
+                                VerticalLayout {
+                                    width: 210px;
+                                    alignment: center;
+                                    Text { text: s.file; font-size: 12.5px; font-weight: 600; color: Theme.text; overflow: elide; }
+                                }
+                                VerticalLayout {
+                                    width: 130px;
+                                    alignment: center;
+                                    Text { text: s.date; font-size: 11.5px; color: Theme.text-dim; }
+                                }
+                                VerticalLayout {
+                                    width: 70px;
+                                    alignment: center;
+                                    Text { text: s.size; font-size: 11.5px; color: Theme.text-dim; }
+                                }
+                                Rectangle {}
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.od-view; small: true; clicked => { Od.snap-view(s.id); } }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn { label: L.od-restore; small: true; danger: true; clicked => { Od.snap-restore-request(s.id); } }
+                                }
+                            }
+                        }
+                        if Od.snap-total > 20: Pager {
+                            page: Od.snap-page;
+                            total: Od.snap-total;
+                            prev => { Od.snap-page-prev(); }
+                            next => { Od.snap-page-next(); }
+                        }
+                    }
+                    // ---- Histórico de commits / push ----
+                    Rectangle { height: 1px; background: Theme.border; }
+                    VerticalLayout {
+                        spacing: 8px;
+                        Text { text: L.od-commits; font-size: 14px; font-weight: 800; color: Theme.text; }
+                        if Od.upstream-line != "": Text { text: Od.upstream-line; font-size: 12px; font-weight: 600; color: Theme.accent; }
+                        if Od.commits.length == 0: Text { text: L.od-commits-empty; font-size: 12px; color: Theme.text-dim; }
+                        for c[ci] in Od.commits: Rectangle {
+                            height: 40px;
+                            border-radius: 8px;
+                            background: Theme.surface;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 10px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text { text: c.pushed ? "●" : "○"; font-size: 13px; color: c.pushed ? Theme.good : Theme.text-dim; }
+                                }
+                                VerticalLayout {
+                                    width: 70px;
+                                    alignment: center;
+                                    Text { text: c.short; font-size: 12px; color: Theme.accent; }
+                                }
+                                VerticalLayout {
+                                    width: 90px;
+                                    alignment: center;
+                                    Text { text: c.date; font-size: 11.5px; color: Theme.text-dim; }
+                                }
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    Text { text: c.subject; font-size: 12.5px; color: Theme.text; overflow: elide; }
+                                }
+                                VerticalLayout {
+                                    width: 110px;
+                                    alignment: center;
+                                    Text { text: c.author; font-size: 11.5px; color: Theme.text-dim; overflow: elide; }
+                                }
+                            }
+                        }
+                        if Od.commit-total > 20: Pager {
+                            page: Od.commit-page;
+                            total: Od.commit-total;
+                            prev => { Od.commit-page-prev(); }
+                            next => { Od.commit-page-next(); }
+                        }
+                    }
+                    Rectangle { height: 6px; }
+                    // seções colapsáveis (só quando há conteúdo)
+                    if Od.notes != "": Collapse { title: L.od-notes-title; body: Od.notes; }
+                    if Od.decisoes != "": Collapse { title: L.od-decisions; body: Od.decisoes; }
+                    if Od.plano != "": Collapse { title: L.od-plan; body: Od.plano; }
+                    if Od.perguntas != "": Collapse { title: L.od-questions; body: Od.perguntas; }
+                }
+            }
+}

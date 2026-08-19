@@ -26,7 +26,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
-        app.on_graph_canvas_resized(move |w, h| {
+        app.global::<G>().on_canvas_resized(move |w, h| {
             let mut st = gs.borrow_mut();
             st.canvas_w = w;
             st.canvas_h = h;
@@ -42,7 +42,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // mouse-down: hit-test → fixa o nó a arrastar (com offset de pega) ou nada.
     {
         let gs = graph_state.clone();
-        app.on_graph_press(move |mx, my| {
+        app.global::<G>().on_press(move |mx, my| {
             let mut st = gs.borrow_mut();
             let (wx, wy) = st.to_world(mx, my);
             st.last_ptr = (mx, my);
@@ -63,7 +63,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
         let gt = graph_timer.clone();
-        app.on_graph_move(move |mx, my| {
+        app.global::<G>().on_move(move |mx, my| {
             let need_kick;
             {
                 let mut st = gs.borrow_mut();
@@ -105,7 +105,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
-        app.on_graph_release(move || {
+        app.global::<G>().on_release(move || {
             let mut st = gs.borrow_mut();
             if !st.moved {
                 let (wx, wy) = st.to_world(st.last_ptr.0, st.last_ptr.1);
@@ -124,7 +124,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
-        app.on_graph_scroll(move |mx, my, dy| {
+        app.global::<G>().on_scroll(move |mx, my, dy| {
             let mut st = gs.borrow_mut();
             let cx = st.canvas_w / 2.0;
             let cy = st.canvas_h / 2.0;
@@ -144,7 +144,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
-        app.on_graph_fit(move || {
+        app.global::<G>().on_fit(move || {
             let mut st = gs.borrow_mut();
             st.fit();
             if let Some(app) = weak.upgrade() {
@@ -158,7 +158,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
-        app.on_graph_search_changed(move |s| {
+        app.global::<G>().on_search_changed(move |s| {
             let mut st = gs.borrow_mut();
             st.search = s.to_string();
             st.refresh_flags();
@@ -170,7 +170,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // clique em "abrir no editor" do nó selecionado → vscode://file/<abs>/…:<linha>.
     {
         let gs = graph_state.clone();
-        app.on_graph_open_editor(move || {
+        app.global::<G>().on_open_editor(move || {
             let st = gs.borrow();
             if let (Some(i), Some(proj)) = (st.sel, st.project.clone()) {
                 if let Some(loc) = st.nodes[i].loc.clone() {
@@ -184,19 +184,19 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
-        app.on_graph_export(move || {
+        app.global::<G>().on_export(move || {
             let proj = gs.borrow().project.clone();
             if let Some(p) = proj {
                 match panel::export_obsidian_at(&p, None) {
                     Ok(dir) => {
                         if let Some(app) = weak.upgrade() {
-                            app.set_status(tf("gui.exported", &[("p", &dir.to_string_lossy())]).into());
+                            app.global::<Sk>().set_status(tf("gui.exported", &[("p", &dir.to_string_lossy())]).into());
                         }
                         util::open_url(&dir.to_string_lossy());
                     }
                     Err(e) => {
                         if let Some(app) = weak.upgrade() {
-                            app.set_status(tf("err.prefix", &[("e", &e)]).into());
+                            app.global::<Sk>().set_status(tf("err.prefix", &[("e", &e)]).into());
                         }
                     }
                 }
@@ -206,7 +206,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // abrir o painel HTML (com o mesmo grafo) no navegador (bônus).
     {
         let gs = graph_state.clone();
-        app.on_graph_open_browser(move || {
+        app.global::<G>().on_open_browser(move || {
             let proj = gs.borrow().project.clone();
             if let Some(p) = proj {
                 let _ = panel::open_in_browser(&p);
@@ -220,7 +220,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
-        app.on_graph_reindex(move || {
+        app.global::<G>().on_reindex(move || {
             let Some(root) = gs.borrow().project.clone() else {
                 return;
             };
@@ -241,7 +241,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                             ),
                             Err(e) => e,
                         };
-                        app.set_g_reindex_status(msg.into());
+                        app.global::<G>().set_reindex_status(msg.into());
                     }
                 });
             });
@@ -256,11 +256,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
         let gl = graph_loaded.clone();
-        app.on_graph_reload(move || {
+        app.global::<G>().on_reload(move || {
             let proj = gs.borrow().project.clone();
             graph_load_and_kick(proj.as_deref(), &gl, &gt, &weak, &gs, &gn, &ge);
             if let Some(app) = weak.upgrade() {
-                app.set_g_reindex_status(SharedString::new());
+                app.global::<G>().set_reindex_status(SharedString::new());
             }
         });
     }
@@ -272,7 +272,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
-        app.on_graph_drill(move || {
+        app.global::<G>().on_drill(move || {
             let (proj, servico) = {
                 let st = gs.borrow();
                 let servico = st.sel.map(|i| st.nodes[i].id.clone());
@@ -284,9 +284,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 if carregou {
                     graph_sync(&app, &gs.borrow(), &gn, &ge);
                     graph_kick(&gt, weak.clone(), gs.clone(), gn.clone(), ge.clone());
-                    app.set_g_reindex_status(SharedString::new());
+                    app.global::<G>().set_reindex_status(SharedString::new());
                 } else {
-                    app.set_g_reindex_status(
+                    app.global::<G>().set_reindex_status(
                         tor("gui.g_no_service_graph", "sem grafo detalhado para este serviço (rode Reindexar).")
                             .into(),
                     );
@@ -302,11 +302,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
         let gl = graph_loaded.clone();
-        app.on_graph_global(move || {
+        app.global::<G>().on_global(move || {
             let proj = gs.borrow().project.clone();
             graph_load_and_kick(proj.as_deref(), &gl, &gt, &weak, &gs, &gn, &ge);
             if let Some(app) = weak.upgrade() {
-                app.set_g_reindex_status(SharedString::new());
+                app.global::<G>().set_reindex_status(SharedString::new());
             }
         });
     }
@@ -316,7 +316,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gs = graph_state.clone();
         let gn = graph_nodes.clone();
         let ge = graph_edges.clone();
-        app.on_graph_clear_sel(move || {
+        app.global::<G>().on_clear_sel(move || {
             let mut st = gs.borrow_mut();
             st.sel = None;
             st.refresh_flags();

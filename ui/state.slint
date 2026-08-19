@@ -1,0 +1,401 @@
+import {
+    SkillRow, EnvRow, LangItem, ProjItem, OverItem, SnapRow, CommitRow, SshRow,
+    GraphNode, GraphEdge, DbTableRow, NotifItem, CmpFile, SkillAction,
+} from "types.slint";
+
+// Estado de TELA da GUI, agrupado por área — um `global` por recorte.
+//
+// Por quê: o `AppWindow` tinha 340 propriedades/callbacks num arquivo só, o que
+// impedia quebrar as telas em componentes (cada uma precisaria repassar dezenas
+// de propriedades à mão). Global no Slint é visível de qualquer componente, então
+// cada tela lê o SEU estado direto — e o arquivo da tela fica independente.
+//
+// Do lado do Rust o acesso é `app.global::<Od>().set_items(...)`.
+
+// LISTA DE SKILLS — o modelo de linhas e as ações por linha / em massa.
+export global Sk {
+    in-out property <[SkillRow]> rows;
+    in-out property <string> status: "";
+    in-out property <bool> busy: false;
+    callback toggle(int);
+    callback row-install(int);   // Marketplace: instalar a linha i
+    callback row-update(int);    // Instaladas: atualizar a linha i (só se outdated)
+    callback row-remove(int);    // Instaladas: desinstalar a linha i
+    callback open-author(int);   // abrir sponsor.url da linha i
+    callback install-selected(); // Marketplace: instalar selecionadas (missing)
+    callback update-selected();  // Instaladas: atualizar selecionadas (outdated)
+    callback remove-selected();  // Instaladas: desinstalar selecionadas (instaladas)
+    callback update-all();       // Instaladas: atualizar TODAS as instaladas-desatualizadas
+    callback check();            // rechecar versões (re-resolve latest)
+    callback select-all();
+    callback select-pending();
+    callback select-none();
+}
+
+// MERCADO — paginação da lista e o modal de instalação (skill + base + environment).
+export global Mp {
+    in-out property <bool> open: false;    // modal visível?
+    in-out property <int> idx: -1;          // linha (skill) sendo instalada
+    in-out property <string> title;          // "Instalar <slug>" (montado no Rust)
+    in-out property <bool> rec-show: false;  // oferecer a recomendada (base)?
+    in-out property <string> rec-label;       // "instalar também a <slug> (base)"
+    in-out property <bool> rec-check: false; // usuário marcou instalar a base? (default OFF)
+    in-out property <bool> env-show: false;  // oferecer o environment da linguagem?
+    in-out property <string> env-label;       // "instalar também o environment <lang>"
+    in-out property <bool> env-check: false; // usuário marcou instalar o environment?
+    in-out property <[string]> methods;          // métodos do environment disponíveis aqui
+    in-out property <string> method-sel;      // método escolhido (chip)
+    in-out property <int> page: 0;
+    in-out property <int> total: 0;   // total de skills na página-tab ativa
+    callback recompute();             // recomputa `disp` das linhas (troca de tab)
+    callback confirm();            // aplica: instala skill (+ base marcada) + (env em terminal se marcado)
+    callback cancel();             // fecha sem fazer nada
+    callback pick-method(string);  // escolhe o método do environment no modal
+    callback toggle-rec();         // liga/desliga instalar a recomendada
+    callback toggle-env();         // liga/desliga instalar o environment
+}
+
+// CONFIGURAÇÕES — idioma, autostart, hooks, relatório de debug, e a aba
+// Environments (runtimes de linguagem) com seu modal de diretórios.
+export global Cfg {
+    in-out property <bool> modal-open: false;
+    in-out property <[EnvRow]> rows;
+    in-out property <[LangItem]> langs;
+    in-out property <string> lang-code;   // código do idioma atual
+    in-out property <string> lang-name;   // nome nativo do idioma atual
+    in-out property <bool> autostart-on: false;
+    in-out property <bool> hooks-on: false;
+    callback set-lang(string);       // troca o idioma (persiste + recarrega L)
+    callback toggle-autostart();
+    callback toggle-hooks();
+    callback manage-dirs();          // abre o modal de dev_dirs/pins
+    in-out property <bool> debug-online: false;  // incluir diagnóstico de rede (mais lento)
+    in-out property <bool> debug-running: false; // geração em andamento (thread)
+    in-out property <string> debug-path;          // caminho do arquivo gravado ("" = nenhum)
+    in-out property <string> debug-summary;       // short_summary() do relatório
+    in-out property <string> debug-error;         // erro ("" = nenhum)
+    callback debug-generate();       // gera o relatório (write_report em thread)
+    callback debug-open-folder();    // abre a pasta do relatório no gerenciador de arquivos
+    callback debug-toggle-online();  // alterna o diagnóstico de rede
+    callback install(int);        // instala o environment da linha i (abre TERMINAL)
+    callback remove(int);         // remove o environment da linha i (abre TERMINAL)
+    callback pick-method(int, string); // escolhe o método de instalação da linha i
+    callback refresh();           // re-sonda a máquina e recarrega o status
+}
+
+// Aba GERENCIAR — criar skill do zero e forkar/editar uma instalada.
+export global Mg {
+    in-out property <int> mode: 0;             // 0 = Criar, 1 = Editar
+    in-out property <string> slug;              // slug digitado (validado no Rust)
+    in-out property <string> name;              // nome humano
+    in-out property <string> desc;              // descrição densa
+    in-out property <string> slug-error;        // "" = ok; senão msg de slug inválido
+    in-out property <string> create-result;     // sucesso (caminho) ou erro
+    in-out property <bool> create-error: false; // o resultado é erro?
+    in-out property <string> created-slug;      // slug recém-criado (p/ "editar agora")
+    in-out property <[string]> skills;             // skills instaladas (slugs) p/ o dropdown
+    in-out property <string> sel-skill;         // skill escolhida ("" = nenhuma)
+    in-out property <[string]> files;              // arquivos editáveis da skill escolhida
+    in-out property <string> sel-file;          // arquivo escolhido ("" = nenhum)
+    in-out property <string> content;           // conteúdo do arquivo no editor
+    in-out property <string> save-result;       // feedback de salvo/erro
+    in-out property <bool> save-error: false;   // o feedback é erro?
+    callback refresh-skills();        // re-sonda as skills instaladas (dropdown)
+    callback slug-edited(string);     // valida o slug digitado
+    callback create();                // scaffold(slug, nome, desc)
+    callback edit-created();          // pula pro modo Editar com a skill recém-criada
+    callback pick-skill(string);      // escolhe uma skill → lista os arquivos
+    callback pick-file(string);       // escolhe um arquivo → carrega o conteúdo
+    callback save();                  // write_file(skill, arquivo, conteúdo)
+    in-out property <bool> sel-official: false;     // a skill escolhida é OFICIAL (catálogo)?
+    in-out property <bool> sel-forked: false;       // já virou fork editável?
+}
+
+// Aba OVERDEV — projeto selecionado, checklist fatiado, editor acoplado, notas,
+// monitor do run e o histórico (snapshots + commits).
+export global Od {
+    in-out property <[SkillAction]> skill-actions;
+    callback run-skill-action(string);  // dispara o `command` da ação no claude de um terminal
+    in-out property <[ProjItem]> projects;      // seletor de projeto (detectados + recentes)
+    in-out property <[string]> dev-dirs;         // diretórios de desenvolvimento cadastrados
+    in-out property <[string]> pinned;           // pastas FIXADAS como projeto (pins)
+    in-out property <string> current;         // nome do projeto atual ("" = nenhum)
+    in-out property <bool> has-project: false;
+    in-out property <bool> has-overdev: false;
+    in-out property <string> objetivo;
+    in-out property <string> mode;
+    in-out property <int> done;
+    in-out property <int> open;
+    in-out property <int> hold;
+    in-out property <int> human-open;         // humanos abertos (- [H ])
+    in-out property <[OverItem]> items;           // SÓ a página corrente (o resto vive no Rust)
+    in-out property <int> cl-filter: 0;   // 0 todos · 1 abertos · 2 feitos · 3 on-hold · 4 humanos
+    in-out property <int> cl-page: 0;     // página corrente (0-based)
+    in-out property <int> cl-pages: 1;    // total de páginas sob o filtro
+    in-out property <int> cl-total: 0;    // itens sob o filtro
+    in-out property <int> cl-from: 0;     // 1-based do 1º item da página
+    in-out property <int> cl-to: 0;       // 1-based do último item da página
+    in-out property <string> decisoes;
+    in-out property <string> plano;
+    in-out property <string> perguntas;
+    in-out property <string> editor-target: "PLAN.md";  // arquivo em edição
+    in-out property <string> editor-content;             // conteúdo editável
+    in-out property <string> editor-status;              // feedback salvo/erro
+    in-out property <bool> editor-error: false;          // o status é erro?
+    in-out property <bool> editor-open: false;           // editor ABERTO (só aí o TextEdit existe)
+    in-out property <bool> editor-too-big: false;        // arquivo acima do teto → só editor externo
+    in-out property <string> editor-size;                // tamanho legível do arquivo grande
+    in-out property <string> notes;                      // read_notes(root)
+    in-out property <string> note-input;                 // input de nota por task
+    in-out property <string> correction-input;           // input do prompt de correção
+    in-out property <bool> session-running: false;       // MONITOR ativo (claude roda fora do app)
+    in-out property <bool> confirm-open: false;          // guardrail (mini-modal de confirmação) aberto
+    in-out property <string> agent-cmdline;              // comando que abre no terminal externo (guardrail)
+    in-out property <string> run-status;                 // msg do launch/monitor (vazio = ocioso)
+    in-out property <int> run-done: 0;                   // monitor: feitos
+    in-out property <int> run-open: 0;                   // monitor: abertos (máquina)
+    in-out property <int> mon-human: 0;                  // monitor: humanos abertos (- [H ])
+    in-out property <int> mon-hold: 0;                   // monitor: on-hold (- [~])
+    in-out property <int> mon-iter: 0;                   // monitor: iterações gastas
+    in-out property <int> mon-max: 0;                    // monitor: teto de iterações
+    in-out property <string> mon-mode;                   // monitor: estado do run (active/stopped/…)
+    in-out property <[string]> mon-items;                // monitor: itens abertos (máquina)
+    in-out property <[string]> completions;              // monitor: log de conclusões ("HH:MM:SS  texto")
+    in-out property <string> usage-line;                 // monitor: tokens+modelo já formatado (vazio = sem dado)
+    callback refresh-history();       // recarrega histórico do DB + commits do projeto atual
+    in-out property <[SnapRow]> snaps;    // histórico do DB (página atual)
+    in-out property <int> snap-page: 0;
+    in-out property <int> snap-total: 0;
+    callback snap-page-prev();
+    callback snap-page-next();
+    callback snap-view(int);          // Ver: get(id) → visor
+    callback snap-restore-request(int);
+    in-out property <bool> snap-confirm-open: false;
+    in-out property <int> snap-confirm-id: -1;
+    in-out property <string> snap-confirm-msg;
+    callback snap-restore-confirm();
+    callback snap-restore-cancel();
+    in-out property <bool> snap-view-open: false;   // visor read-only
+    in-out property <string> snap-view-title;
+    in-out property <string> snap-view-content;
+    in-out property <[CommitRow]> commits;
+    in-out property <int> commit-page: 0;
+    in-out property <int> commit-total: 0;
+    in-out property <string> upstream-line;         // "main → origin/main · ↑2 ↓0"
+    callback commit-page-prev();
+    callback commit-page-next();
+    callback pick-project(string);  // escolhe um projeto (caminho) do seletor
+    callback open-folder();          // abre pasta avulsa como projeto (picker nativo)
+    callback open-project-folder();  // abre a pasta do projeto atual no gerenciador de arquivos
+    callback open-vscode();          // abre o projeto atual no VSCode (code <root> / vscode://)
+    callback reload();               // re-sonda dev_dirs + recarrega o projeto
+    callback new-window();           // abre o projeto atual em nova janela (overdev em paralelo)
+    callback gen-from-archive();     // GERA afazeres pro overdev do histórico recuperável do archive
+    in-out property <int> agent-cap: 0;        // teto seguro de claudes na máquina
+    in-out property <int> agent-avail: 0;      // disponível p/ lançar (teto − rodando)
+    in-out property <int> agent-running: 0;    // claudes rodando na máquina agora
+    in-out property <string> agent-load: "—";  // load average 1min (formatado)
+    in-out property <int> split-k: 2;          // K do split (claudes principais)
+    in-out property <string> split-status: ""; // feedback do último split
+    callback split(int, bool);       // divide o checklist em K parts; bool = também lançar (dispatch)
+    callback refresh-agents();       // recomputa o orçamento do governador
+    callback add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
+    callback remove-dev-dir(string); // remove um diretório de desenvolvimento
+    callback pin-folder();           // fixa uma pasta como projeto (picker nativo → pin_project)
+    callback unpin(string);          // desafixa uma pasta fixada (unpin_project)
+    callback open-browser();         // abre o painel HTML do projeto no navegador
+    callback mark-human(int);        // fecha o i-ésimo humano aberto (- [H ]→- [H x])
+    callback cl-set-page(int);       // checklist fatiado: vai pra página N (0-based)
+    callback cl-set-filter(int);     // checklist fatiado: troca o filtro (volta pra página 0)
+    callback editor-toggle();        // abre/fecha o editor acoplado (e lê/descarta o conteúdo)
+    callback editor-open-external(); // arquivo grande demais → abre no editor do sistema
+    callback editor-pick(string);    // troca o arquivo do editor (PLAN.md/CHECKLIST.md)
+    callback editor-save();          // regrava o arquivo do editor no .overdev/
+    callback add-note(string);       // add_note(root,"task",texto) — ponto por task
+    callback add-correction(string); // add_note(root,"correcao",texto) — prompt de correção
+    callback run-request();          // clique "Executar overdev" → abre o guardrail (mostra o comando)
+    callback run-confirm();          // clique "Confirmar" no guardrail → dispara o agente acoplado
+    callback run-cancel();           // fecha o guardrail sem disparar
+    callback stop();                 // "Parar" → session.kill() + encerra a thread
+    callback attach();               // "Reload / Acompanhar" → anexa o monitor a um overdev externo
+    callback refresh-tokens();       // "Atualizar tokens" → relê agent_usage sob demanda
+}
+
+// Aba GRAFO — nós/arestas, transformação de tela, seleção, busca e drill-down.
+export global G {
+    in-out property <[GraphNode]> nodes;
+    in-out property <[GraphEdge]> edges;
+    in-out property <float> scale: 1.0;   // zoom
+    in-out property <float> ox: 0;         // pan X (px de tela)
+    in-out property <float> oy: 0;         // pan Y (px de tela)
+    in-out property <bool> has-graph: false;
+    in-out property <int> node-count: 0;
+    in-out property <string> search;
+    in-out property <bool> has-sel: false;
+    in-out property <string> sel-id;
+    in-out property <string> sel-loc;      // "" = nó sem arquivo:linha
+    in-out property <string> sel-desc;     // descrição do nó (do índice/MAPA); "" = sem descrição
+    in-out property <bool> in-service: false;  // true = vendo o grafo detalhado de UM microserviço
+    in-out property <string> service-name;     // nome do serviço em drill-down (título da visão)
+    in-out property <string> reindex-status; // banner: "índice rodando no terminal <nome>…" / erro
+    callback press(float, float);       // mouse-down (mx, my)
+    callback move(float, float);        // arrasto (mx, my)
+    callback release();                 // mouse-up
+    callback scroll(float, float, float); // zoom (mx, my, delta)
+    callback canvas-resized(float, float); // canvas mudou de tamanho (w, h)
+    callback fit();                     // enquadrar tudo
+    callback search-changed(string);    // busca digitada
+    callback open-editor();             // abre o arquivo:linha do nó selecionado
+    callback export();                  // exporta o vault Obsidian
+    callback open-browser();            // abre o painel HTML no navegador
+    callback reindex();                 // dispara o índice §39 num terminal externo (thread)
+    callback enter();             // aba Grafo aberta → carrega (se preciso) e liga a física
+    callback reload();                  // re-roda load_graph + node_descriptions e atualiza a UI
+    callback clear-sel();               // fecha o bloco de info do nó (deseleciona)
+    callback drill();                   // drill-down: abre o grafo detalhado do serviço selecionado
+    callback global();                  // volta da visão por-serviço para o grafo global
+}
+
+// DATABASE BUILDER — schema carregado, formulários de tabela/coluna/FK, geração
+// de SQL/migration e o grafo do schema.
+export global Db {
+    in-out property <int> view: 0;
+    in-out property <bool> has-schema: false;
+    in-out property <string> status;                // banner de status (ok/info)
+    in-out property <string> error;                 // banner de erro ("" = nenhum)
+    in-out property <bool> busy: false;             // introspecção Postgres em andamento
+    in-out property <string> sqlite-path;           // caminho do arquivo SQLite (picker)
+    in-out property <string> pg-conn;               // connection string Postgres
+    in-out property <[DbTableRow]> tables;
+    in-out property <[string]> table-names;             // nomes das tabelas (dropdown do editor)
+    in-out property <string> new-table;             // nome da nova tabela
+    in-out property <string> sel-table;             // tabela alvo (coluna/FK)
+    in-out property <string> new-col;               // nome da coluna
+    in-out property <string> new-col-type: "TEXT";  // tipo da coluna
+    in-out property <bool> new-col-pk: false;
+    in-out property <bool> new-col-unique: false;
+    in-out property <bool> new-col-nullable: false;
+    in-out property <string> fk-col;                // FK: coluna local
+    in-out property <string> fk-reftable;           // FK: tabela referenciada
+    in-out property <string> fk-refcol;             // FK: coluna referenciada
+    in-out property <bool> gen-open: false;
+    in-out property <string> gen-title;
+    in-out property <string> gen-content;
+    in-out property <string> ai-desc;               // descrição do domínio
+    in-out property <string> ai-status;             // banner do disparo no terminal
+    callback pick-sqlite();                          // picker nativo → db-sqlite-path
+    callback introspect-sqlite();                    // introspect_sqlite(path) → schema
+    callback introspect-postgres();                  // introspect_postgres(conn) em thread
+    callback load-json();                            // picker → serde → schema
+    callback save-json();                            // picker → serde → arquivo
+    callback add-table();                            // append tabela vazia
+    callback add-column();                           // append coluna à tabela alvo
+    callback add-fk();                               // append FK à tabela alvo
+    callback pick-table(string);                     // escolhe a tabela alvo do editor
+    callback gen-sql();                              // to_sql → visor
+    callback gen-migration();                        // to_migration → visor
+    callback gen-save();                             // salva o conteúdo do visor num arquivo
+    callback show-graph();                           // (re)constrói o grafo do schema atual
+    callback ai-generate();                          // dispara a skill schematize-database num terminal
+    in-out property <[GraphNode]> graph-nodes;
+    in-out property <[GraphEdge]> graph-edges;
+    in-out property <float> g-scale: 1.0;
+    in-out property <float> g-ox: 0;
+    in-out property <float> g-oy: 0;
+    in-out property <bool> g-has-graph: false;
+    in-out property <int> g-node-count: 0;
+    in-out property <bool> g-has-sel: false;
+    in-out property <string> g-sel-id;
+    in-out property <string> g-sel-desc;
+    callback graph-press(float, float);
+    callback graph-move(float, float);
+    callback graph-release();
+    callback graph-scroll(float, float, float);
+    callback graph-canvas-resized(float, float);
+    callback graph-fit();
+    callback graph-clear-sel();
+}
+
+// Tela de CHAVES SSH — listagem, geração, exportação e remoção.
+export global Ssh {
+    in-out property <[SshRow]> rows;
+    in-out property <string> gen-name;
+    in-out property <string> gen-kind: "ed25519";   // "ed25519" | "rsa"
+    in-out property <string> gen-comment;
+    in-out property <string> gen-passphrase;
+    in-out property <string> gen-status;
+    in-out property <bool> gen-error: false;
+    in-out property <string> gen-proof;              // prova (bits·fingerprint·tipo) da chave recém-gerada
+    in-out property <string> bw-result;              // resultado da exportação p/ Bitwarden (banner)
+    in-out property <bool> bw-error: false;          // ssh-bw-result é erro?
+    in-out property <bool> confirm-open: false;      // modal de confirmação de remoção
+    in-out property <string> confirm-name;
+    in-out property <string> confirm-msg;
+    callback generate();
+    callback export-bw(int);     // exportar a chave da linha i p/ o Bitwarden (thread)
+    callback copy(int);          // copiar pública da linha i
+    callback remove-request(int);// abrir confirmação de remoção da linha i
+    callback remove-confirm();   // remove de fato
+    callback remove-cancel();
+    callback refresh();
+}
+
+// SININHO — contagem e as listas de notificações (global e pessoal).
+export global Notif {
+    in-out property <int> count: 0;              // badge (notifications::count())
+    in-out property <bool> open: false;          // painel aberto?
+    in-out property <bool> loading: false;       // collect() em thread
+    in-out property <int> total: 0;              // total colhido (empty-state)
+    in-out property <[NotifItem]> global;            // notificações de escopo Global
+    in-out property <[NotifItem]> personal;          // notificações de escopo Pessoal
+    callback refresh();                           // só recomputa a contagem (thread)
+    callback toggle();                            // abre o painel + collect() (thread)
+    callback action(string, string);              // executa a ação (kind, action) da notificação
+}
+
+// COMPARAR fork vs oficial — diff por arquivo.
+export global Cmp {
+    in-out property <bool> open: false;            // painel de comparação aberto?
+    in-out property <bool> loading: false;         // compare_update() em thread
+    in-out property <string> slug;                 // slug em comparação
+    in-out property <string> title;                // "Comparar: <slug>"
+    in-out property <string> versions;             // "base vX → nova vY"
+    in-out property <string> error;                // erro (ou "")
+    in-out property <string> diff;                 // diff unificado (visor mono read-only)
+    in-out property <[CmpFile]> files;                 // arquivos + status
+    callback request(string);                       // abre o painel + compare_update(slug) em thread
+    callback close();                               // fecha o painel
+}
+
+// CONTA — sessão e o fluxo de login por device flow.
+export global Acc {
+    in-out property <bool> logged-in: false;        // há sessão persistida?
+    in-out property <string> sub;                   // subject do usuário logado
+    in-out property <bool> modal-open: false;       // modal do device flow aberto?
+    in-out property <bool> polling: false;          // login em andamento (device_start/poll)
+    in-out property <string> user-code;             // código a digitar no navegador (destaque)
+    in-out property <string> verification-uri;      // URL curta pra mostrar
+    in-out property <string> verification-uri-complete; // URL completa (botão "Abrir")
+    in-out property <string> status;                // erro/info (negado/expirado/falha)
+    callback login();                               // inicia o device flow (thread)
+    callback logout();                              // encerra a sessão + atualiza UI
+    callback cancel-login();                        // cancela o loop de poll + fecha o modal
+    callback open-verify();                         // abre a verification_uri_complete no navegador
+}
+
+// VERSÃO DO APP e self-update (rodapé das Configurações).
+export global App {
+    callback restart();                 // relança o app (janela nova) — usado pós self-update
+    in-out property <string> version;                  // "schematize v0.25.1" (montado no Rust)
+    in-out property <bool> checking: false;        // checagem de update em andamento
+    in-out property <string> update-status;        // linha de resultado ("atualizado" / erro)
+    in-out property <bool> updater-missing: false;     // o schematize-updater NÃO está instalado
+    in-out property <bool> updater-installing: false;  // instalação do updater em andamento
+    in-out property <string> updater-status;           // resultado da instalação do updater
+    callback install-updater();                        // baixa+instala o schematize-updater
+    in-out property <bool> has-update: false;      // há versão nova?
+    in-out property <bool> updating: false;        // self-update em andamento
+    in-out property <bool> update-done: false;     // update concluído → sugerir reiniciar
+    callback check-update();                        // app_update_available() em thread
+    callback do-update();                           // selfupdate::run() em thread
+}

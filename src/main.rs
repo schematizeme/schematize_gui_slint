@@ -75,10 +75,10 @@ fn main() -> Result<(), slint::PlatformError> {
     // Ícone da janela DESENHADO em código (resiliente — sem depender de arquivo).
     app.set_app_icon(make_app_icon());
     // Ações declaradas por skills instaladas (gui.json) → botões (Q.A., Pentest, …) na aba do projeto.
-    app.set_skill_actions(ModelRc::from(Rc::new(VecModel::from(skill_action_rows()))));
+    app.global::<Od>().set_skill_actions(ModelRc::from(Rc::new(VecModel::from(skill_action_rows()))));
     // Versão do app (Configurações) — ex.: "schematize v0.25.1".
-    app.set_app_version(format!("schematize v{}", upgrade::app_version()).into());
-    app.set_rows(ModelRc::from(model.clone()));
+    app.global::<App>().set_version(format!("schematize v{}", upgrade::app_version()).into());
+    app.global::<Sk>().set_rows(ModelRc::from(model.clone()));
     update_status(&app);
     recompute_headers(&app); // esconde cabeçalhos de página sem itens
 
@@ -100,7 +100,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // Sonda a máquina UMA vez (local, rápido pra command -v). O refresh re-sonda.
     let env_status = environments::status();
     let env_model = Rc::new(VecModel::from(build_env_rows_from(&env_status)));
-    app.set_env_rows(ModelRc::from(env_model.clone()));
+    app.global::<Cfg>().set_rows(ModelRc::from(env_model.clone()));
     // lang → métodos disponíveis (slugs), pra o modal montar os chips sem re-sondar.
     let env_methods: Rc<std::collections::HashMap<String, Vec<String>>> = Rc::new(
         env_status
@@ -136,8 +136,8 @@ fn main() -> Result<(), slint::PlatformError> {
     // Projeto cujo grafo JÁ está carregado no `graph_state`. None = pendente: a
     // carga (parse do índice + física) acontece na 1ª entrada na aba Grafo.
     let graph_loaded: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
-    app.set_graph_nodes(ModelRc::from(graph_nodes.clone()));
-    app.set_graph_edges(ModelRc::from(graph_edges.clone()));
+    app.global::<G>().set_nodes(ModelRc::from(graph_nodes.clone()));
+    app.global::<G>().set_edges(ModelRc::from(graph_edges.clone()));
 
     // ==================== aba Overdev ====================
     // Modelos: seletor de projeto (detectados + recentes), dev_dirs, e checklist.
@@ -145,10 +145,10 @@ fn main() -> Result<(), slint::PlatformError> {
     let od_dev_model = Rc::new(VecModel::<SharedString>::from(Vec::new()));
     let od_pin_model = Rc::new(VecModel::<SharedString>::from(Vec::new()));
     let od_items_model = Rc::new(VecModel::<OverItem>::from(Vec::new()));
-    app.set_od_projects(ModelRc::from(od_proj_model.clone()));
-    app.set_od_dev_dirs(ModelRc::from(od_dev_model.clone()));
-    app.set_od_pinned(ModelRc::from(od_pin_model.clone()));
-    app.set_od_items(ModelRc::from(od_items_model.clone()));
+    app.global::<Od>().set_projects(ModelRc::from(od_proj_model.clone()));
+    app.global::<Od>().set_dev_dirs(ModelRc::from(od_dev_model.clone()));
+    app.global::<Od>().set_pinned(ModelRc::from(od_pin_model.clone()));
+    app.global::<Od>().set_items(ModelRc::from(od_items_model.clone()));
     // Dona do checklist COMPLETO (Rust) — o modelo acima só recebe a PÁGINA visível.
     let od_cl = Rc::new(ChecklistView::new(od_items_model.clone()));
     refresh_proj_models(&od_proj_model, &od_dev_model, &od_pin_model);
@@ -164,8 +164,8 @@ fn main() -> Result<(), slint::PlatformError> {
     let od_snaps_model = Rc::new(VecModel::<SnapRow>::from(Vec::new()));
     let od_commits_all: Rc<RefCell<Vec<githist::Commit>>> = Rc::new(RefCell::new(Vec::new()));
     let od_commits_model = Rc::new(VecModel::<CommitRow>::from(Vec::new()));
-    app.set_od_snaps(ModelRc::from(od_snaps_model.clone()));
-    app.set_od_commits(ModelRc::from(od_commits_model.clone()));
+    app.global::<Od>().set_snaps(ModelRc::from(od_snaps_model.clone()));
+    app.global::<Od>().set_commits(ModelRc::from(od_commits_model.clone()));
     // `--project <path>` (ou 1º argumento posicional que seja um dir): abre DIRETO nesse projeto e na
     // aba Overdev — é o multi-janela (cada projeto no seu processo). Senão, restaura o mais recente.
     let arg_project: Option<PathBuf> = {

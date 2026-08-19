@@ -11,10 +11,7 @@
 //! projeto. Ver o porquê em `checklist.rs`.
 
 use crate::checklist;
-use crate::{AppWindow, OverItem};
-use slint::VecModel;
-use std::cell::RefCell;
-use std::rc::Rc;
+use crate::prelude::*;
 
 /// Dono do checklist do projeto atual: tudo no Rust, fatia no Slint.
 pub struct ChecklistView {
@@ -44,14 +41,14 @@ impl ChecklistView {
     /// Zera filtro e página — usado ao TROCAR de projeto (a posição do checklist
     /// anterior não significa nada no novo).
     pub fn reset_view(&self, app: &AppWindow) {
-        app.set_od_cl_filter(checklist::FILTER_ALL);
-        app.set_od_cl_page(0);
+        app.global::<Od>().set_cl_filter(checklist::FILTER_ALL);
+        app.global::<Od>().set_cl_page(0);
     }
 
     /// Esvazia (nenhum projeto / projeto sem overdev).
     pub fn clear(&self, app: &AppWindow) {
         self.all.borrow_mut().clear();
-        app.set_od_cl_page(0);
+        app.global::<Od>().set_cl_page(0);
         self.publish_counts(app);
         self.apply(app);
     }
@@ -60,15 +57,15 @@ impl ChecklistView {
     /// Prende a página ao intervalo válido (filtro pode ter encolhido o total).
     pub fn apply(&self, app: &AppWindow) {
         let all = self.all.borrow();
-        let filter = app.get_od_cl_filter();
+        let filter = app.global::<Od>().get_cl_filter();
         let total = checklist::filtered_len(&all, filter);
-        let page = checklist::clamp_page(app.get_od_cl_page(), total);
+        let page = checklist::clamp_page(app.global::<Od>().get_cl_page(), total);
         let (from, to) = checklist::range_of(total, page);
-        app.set_od_cl_page(page);
-        app.set_od_cl_pages(checklist::page_count(total));
-        app.set_od_cl_total(total as i32);
-        app.set_od_cl_from(from);
-        app.set_od_cl_to(to);
+        app.global::<Od>().set_cl_page(page);
+        app.global::<Od>().set_cl_pages(checklist::page_count(total));
+        app.global::<Od>().set_cl_total(total as i32);
+        app.global::<Od>().set_cl_from(from);
+        app.global::<Od>().set_cl_to(to);
         self.model.set_vec(checklist::page_rows(&all, filter, page));
     }
 
@@ -85,10 +82,10 @@ impl ChecklistView {
                 _ => {}
             }
         }
-        app.set_od_done(done);
-        app.set_od_open(open);
-        app.set_od_hold(hold);
-        app.set_od_human_open(human);
+        app.global::<Od>().set_done(done);
+        app.global::<Od>().set_open(open);
+        app.global::<Od>().set_hold(hold);
+        app.global::<Od>().set_human_open(human);
     }
 
     /// `true` quando não há item nenhum — usado pra decidir "projeto sem run".
