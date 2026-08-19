@@ -1322,7 +1322,9 @@ fn overdev_file_path(root: &Path, target: &str) -> PathBuf {
 /// Casa `- [H ...]` ANTES de `- [ ]`/`- [x]` (senÃ£o o humano cai no ramo de mÃ¡quina).
 /// `hindex` numera 1-based sÃ³ os HUMANOS ABERTOS (- [H ]) â Ã© o arg de `od-mark-human`.
 fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
-    let cl = std::fs::read_to_string(checklist_path(root)).unwrap_or_default();
+    // Multi-arquivo: CHECKLIST.md E/OU a pasta checklist/*.md (granularidade / split multiagent) —
+    // mesmo resolvedor do lib, pra a GUI contar certo depois de um split.
+    let cl = schematize::paths::read_multidoc(&overdev_dir(root), "CHECKLIST.md", "checklist");
     let mut out = Vec::new();
     let mut hopen = 0i32; // contador de humanos abertos (1-based)
     for line in cl.lines() {
