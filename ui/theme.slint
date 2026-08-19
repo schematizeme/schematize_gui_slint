@@ -1,0 +1,24 @@
+// `global Theme` — a paleta, ponto único de verdade pra claro/escuro.
+
+// Paleta central — um único ponto de verdade para claro/escuro.
+export global Theme {
+    in-out property <bool> dark: true;
+
+    // Light REBALANCEADO pra contraste (o dark já estava ótimo, intacto): fundo um pouco mais fundo
+    // pra as superfícies brancas destacarem, bordas visíveis, texto-dim bem mais escuro (era #6b7280,
+    // borderline), acento mais forte.
+    out property <color> bg:        dark ? #14161c : #e8ecf4;
+    out property <color> surface:   dark ? #1b1e27 : #ffffff;
+    out property <color> surface-2: dark ? #222634 : #dce3f0;
+    out property <color> stripe:    dark ? #1e222d : #eef2f9;
+    out property <color> border:    dark ? #2b3040 : #bfc9dc;
+    out property <color> text:      dark ? #e6e9f2 : #12151d;
+    out property <color> text-dim:  dark ? #8a90a2 : #475062;
+    out property <color> accent:    #5b8cff;
+    out property <color> accent-soft: dark ? #2a3a66 : #cedcff;
+    out property <color> good:      #3ecf8e;
+    out property <color> warn:      #e6b23a;
+    out property <color> header-fg: dark ? #9db4ff : #2b48bd;
+}
+
+// Selo verificado: check pequeno (círculo de acento + ✓) + tooltip no hover.

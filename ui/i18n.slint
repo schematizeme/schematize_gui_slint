@@ -1,0 +1,292 @@
+// `global L` — TODA string estática da UI. Nada de texto hardcoded nos
+// componentes: o Rust preenche isto a partir do catálogo i18n do lib.
+
+export global L {
+    in-out property <string> window-title: "schematize";
+    in-out property <string> subtitle;
+    in-out property <string> theme-light;
+    in-out property <string> theme-dark;
+    in-out property <string> check;
+    in-out property <string> update-all;
+    in-out property <string> update-installed-only; // texto-guia do "Atualizar tudo"
+    in-out property <string> update-sel;
+    in-out property <string> install-sel-market;
+    in-out property <string> remove-sel;
+    in-out property <string> sel-label;
+    in-out property <string> sel-all;
+    in-out property <string> sel-pending;
+    in-out property <string> sel-none;
+    in-out property <string> col-skill;
+    in-out property <string> col-author;
+    in-out property <string> col-installed;
+    in-out property <string> col-latest;
+    in-out property <string> col-state;
+    in-out property <string> col-actions;
+    in-out property <string> verified;   // tooltip do selo
+    in-out property <string> tab-installed;
+    in-out property <string> tab-marketplace;
+    in-out property <string> tab-overdev;
+    in-out property <string> tab-graph;
+    in-out property <string> coming-soon;
+    in-out property <string> act-install;
+    in-out property <string> act-update;
+    in-out property <string> act-remove;   // "Desinstalar" por-linha
+    // aba Environments
+    in-out property <string> tab-environments;
+    in-out property <string> env-intro;      // texto-guia (mexe na máquina / roda em terminal)
+    in-out property <string> env-method;      // "Método:"
+    in-out property <string> env-no-methods;  // nenhum método disponível
+    // modal de instalação do Marketplace (dep opcional + environment opcional)
+    in-out property <string> mp-recommends-note; // "Recomenda a skill base:"
+    in-out property <string> mp-env-note;         // "o environment mexe na máquina / roda em terminal"
+    in-out property <string> mp-confirm;          // "Instalar"
+    in-out property <string> mp-cancel;           // "Cancelar"
+    // aba Overdev (seletor de projeto + view)
+    in-out property <string> project;            // "Projeto:"
+    in-out property <string> no-project;          // empty-state: nenhum projeto
+    in-out property <string> detected-projects;   // cabeçalho do grupo detectados
+    in-out property <string> recent-projects;     // cabeçalho do grupo recentes
+    in-out property <string> open-folder;         // "Abrir pasta…"
+    in-out property <string> reload;              // "recarregar"
+    in-out property <string> dev-dirs;            // "Diretórios de desenvolvimento"
+    in-out property <string> add-dev-dir;         // "Adicionar diretório…"
+    in-out property <string> dev-dirs-empty;      // empty-state dos dev_dirs
+    in-out property <string> remove;              // tooltip "remover"
+    // ---- Projetos fixados (pins) ----
+    in-out property <string> pinned-projects;     // título "Projetos fixados"
+    in-out property <string> pin-folder;          // botão "Fixar pasta…"
+    in-out property <string> unpin;               // tooltip/botão "Desafixar"
+    in-out property <string> pin-hint;            // texto de ajuda do pin
+    in-out property <string> no-overdev;          // empty-state: sem run de overdev
+    in-out property <string> od-decisions;        // "Decisões"
+    in-out property <string> od-plan;             // "Plano"
+    in-out property <string> od-questions;        // "Perguntas parkeadas"
+    in-out property <string> open-browser;        // "abrir no navegador"
+    // ---- aba Overdev — Fase 3 (editor + tasks + checklist 2-níveis) ----
+    in-out property <string> od-human;             // etiqueta "humano"
+    in-out property <string> od-machine;           // etiqueta "máquina"
+    in-out property <string> od-mark-human;        // botão "marcar como feito"
+    in-out property <string> od-editor;            // título "Editor"
+    in-out property <string> od-save-plan;         // botão "Salvar"
+    in-out property <string> od-tasks;             // título "Tarefas e notas"
+    in-out property <string> od-add-note;          // botão "Adicionar nota"
+    in-out property <string> od-note;              // rótulo/hint "Nota para esta tarefa…"
+    in-out property <string> od-correction;        // título/hint "Prompt de correção…"
+    in-out property <string> od-notes-title;       // título "Notas e correções"
+    // ---- checklist FATIADO (filtro + paginação) ----
+    in-out property <string> od-cl-all;            // filtro "Todos"
+    in-out property <string> od-cl-open;           // filtro "Abertos"
+    in-out property <string> od-cl-done;           // filtro "Feitos"
+    in-out property <string> od-cl-hold;           // filtro "On-hold"
+    in-out property <string> od-cl-human;          // filtro "Humanos"
+    in-out property <string> od-cl-of;             // conector "de" ("1–100 de 700")
+    in-out property <string> od-cl-empty;          // "Nenhum item neste filtro"
+    // ---- editor acoplado sob demanda ----
+    in-out property <string> od-editor-show;       // botão "Abrir editor"
+    in-out property <string> od-editor-hide;       // botão "Fechar editor"
+    in-out property <string> od-editor-big;        // aviso "arquivo grande demais…"
+    in-out property <string> od-editor-external;   // botão "Abrir no editor externo"
+    // ---- aba Overdev — Fase 4 (terminal externo + monitor leve) ----
+    in-out property <string> od-run;               // botão "Executar overdev"
+    in-out property <string> od-gen-archive;       // botão "Gerar afazeres do archive"
+    in-out property <string> od-stop;              // botão "Parar"
+    in-out property <string> od-running;           // pill de estado (monitor ligado)
+    in-out property <string> od-mon-active;        // pill quando o run está "active"
+    in-out property <string> od-confirm-run;       // texto do guardrail (aviso do disparo)
+    in-out property <string> od-run-done;          // status "concluído"
+    in-out property <string> od-agent-cmd;         // rótulo "Comando do agente"
+    in-out property <string> od-ext-terminal;      // rótulo "claude rodando em terminal externo…"
+    in-out property <string> od-mon-iters;         // rótulo "iterações"
+    in-out property <string> od-mon-open-title;    // título "Itens abertos"
+    in-out property <string> od-attach;            // botão "Reload / Acompanhar" (anexa a run externo)
+    in-out property <string> od-refresh-tokens;    // botão "Atualizar tokens"
+    in-out property <string> od-completions-title; // título "Conclusões" (log com data/hora)
+    // aba Grafo
+    in-out property <string> g-search-hint;        // hint da busca ("procurar")
+    in-out property <string> g-nodes-suffix;       // sufixo "nós"
+    in-out property <string> g-fit;                // "ajustar"
+    in-out property <string> g-no-graph;           // empty-state: sem índice/grafo
+    in-out property <string> g-export-obsidian;    // "exportar Obsidian"
+    in-out property <string> g-open-editor;        // "abrir no editor"
+    in-out property <string> g-no-loc;             // "sem arquivo:linha no índice"
+    in-out property <string> g-reindex;            // "Reindexar" (dispara o índice §39 num terminal)
+    in-out property <string> g-reload;             // "Recarregar" (re-roda load_graph + descrições)
+    in-out property <string> g-drill;              // "Grafo do serviço" (drill-down no nó selecionado)
+    in-out property <string> g-global;             // "← Grafo global" (volta da visão por-serviço)
+    in-out property <string> g-node-nodesc;        // "(sem descrição no índice — rode Reindexar)"
+    // ---- Home + navegação (Fase 1 do redesenho) ----
+    in-out property <string> home;                   // breadcrumb de volta ("Início")
+    in-out property <string> home-title;             // "O que você quer fazer?"
+    in-out property <string> home-market;            // card + breadcrumb "Mercado de Skills"
+    in-out property <string> home-overdev-desc;      // descrição do card Overdev
+    in-out property <string> home-market-desc;       // descrição do card Mercado
+    in-out property <string> home-graph-desc;        // descrição do card Grafo
+    in-out property <string> home-environments;      // card "Environments" (avulso, futuro)
+    in-out property <string> home-environments-desc;
+    in-out property <string> home-ssh;               // card "SSH" (futuro)
+    in-out property <string> home-ssh-desc;
+    in-out property <string> home-settings;          // card "Configurações" (futuro)
+    in-out property <string> home-settings-desc;
+    in-out property <string> open-vscode;            // "Abrir no VSCode"
+    in-out property <string> open-loose-project;     // "Abrir projeto avulso…" (no modal)
+    // ---- aba Gerenciar (criar + editar skills) — chaves NOVAS via `tor` ----
+    in-out property <string> manage;                 // sub-aba "Gerenciar"
+    in-out property <string> create-skill;            // modo/título "Criar skill"
+    in-out property <string> edit-skill;              // modo/título "Editar skill"
+    in-out property <string> skill-slug;              // rótulo campo slug
+    in-out property <string> skill-name;              // rótulo campo nome
+    in-out property <string> skill-desc;              // rótulo campo descrição
+    in-out property <string> create;                  // botão "Criar"
+    in-out property <string> save;                    // botão "Salvar"
+    in-out property <string> saved;                   // feedback "Salvo"
+    in-out property <string> slug-invalid;            // erro de slug inválido
+    in-out property <string> skill-exists;            // erro "já existe"
+    in-out property <string> pick-skill;              // rótulo dropdown de skills
+    in-out property <string> pick-file;               // rótulo lista de arquivos
+    in-out property <string> skill-created;           // prefixo do sucesso ("Skill criada em")
+    in-out property <string> no-installed-skills;     // empty-state do dropdown
+    in-out property <string> edit-now;                // botão "Editar agora" (pós-criar)
+    in-out property <string> pick-file-hint;          // empty-state do editor
+    // ---- Tela SSH (chaves) — chaves NOVAS via `tor` ----
+    in-out property <string> ssh-title;
+    in-out property <string> ssh-generate;            // "Gerar chave"
+    in-out property <string> ssh-name;                // "Nome"
+    in-out property <string> ssh-kind;                // "Tipo"
+    in-out property <string> ssh-comment;             // "Comentário"
+    in-out property <string> ssh-passphrase;          // "Passphrase (opcional)"
+    in-out property <string> ssh-copy-pub;            // "Copiar pública"
+    in-out property <string> ssh-copied;              // "copiado"
+    in-out property <string> ssh-remove;              // "Remover"
+    in-out property <string> ssh-empty;               // empty-state
+    in-out property <string> ssh-priv-note;           // "A chave privada nunca é exposta"
+    in-out property <string> ssh-keys-title;          // "Suas chaves"
+    in-out property <string> ssh-entropy-ed25519;     // nota de entropia do ed25519
+    in-out property <string> ssh-entropy-rsa;         // nota de entropia do RSA 4096
+    in-out property <string> ssh-kind-hint;           // "ed25519 é o default forte; RSA exige ≥4096"
+    in-out property <string> ssh-proof-label;         // "Prova da chave (bits · fingerprint · tipo)"
+    in-out property <string> ssh-export-bw;           // "Exportar → Bitwarden"
+    in-out property <string> ssh-bw-note;             // nota: a privada nunca aparece na tela
+    // ---- Tela Configurações — chaves NOVAS via `tor` ----
+    in-out property <string> cfg-title;
+    in-out property <string> cfg-language;            // "Idioma"
+    in-out property <string> cfg-theme;               // "Tema"
+    in-out property <string> cfg-autostart;           // "Autostart do agente"
+    in-out property <string> cfg-autostart-desc;
+    in-out property <string> cfg-hooks;               // "Hooks do overdev"
+    in-out property <string> cfg-hooks-desc;
+    in-out property <string> cfg-dirs;                // "Diretórios de dev e projetos fixados"
+    in-out property <string> cfg-dirs-desc;
+    in-out property <string> cfg-manage;              // "Gerenciar…"
+    in-out property <string> cfg-on;                  // "ligado"
+    in-out property <string> cfg-off;                 // "desligado"
+    // ---- Diagnóstico (relatório de debug) ----
+    in-out property <string> cfg-debug-title;         // "Diagnóstico"
+    in-out property <string> cfg-debug-btn;           // "Gerar relatório de debug"
+    in-out property <string> cfg-debug-generating;    // "Gerando…"
+    in-out property <string> cfg-debug-open;          // "Abrir pasta"
+    in-out property <string> cfg-debug-note;          // "modo 600 · segredos redigidos · revise antes de compartilhar"
+    in-out property <string> cfg-debug-net;           // "incluir diagnóstico de rede (mais lento)"
+    in-out property <string> cfg-debug-saved;         // "Relatório gravado em"
+    // ---- Overdev — aditivos (histórico DB + commits) ----
+    in-out property <string> od-history;              // "Histórico (backup)"
+    in-out property <string> od-history-note;         // explicação da cópia de segurança
+    in-out property <string> od-view;                 // "Ver"
+    in-out property <string> od-restore;              // "Restaurar"
+    in-out property <string> od-snap-empty;           // empty-state do histórico
+    in-out property <string> od-commits;              // "Commits e push"
+    in-out property <string> od-commits-empty;        // empty-state dos commits
+    in-out property <string> od-close;                // "Fechar" (visor)
+    // ---- Paginação ----
+    in-out property <string> pg-prev;                 // "‹ Anterior"
+    in-out property <string> pg-next;                 // "Próximo ›"
+    in-out property <string> pg-of;                   // "de" (página X de Y)
+
+    // ---- versão do app + self-update (Configurações) ----
+    in-out property <string> app-version-title;       // "Versão do app"
+    in-out property <string> app-check-update;        // "Verificar atualização"
+    in-out property <string> app-checking;            // "Verificando…"
+    in-out property <string> app-up-to-date;          // "Você está atualizado"
+    in-out property <string> app-update-btn;          // "Atualizar app"
+    in-out property <string> app-updating;            // "Atualizando…"
+    in-out property <string> app-restart-hint;        // "Atualização concluída — reinicie o app."
+    in-out property <string> app-restart;             // "Reiniciar"
+    in-out property <string> updater-missing-msg;     // "O gestor de atualizações não está instalado."
+    in-out property <string> updater-install-btn;     // "Instalar gestor de atualizações"
+
+    // ---- sininho de notificações ----
+    in-out property <string> notif-title;             // "Notificações"
+    in-out property <string> notif-empty;             // "Sem notificações"
+    in-out property <string> notif-global;            // "Globais"
+    in-out property <string> notif-personal;          // "Pessoais"
+    in-out property <string> notif-loading;           // "Carregando…"
+    in-out property <string> notif-do-update;         // ação app_update: "Atualizar"
+    in-out property <string> notif-open;              // ação news: "Abrir"
+    in-out property <string> notif-go-installed;      // ação skill_outdated: "Ver instaladas"
+
+    // ---- fork + comparar ----
+    in-out property <string> fork-badge;              // "fork"
+    in-out property <string> fork-will;               // aviso: editar vai forkar
+    in-out property <string> fork-active;             // "[fork] ativo — oficial preservada"
+    in-out property <string> compare-official;        // "Comparar com oficial"
+    in-out property <string> compare-note;            // "Comparar NÃO sobrescreve nada"
+    in-out property <string> compare-files;           // "Arquivos"
+    in-out property <string> compare-loading;         // "Comparando…"
+
+    // ---- Conta (login via device flow) ----
+    in-out property <string> acc-section;              // título da seção "Conta"
+    in-out property <string> acc-login;                // "Entrar na plataforma"
+    in-out property <string> acc-logout;               // "Sair"
+    in-out property <string> acc-connected-as;         // "Conectado como" (prefixo do sub)
+    in-out property <string> acc-logged-out-hint;      // descrição do estado deslogado
+    in-out property <string> acc-modal-title;          // título do modal de login
+    in-out property <string> acc-code-label;           // "Digite este código no navegador:"
+    in-out property <string> acc-open-browser;         // "Abrir no navegador"
+    in-out property <string> acc-verification-at;      // "Acesse:" (rótulo da URL)
+    in-out property <string> acc-waiting;              // "Aguardando confirmação…"
+    in-out property <string> acc-cancel;               // "Cancelar"
+    in-out property <string> acc-indicator-tip;        // tooltip do indicador no header
+
+    // ---- Database builder (tela 6) ----
+    in-out property <string> home-database;            // card da Home "Banco de dados"
+    in-out property <string> home-database-desc;
+    in-out property <string> db-title;                 // título da tela
+    in-out property <string> db-sub-connect;           // sub-aba "Conectar"
+    in-out property <string> db-sub-schema;            // sub-aba "Schema"
+    in-out property <string> db-sub-generate;          // sub-aba "Gerar"
+    in-out property <string> db-sub-graph;             // sub-aba "Grafo"
+    in-out property <string> db-sqlite-label;          // "Arquivo SQLite"
+    in-out property <string> db-pg-label;              // "Connection string Postgres"
+    in-out property <string> db-pick-file;             // "Escolher…"
+    in-out property <string> db-introspect;            // "Introspectar"
+    in-out property <string> db-load-json;             // "Carregar schema.json"
+    in-out property <string> db-save-json;             // "Salvar schema.json"
+    in-out property <string> db-no-schema;             // empty-state (nenhum schema)
+    in-out property <string> db-tables-title;          // "Tabelas"
+    in-out property <string> db-cols-label;            // "Colunas"
+    in-out property <string> db-fks-label;             // "Chaves estrangeiras"
+    in-out property <string> db-indexes-label;         // "Índices"
+    in-out property <string> db-editor-title;          // "Editar schema"
+    in-out property <string> db-add-table;             // "Adicionar tabela"
+    in-out property <string> db-table-name;            // "Nome da tabela"
+    in-out property <string> db-select-table;          // "Tabela alvo"
+    in-out property <string> db-add-column;            // "Adicionar coluna"
+    in-out property <string> db-col-name;              // "Nome da coluna"
+    in-out property <string> db-col-type;              // "Tipo"
+    in-out property <string> db-pk;                    // "PK"
+    in-out property <string> db-unique;                // "UNIQUE"
+    in-out property <string> db-nullable;              // "NULL"
+    in-out property <string> db-add-fk;                // "Adicionar FK"
+    in-out property <string> db-fk-col;                // "Coluna"
+    in-out property <string> db-fk-reftable;           // "Tabela ref."
+    in-out property <string> db-fk-refcol;             // "Coluna ref."
+    in-out property <string> db-gen-sql;               // "Gerar SQL"
+    in-out property <string> db-gen-migration;         // "Gerar migration"
+    in-out property <string> db-gen-save;              // "Salvar em arquivo…"
+    in-out property <string> db-ai-title;              // "Gerar por descrição (IA)"
+    in-out property <string> db-ai-hint;               // hint do campo de descrição
+    in-out property <string> db-ai-generate;           // "Gerar com IA"
+    in-out property <string> db-ai-note;               // "roda no terminal; carregue o schema.json quando terminar"
+    in-out property <string> db-ai-no-project;         // aviso: selecione um projeto
+    in-out property <string> db-view-graph;            // "Ver grafo"
+    in-out property <string> db-node-cols;             // texto do nó quando sem descrição
+}

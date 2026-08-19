@@ -52,5 +52,18 @@ slint-build = "1.17"
 
 [profile.release]
 strip = true
-opt-level = "z"
+# VELOCIDADE, não tamanho — e isto foi MEDIDO, não estimado.
+#
+# Isto aqui é uma GUI: faz layout de árvore de elementos e física de grafo no
+# event loop. O `opt-level = "z"` (otimiza pra tamanho: praticamente sem inline)
+# deixa esse caminho quente MUITO mais caro. Medida nesta máquina, CPU gasto pra
+# abrir um projeto e ficar ocioso (mesmo binário, só o opt-level muda):
+#
+#   opt-level   projeto real   checklist de 4.000 itens   binário
+#   "z"             2,47 s              3,66 s             23,4 MB
+#   3               0,42 s              0,40 s             34,9 MB
+#
+# ~6x mais rápido por ~11 MB. Pra um app que o usuário abre o dia inteiro, o
+# tempo dele vale mais que o download. O CLI (processo curto, I/O) segue em `z`.
+opt-level = 3
 lto = true

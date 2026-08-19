@@ -1,1403 +1,32 @@
-// ---------------------------------------------------------------------------
-// schematize — GUI em Slint (migração incremental egui→Slint).
+// schematize — GUI em Slint. Este arquivo guarda a JANELA (AppWindow): o estado
+// de tela, os callbacks que o Rust liga e a composição das telas.
 //
-// O quê: DUAS páginas de topo — "Instaladas" e "Marketplace" — sobre o MESMO
-// modelo de linhas (uma linha por skill + cabeçalhos de categoria). A página
-// ativa filtra as linhas por ESTADO:
-//   • Marketplace = skills NÃO instaladas (state == "missing") → descobrir/instalar.
-//   • Instaladas  = skills instaladas (state != "missing")     → atualizar/desinstalar.
-// Overdev/Grafo seguem como placeholders ("em breve").
-//
-// Selo verificado: um CHECK pequeno (círculo de acento + ✓), estilo Instagram/X,
-// com tooltip no hover — SEM texto ao lado.
-//
-// i18n: NADA de texto hardcoded — toda string estática vem do `global L`,
-// preenchido pelo Rust a partir de `schematize::i18n` (11 locales).
-// ---------------------------------------------------------------------------
+// O resto foi separado por arquivo (piso da casa: <=750 linhas, uma unidade
+// lógica por arquivo):
+//   types.slint   — structs da fronteira Rust <-> UI
+//   i18n.slint    — `global L` (toda string estática)
+//   theme.slint   — `global Theme` (paleta claro/escuro)
+//   widgets.slint — componentes de base (Btn, Chip, TabBtn, Collapse, …)
+//   chrome.slint  — ProjectBar, Pager e GraphCanvas
 
 import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import {
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
+    LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
+    DbTableRow,
+} from "types.slint";
+import {
+    VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
+    SkillName, AuthorCell, HomeCard, ReloadIcon, IconBtn,
+} from "widgets.slint";
+import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
 
-// ---- Grafo (aba 4) ----------------------------------------------------------
-// Um nó do grafo force-directed. As posições (x/y) são MUNDO (não-tela) — a física
-// vive no Rust e as escreve a cada tick; o Slint aplica a transformação global
-// (g-scale/g-ox/g-oy + centro do canvas) na hora de renderizar. `r` é o raio EM
-// PIXELS de tela (constante ao zoom, como no egui). `selected`/`hot`/`dim`
-// controlam cor e realce; `has-loc` diz se o nó tem `arquivo:linha` (abrível).
-export struct GraphNode {
-    id: string,
-    label: string,
-    x: float,
-    y: float,
-    r: float,
-    selected: bool,
-    hot: bool,      // vizinho do selecionado OU casa com a busca
-    dim: bool,      // apagado (fora do foco/da busca)
-    has-loc: bool,
-}
-// Uma aresta: as duas pontas em coordenadas de MUNDO (o Slint transforma). `on`
-// realça quando toca o nó selecionado.
-export struct GraphEdge {
-    x1: float,
-    y1: float,
-    x2: float,
-    y2: float,
-    on: bool,
-}
-
-// Uma linha do modelo. Pode ser um CABEÇALHO de categoria (is-header) ou uma
-// SKILL. Campos preenchidos/atualizados pelo Rust (catálogo + rede + ações).
-export struct SkillRow {
-    is-header: bool,
-    header-label: string,
-    // Cabeçalho: a QUAL página pertence (0 = Instaladas, 1 = Marketplace) e
-    // quantas skills ele agrupa AGORA nessa página (0 → cabeçalho some).
-    page: int,
-    count: int,
-    // Categoria (base/language/external) — usada pelo Rust p/ recontar os
-    // cabeçalhos após instalar/desinstalar (skill muda de página).
-    category: string,
-    slug: string,
-    author: string,
-    author-url: string,
-    installed: string,
-    latest: string,
-    state: string,        // "missing" | "outdated" | "current" | "loading"
-    state-label: string,
-    verified: bool,
-    selected: bool,
-    busy: bool,           // operação (instalar/remover) em andamento nesta linha
-    op-label: string,     // status transitório da linha ("instalando…", erro…)
-    op-error: bool,       // op-label é um erro? (colore em warn)
-    disp: int,            // índice de exibição na página ativa (paginação); -1 fora da página
-    forked: bool,         // skill oficial que virou FORK editável (marca [fork] + habilita Comparar)
-    rating: string,       // nota do marketplace ("★4.7 (12)"); vazio = sem nota (preenchido async)
-}
-
-// Uma linha da aba Environments: uma LINGUAGEM ou FERRAMENTA de dev, seus métodos
-// disponíveis nesta máquina, o método escolhido pra instalar, e o status.
-// Preenchida pelo Rust a partir de `schematize::environments::status()`.
-// `category` ("language" | "tool") separa as duas seções; ferramentas não têm
-// seletor de método (methods vazio) — mostram só o `install-hint`.
-export struct EnvRow {
-    lang: string,           // slug ("go", "rust", "claude", ...) — vira o arg do `schematize env`
-    display: string,        // nome de exibição ("Go", "C# / .NET", "Claude Code", ...)
-    category: string,       // "language" (runtime) | "tool" (ferramenta de dev)
-    install-hint: string,   // rótulo do caminho de instalação (ferramenta: "npm -g" / "official (curl|sh)")
-    section-title: string,  // não-vazio → esta linha ABRE uma seção com este título ("Linguagens"/"Ferramentas de dev")
-    methods: [string],      // métodos utilizáveis AQUI (docker|mise|distro|official); vazio p/ ferramenta
-    method-sel: string,     // método escolhido pra instalar (chip selecionado)
-    installed: bool,        // já instalado (por método detectado OU runtime no PATH)
-    status-label: string,   // texto de status traduzido (instalado via X / instalado / não)
-    op-label: string,       // mensagem transitória da linha (terminal aberto / erro)
-}
-
-// Uma entrada do seletor de projeto da aba Overdev: um CABEÇALHO de grupo
-// (Detectados/Recentes) ou um PROJETO clicável. Preenchida pelo Rust a partir de
-// `schematize::projects::scan()` (detectados) + `config::recent_projects()`.
-export struct ProjItem {
-    is-header: bool,
-    label: string,    // cabeçalho: rótulo do grupo
-    name: string,     // projeto: nome de exibição (basename)
-    path: string,     // projeto: caminho absoluto (arg das ações)
-    marker: string,   // projeto: marcador que o identificou (.git/.overdev/…)
-}
-
-// Um item do checklist 2-níveis do overdev: tipo + texto + origem + índice humano.
-// `kind` decide cor/ícone: máquina "done"=✓verde / "open"=○ / "hold"=~amarelo;
-// humano "hdone"=✓ / "hopen"=○ (marcável pela pessoa). `machine`=🤖 vs 👤.
-// `hindex` = posição 1-based do item entre os HUMANOS ABERTOS (arg de od-mark-human);
-// -1 para itens não-marcáveis.
-export struct OverItem {
-    kind: string,     // "done" | "open" | "hold" | "hopen" | "hdone"
-    text: string,
-    machine: bool,    // true = item de MÁQUINA (agente) · false = item HUMANO
-    hindex: int,      // hopen: 1-based entre humanos abertos · senão -1
-}
-
-// Uma ação declarada por uma skill instalada (gui.json) — vira botão na aba do projeto.
-// Preenchida pelo Rust a partir de `schematize::guiactions::gui_actions()`.
-export struct SkillAction {
-    label: string,        // rótulo do botão ("Q.A.", "Pentest")
-    command: string,      // comando disparado no claude ("/eng-qa")
-    needs-project: bool,  // só habilita com projeto selecionado
-    skill: string,        // slug da skill dona
-}
-
-// Uma chave SSH da máquina (só metadados PÚBLICOS — a privada NUNCA aparece).
-// Preenchida pelo Rust a partir de `schematize::sshkeys::list()`.
-export struct SshRow {
-    name: string,        // nome do arquivo base em ~/.ssh (ex.: "github")
-    kind: string,        // algoritmo (ED25519/RSA/…)
-    comment: string,     // comentário embutido na pública
-    fingerprint: string, // fingerprint SHA256
-    public-path: string, // caminho da PÚBLICA (nunca a privada)
-    op-label: string,    // feedback transitório ("copiado" / erro)
-    op-error: bool,      // op-label é erro?
-}
-
-// Um idioma no seletor de Configurações (código + nome nativo + se é o atual).
-export struct LangItem {
-    code: string,
-    name: string,
-    current: bool,
-}
-
-// Uma linha do histórico do DB do overdev (snapshot). Preenchida pelo Rust a
-// partir de `schematize::overdevdb::history()`. `id` é a chave de Ver/Restaurar.
-export struct SnapRow {
-    id: int,
-    file: string,     // caminho relativo (ex.: .overdev/CHECKLIST.md)
-    date: string,     // ts epoch formatado (AAAA-MM-DD hh:mm)
-    size: string,     // tamanho legível
-    hash: string,     // hash curto
-}
-
-// Uma linha do histórico de commits. Preenchida pelo Rust a partir de
-// `schematize::githist::commits()`. `pushed` decide o marcador ● / ○.
-export struct CommitRow {
-    short: string,
-    date: string,
-    author: string,
-    subject: string,
-    pushed: bool,
-}
-
-// Uma notificação do sininho (mapeada de `schematize::notifications::Notif`).
-// `scope` = "global" | "personal" (agrupador). `has-action` decide se mostra o
-// botão de ação; `kind` decide o rótulo/efeito ("app_update"|"news"|"skill_outdated").
-export struct NotifItem {
-    idx: int,        // posição na lista completa colhida (arg de notif-action)
-    scope: string,
-    title: string,
-    body: string,
-    kind: string,
-    action: string,
-    has-action: bool,
-}
-
-// Um arquivo na comparação fork-ativo vs nova oficial (mapeado de `skills::FileDiff`).
-// `status` = "igual" | "mudou" | "novo" | "removido" (texto já em pt-BR do lib).
-export struct CmpFile {
-    path: string,
-    status: string,
-}
-
-// ---- Database builder (tela 6) ----------------------------------------------
-// Uma COLUNA de uma tabela do schema (espelha database::Column). Flags decidem
-// os marcadores PK/UK/NULL na visualização.
-export struct DbColumn {
-    name: string,
-    ty: string,
-    nullable: bool,
-    pk: bool,
-    unique: bool,
-}
-// Uma chave estrangeira (espelha database::Fk): coluna local → tabela.coluna ref.
-export struct DbFkRow {
-    column: string,
-    ref-table: string,
-    ref-column: string,
-}
-// Um índice (espelha database::Index): nome + colunas (já unidas em texto) + UNIQUE.
-export struct DbIndexRow {
-    name: string,
-    columns-text: string,
-    unique: bool,
-}
-// Uma TABELA do schema carregado — colunas, FKs e índices aninhados (modelos
-// próprios). Preenchida pelo Rust a partir de `database::Schema`.
-export struct DbTableRow {
-    name: string,
-    columns: [DbColumn],
-    fks: [DbFkRow],
-    indexes: [DbIndexRow],
-}
-
-// Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.
-export global L {
-    in-out property <string> window-title: "schematize";
-    in-out property <string> subtitle;
-    in-out property <string> theme-light;
-    in-out property <string> theme-dark;
-    in-out property <string> check;
-    in-out property <string> update-all;
-    in-out property <string> update-installed-only; // texto-guia do "Atualizar tudo"
-    in-out property <string> update-sel;
-    in-out property <string> install-sel-market;
-    in-out property <string> remove-sel;
-    in-out property <string> sel-label;
-    in-out property <string> sel-all;
-    in-out property <string> sel-pending;
-    in-out property <string> sel-none;
-    in-out property <string> col-skill;
-    in-out property <string> col-author;
-    in-out property <string> col-installed;
-    in-out property <string> col-latest;
-    in-out property <string> col-state;
-    in-out property <string> col-actions;
-    in-out property <string> verified;   // tooltip do selo
-    in-out property <string> tab-installed;
-    in-out property <string> tab-marketplace;
-    in-out property <string> tab-overdev;
-    in-out property <string> tab-graph;
-    in-out property <string> coming-soon;
-    in-out property <string> act-install;
-    in-out property <string> act-update;
-    in-out property <string> act-remove;   // "Desinstalar" por-linha
-    // aba Environments
-    in-out property <string> tab-environments;
-    in-out property <string> env-intro;      // texto-guia (mexe na máquina / roda em terminal)
-    in-out property <string> env-method;      // "Método:"
-    in-out property <string> env-no-methods;  // nenhum método disponível
-    // modal de instalação do Marketplace (dep opcional + environment opcional)
-    in-out property <string> mp-recommends-note; // "Recomenda a skill base:"
-    in-out property <string> mp-env-note;         // "o environment mexe na máquina / roda em terminal"
-    in-out property <string> mp-confirm;          // "Instalar"
-    in-out property <string> mp-cancel;           // "Cancelar"
-    // aba Overdev (seletor de projeto + view)
-    in-out property <string> project;            // "Projeto:"
-    in-out property <string> no-project;          // empty-state: nenhum projeto
-    in-out property <string> detected-projects;   // cabeçalho do grupo detectados
-    in-out property <string> recent-projects;     // cabeçalho do grupo recentes
-    in-out property <string> open-folder;         // "Abrir pasta…"
-    in-out property <string> reload;              // "recarregar"
-    in-out property <string> dev-dirs;            // "Diretórios de desenvolvimento"
-    in-out property <string> add-dev-dir;         // "Adicionar diretório…"
-    in-out property <string> dev-dirs-empty;      // empty-state dos dev_dirs
-    in-out property <string> remove;              // tooltip "remover"
-    // ---- Projetos fixados (pins) ----
-    in-out property <string> pinned-projects;     // título "Projetos fixados"
-    in-out property <string> pin-folder;          // botão "Fixar pasta…"
-    in-out property <string> unpin;               // tooltip/botão "Desafixar"
-    in-out property <string> pin-hint;            // texto de ajuda do pin
-    in-out property <string> no-overdev;          // empty-state: sem run de overdev
-    in-out property <string> od-decisions;        // "Decisões"
-    in-out property <string> od-plan;             // "Plano"
-    in-out property <string> od-questions;        // "Perguntas parkeadas"
-    in-out property <string> open-browser;        // "abrir no navegador"
-    // ---- aba Overdev — Fase 3 (editor + tasks + checklist 2-níveis) ----
-    in-out property <string> od-human;             // etiqueta "humano"
-    in-out property <string> od-machine;           // etiqueta "máquina"
-    in-out property <string> od-mark-human;        // botão "marcar como feito"
-    in-out property <string> od-editor;            // título "Editor"
-    in-out property <string> od-save-plan;         // botão "Salvar"
-    in-out property <string> od-tasks;             // título "Tarefas e notas"
-    in-out property <string> od-add-note;          // botão "Adicionar nota"
-    in-out property <string> od-note;              // rótulo/hint "Nota para esta tarefa…"
-    in-out property <string> od-correction;        // título/hint "Prompt de correção…"
-    in-out property <string> od-notes-title;       // título "Notas e correções"
-    // ---- aba Overdev — Fase 4 (terminal externo + monitor leve) ----
-    in-out property <string> od-run;               // botão "Executar overdev"
-    in-out property <string> od-gen-archive;       // botão "Gerar afazeres do archive"
-    in-out property <string> od-stop;              // botão "Parar"
-    in-out property <string> od-running;           // pill de estado (monitor ligado)
-    in-out property <string> od-mon-active;        // pill quando o run está "active"
-    in-out property <string> od-confirm-run;       // texto do guardrail (aviso do disparo)
-    in-out property <string> od-run-done;          // status "concluído"
-    in-out property <string> od-agent-cmd;         // rótulo "Comando do agente"
-    in-out property <string> od-ext-terminal;      // rótulo "claude rodando em terminal externo…"
-    in-out property <string> od-mon-iters;         // rótulo "iterações"
-    in-out property <string> od-mon-open-title;    // título "Itens abertos"
-    in-out property <string> od-attach;            // botão "Reload / Acompanhar" (anexa a run externo)
-    in-out property <string> od-refresh-tokens;    // botão "Atualizar tokens"
-    in-out property <string> od-completions-title; // título "Conclusões" (log com data/hora)
-    // aba Grafo
-    in-out property <string> g-search-hint;        // hint da busca ("procurar")
-    in-out property <string> g-nodes-suffix;       // sufixo "nós"
-    in-out property <string> g-fit;                // "ajustar"
-    in-out property <string> g-no-graph;           // empty-state: sem índice/grafo
-    in-out property <string> g-export-obsidian;    // "exportar Obsidian"
-    in-out property <string> g-open-editor;        // "abrir no editor"
-    in-out property <string> g-no-loc;             // "sem arquivo:linha no índice"
-    in-out property <string> g-reindex;            // "Reindexar" (dispara o índice §39 num terminal)
-    in-out property <string> g-reload;             // "Recarregar" (re-roda load_graph + descrições)
-    in-out property <string> g-drill;              // "Grafo do serviço" (drill-down no nó selecionado)
-    in-out property <string> g-global;             // "← Grafo global" (volta da visão por-serviço)
-    in-out property <string> g-node-nodesc;        // "(sem descrição no índice — rode Reindexar)"
-    // ---- Home + navegação (Fase 1 do redesenho) ----
-    in-out property <string> home;                   // breadcrumb de volta ("Início")
-    in-out property <string> home-title;             // "O que você quer fazer?"
-    in-out property <string> home-market;            // card + breadcrumb "Mercado de Skills"
-    in-out property <string> home-overdev-desc;      // descrição do card Overdev
-    in-out property <string> home-market-desc;       // descrição do card Mercado
-    in-out property <string> home-graph-desc;        // descrição do card Grafo
-    in-out property <string> home-environments;      // card "Environments" (avulso, futuro)
-    in-out property <string> home-environments-desc;
-    in-out property <string> home-ssh;               // card "SSH" (futuro)
-    in-out property <string> home-ssh-desc;
-    in-out property <string> home-settings;          // card "Configurações" (futuro)
-    in-out property <string> home-settings-desc;
-    in-out property <string> open-vscode;            // "Abrir no VSCode"
-    in-out property <string> open-loose-project;     // "Abrir projeto avulso…" (no modal)
-    // ---- aba Gerenciar (criar + editar skills) — chaves NOVAS via `tor` ----
-    in-out property <string> manage;                 // sub-aba "Gerenciar"
-    in-out property <string> create-skill;            // modo/título "Criar skill"
-    in-out property <string> edit-skill;              // modo/título "Editar skill"
-    in-out property <string> skill-slug;              // rótulo campo slug
-    in-out property <string> skill-name;              // rótulo campo nome
-    in-out property <string> skill-desc;              // rótulo campo descrição
-    in-out property <string> create;                  // botão "Criar"
-    in-out property <string> save;                    // botão "Salvar"
-    in-out property <string> saved;                   // feedback "Salvo"
-    in-out property <string> slug-invalid;            // erro de slug inválido
-    in-out property <string> skill-exists;            // erro "já existe"
-    in-out property <string> pick-skill;              // rótulo dropdown de skills
-    in-out property <string> pick-file;               // rótulo lista de arquivos
-    in-out property <string> skill-created;           // prefixo do sucesso ("Skill criada em")
-    in-out property <string> no-installed-skills;     // empty-state do dropdown
-    in-out property <string> edit-now;                // botão "Editar agora" (pós-criar)
-    in-out property <string> pick-file-hint;          // empty-state do editor
-    // ---- Tela SSH (chaves) — chaves NOVAS via `tor` ----
-    in-out property <string> ssh-title;
-    in-out property <string> ssh-generate;            // "Gerar chave"
-    in-out property <string> ssh-name;                // "Nome"
-    in-out property <string> ssh-kind;                // "Tipo"
-    in-out property <string> ssh-comment;             // "Comentário"
-    in-out property <string> ssh-passphrase;          // "Passphrase (opcional)"
-    in-out property <string> ssh-copy-pub;            // "Copiar pública"
-    in-out property <string> ssh-copied;              // "copiado"
-    in-out property <string> ssh-remove;              // "Remover"
-    in-out property <string> ssh-empty;               // empty-state
-    in-out property <string> ssh-priv-note;           // "A chave privada nunca é exposta"
-    in-out property <string> ssh-keys-title;          // "Suas chaves"
-    in-out property <string> ssh-entropy-ed25519;     // nota de entropia do ed25519
-    in-out property <string> ssh-entropy-rsa;         // nota de entropia do RSA 4096
-    in-out property <string> ssh-kind-hint;           // "ed25519 é o default forte; RSA exige ≥4096"
-    in-out property <string> ssh-proof-label;         // "Prova da chave (bits · fingerprint · tipo)"
-    in-out property <string> ssh-export-bw;           // "Exportar → Bitwarden"
-    in-out property <string> ssh-bw-note;             // nota: a privada nunca aparece na tela
-    // ---- Tela Configurações — chaves NOVAS via `tor` ----
-    in-out property <string> cfg-title;
-    in-out property <string> cfg-language;            // "Idioma"
-    in-out property <string> cfg-theme;               // "Tema"
-    in-out property <string> cfg-autostart;           // "Autostart do agente"
-    in-out property <string> cfg-autostart-desc;
-    in-out property <string> cfg-hooks;               // "Hooks do overdev"
-    in-out property <string> cfg-hooks-desc;
-    in-out property <string> cfg-dirs;                // "Diretórios de dev e projetos fixados"
-    in-out property <string> cfg-dirs-desc;
-    in-out property <string> cfg-manage;              // "Gerenciar…"
-    in-out property <string> cfg-on;                  // "ligado"
-    in-out property <string> cfg-off;                 // "desligado"
-    // ---- Diagnóstico (relatório de debug) ----
-    in-out property <string> cfg-debug-title;         // "Diagnóstico"
-    in-out property <string> cfg-debug-btn;           // "Gerar relatório de debug"
-    in-out property <string> cfg-debug-generating;    // "Gerando…"
-    in-out property <string> cfg-debug-open;          // "Abrir pasta"
-    in-out property <string> cfg-debug-note;          // "modo 600 · segredos redigidos · revise antes de compartilhar"
-    in-out property <string> cfg-debug-net;           // "incluir diagnóstico de rede (mais lento)"
-    in-out property <string> cfg-debug-saved;         // "Relatório gravado em"
-    // ---- Overdev — aditivos (histórico DB + commits) ----
-    in-out property <string> od-history;              // "Histórico (backup)"
-    in-out property <string> od-history-note;         // explicação da cópia de segurança
-    in-out property <string> od-view;                 // "Ver"
-    in-out property <string> od-restore;              // "Restaurar"
-    in-out property <string> od-snap-empty;           // empty-state do histórico
-    in-out property <string> od-commits;              // "Commits e push"
-    in-out property <string> od-commits-empty;        // empty-state dos commits
-    in-out property <string> od-close;                // "Fechar" (visor)
-    // ---- Paginação ----
-    in-out property <string> pg-prev;                 // "‹ Anterior"
-    in-out property <string> pg-next;                 // "Próximo ›"
-    in-out property <string> pg-of;                   // "de" (página X de Y)
-
-    // ---- versão do app + self-update (Configurações) ----
-    in-out property <string> app-version-title;       // "Versão do app"
-    in-out property <string> app-check-update;        // "Verificar atualização"
-    in-out property <string> app-checking;            // "Verificando…"
-    in-out property <string> app-up-to-date;          // "Você está atualizado"
-    in-out property <string> app-update-btn;          // "Atualizar app"
-    in-out property <string> app-updating;            // "Atualizando…"
-    in-out property <string> app-restart-hint;        // "Atualização concluída — reinicie o app."
-    in-out property <string> app-restart;             // "Reiniciar"
-    in-out property <string> updater-missing-msg;     // "O gestor de atualizações não está instalado."
-    in-out property <string> updater-install-btn;     // "Instalar gestor de atualizações"
-
-    // ---- sininho de notificações ----
-    in-out property <string> notif-title;             // "Notificações"
-    in-out property <string> notif-empty;             // "Sem notificações"
-    in-out property <string> notif-global;            // "Globais"
-    in-out property <string> notif-personal;          // "Pessoais"
-    in-out property <string> notif-loading;           // "Carregando…"
-    in-out property <string> notif-do-update;         // ação app_update: "Atualizar"
-    in-out property <string> notif-open;              // ação news: "Abrir"
-    in-out property <string> notif-go-installed;      // ação skill_outdated: "Ver instaladas"
-
-    // ---- fork + comparar ----
-    in-out property <string> fork-badge;              // "fork"
-    in-out property <string> fork-will;               // aviso: editar vai forkar
-    in-out property <string> fork-active;             // "[fork] ativo — oficial preservada"
-    in-out property <string> compare-official;        // "Comparar com oficial"
-    in-out property <string> compare-note;            // "Comparar NÃO sobrescreve nada"
-    in-out property <string> compare-files;           // "Arquivos"
-    in-out property <string> compare-loading;         // "Comparando…"
-
-    // ---- Conta (login via device flow) ----
-    in-out property <string> acc-section;              // título da seção "Conta"
-    in-out property <string> acc-login;                // "Entrar na plataforma"
-    in-out property <string> acc-logout;               // "Sair"
-    in-out property <string> acc-connected-as;         // "Conectado como" (prefixo do sub)
-    in-out property <string> acc-logged-out-hint;      // descrição do estado deslogado
-    in-out property <string> acc-modal-title;          // título do modal de login
-    in-out property <string> acc-code-label;           // "Digite este código no navegador:"
-    in-out property <string> acc-open-browser;         // "Abrir no navegador"
-    in-out property <string> acc-verification-at;      // "Acesse:" (rótulo da URL)
-    in-out property <string> acc-waiting;              // "Aguardando confirmação…"
-    in-out property <string> acc-cancel;               // "Cancelar"
-    in-out property <string> acc-indicator-tip;        // tooltip do indicador no header
-
-    // ---- Database builder (tela 6) ----
-    in-out property <string> home-database;            // card da Home "Banco de dados"
-    in-out property <string> home-database-desc;
-    in-out property <string> db-title;                 // título da tela
-    in-out property <string> db-sub-connect;           // sub-aba "Conectar"
-    in-out property <string> db-sub-schema;            // sub-aba "Schema"
-    in-out property <string> db-sub-generate;          // sub-aba "Gerar"
-    in-out property <string> db-sub-graph;             // sub-aba "Grafo"
-    in-out property <string> db-sqlite-label;          // "Arquivo SQLite"
-    in-out property <string> db-pg-label;              // "Connection string Postgres"
-    in-out property <string> db-pick-file;             // "Escolher…"
-    in-out property <string> db-introspect;            // "Introspectar"
-    in-out property <string> db-load-json;             // "Carregar schema.json"
-    in-out property <string> db-save-json;             // "Salvar schema.json"
-    in-out property <string> db-no-schema;             // empty-state (nenhum schema)
-    in-out property <string> db-tables-title;          // "Tabelas"
-    in-out property <string> db-cols-label;            // "Colunas"
-    in-out property <string> db-fks-label;             // "Chaves estrangeiras"
-    in-out property <string> db-indexes-label;         // "Índices"
-    in-out property <string> db-editor-title;          // "Editar schema"
-    in-out property <string> db-add-table;             // "Adicionar tabela"
-    in-out property <string> db-table-name;            // "Nome da tabela"
-    in-out property <string> db-select-table;          // "Tabela alvo"
-    in-out property <string> db-add-column;            // "Adicionar coluna"
-    in-out property <string> db-col-name;              // "Nome da coluna"
-    in-out property <string> db-col-type;              // "Tipo"
-    in-out property <string> db-pk;                    // "PK"
-    in-out property <string> db-unique;                // "UNIQUE"
-    in-out property <string> db-nullable;              // "NULL"
-    in-out property <string> db-add-fk;                // "Adicionar FK"
-    in-out property <string> db-fk-col;                // "Coluna"
-    in-out property <string> db-fk-reftable;           // "Tabela ref."
-    in-out property <string> db-fk-refcol;             // "Coluna ref."
-    in-out property <string> db-gen-sql;               // "Gerar SQL"
-    in-out property <string> db-gen-migration;         // "Gerar migration"
-    in-out property <string> db-gen-save;              // "Salvar em arquivo…"
-    in-out property <string> db-ai-title;              // "Gerar por descrição (IA)"
-    in-out property <string> db-ai-hint;               // hint do campo de descrição
-    in-out property <string> db-ai-generate;           // "Gerar com IA"
-    in-out property <string> db-ai-note;               // "roda no terminal; carregue o schema.json quando terminar"
-    in-out property <string> db-ai-no-project;         // aviso: selecione um projeto
-    in-out property <string> db-view-graph;            // "Ver grafo"
-    in-out property <string> db-node-cols;             // texto do nó quando sem descrição
-}
-
-// Paleta central — um único ponto de verdade para claro/escuro.
-export global Theme {
-    in-out property <bool> dark: true;
-
-    // Light REBALANCEADO pra contraste (o dark já estava ótimo, intacto): fundo um pouco mais fundo
-    // pra as superfícies brancas destacarem, bordas visíveis, texto-dim bem mais escuro (era #6b7280,
-    // borderline), acento mais forte.
-    out property <color> bg:        dark ? #14161c : #e8ecf4;
-    out property <color> surface:   dark ? #1b1e27 : #ffffff;
-    out property <color> surface-2: dark ? #222634 : #dce3f0;
-    out property <color> stripe:    dark ? #1e222d : #eef2f9;
-    out property <color> border:    dark ? #2b3040 : #bfc9dc;
-    out property <color> text:      dark ? #e6e9f2 : #12151d;
-    out property <color> text-dim:  dark ? #8a90a2 : #475062;
-    out property <color> accent:    #5b8cff;
-    out property <color> accent-soft: dark ? #2a3a66 : #cedcff;
-    out property <color> good:      #3ecf8e;
-    out property <color> warn:      #e6b23a;
-    out property <color> header-fg: dark ? #9db4ff : #2b48bd;
-}
-
-// Selo verificado: check pequeno (círculo de acento + ✓) + tooltip no hover.
-// Sem texto ao lado do nome — só o ícone (estilo Instagram/X).
-component VerifiedCheck inherits Rectangle {
-    in property <string> tip;
-    width: 17px;
-    height: 17px;
-    Rectangle {
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        background: Theme.accent;
-        Text {
-            text: "✓";
-            color: #ffffff;
-            font-size: 10px;
-            font-weight: 800;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-    ta := TouchArea { mouse-cursor: default; }
-    // tooltip flutuante (aparece no hover; pode transbordar a linha).
-    if ta.has-hover: Rectangle {
-        x: parent.width + 6px;
-        y: (parent.height - self.height) / 2;
-        height: 22px;
-        width: tip-txt.preferred-width + 16px;
-        border-radius: 6px;
-        background: Theme.surface-2;
-        border-width: 1px;
-        border-color: Theme.border;
-        tip-txt := Text {
-            text: root.tip;
-            color: Theme.text;
-            font-size: 11px;
-            font-weight: 600;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-}
-
-// Checkbox próprio (controle total do visual + tema). Emite `toggled`.
-component Check inherits Rectangle {
-    in property <bool> checked;
-    in property <bool> enabled: true;
-    callback toggled();
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    border-width: 1.5px;
-    border-color: checked ? Theme.accent : Theme.text-dim;
-    background: checked ? Theme.accent : transparent;
-    opacity: enabled ? 1.0 : 0.4;
-    animate background, border-color { duration: 120ms; }
-    Text {
-        text: "✓";
-        color: #ffffff;
-        font-size: 13px;
-        font-weight: 800;
-        visible: root.checked;
-    }
-    TouchArea { enabled: root.enabled; clicked => { root.toggled(); } }
-}
-
-// Botão de ação com estilo próprio (primário/secundário, normal/compacto).
-component Btn inherits Rectangle {
-    in property <string> label;
-    in property <bool> primary: false;
-    in property <bool> enabled: true;
-    in property <bool> small: false;
-    in property <bool> danger: false;
-    callback clicked();
-    height: small ? 30px : 38px;
-    border-radius: small ? 7px : 9px;
-    background: primary
-        ? (ta.has-hover && enabled ? #6f9bff : Theme.accent)
-        : (ta.has-hover && enabled ? Theme.surface-2 : Theme.surface);
-    border-width: primary ? 0px : 1px;
-    border-color: danger ? Theme.warn.transparentize(0.4) : Theme.border;
-    opacity: enabled ? 1.0 : 0.45;
-    animate background { duration: 120ms; }
-    HorizontalLayout {
-        padding-left: root.small ? 12px : 16px;
-        padding-right: root.small ? 12px : 16px;
-        Text {
-            text: root.label;
-            vertical-alignment: center;
-            horizontal-alignment: center;
-            color: primary ? #ffffff : (danger ? Theme.warn : Theme.text);
-            font-size: small ? 12.5px : 14px;
-            font-weight: 600;
-        }
-    }
-    ta := TouchArea {
-        enabled: root.enabled;
-        clicked => { if (root.enabled) { root.clicked(); } }
-    }
-}
-
-// Toggle de tema discreto estilo sol/lua — botão-ícone pequeno, sem texto.
-// Mostra a LUA quando está no claro (clica → escuro) e o SOL quando está no
-// escuro (clica → claro). Ícones desenhados por Path (SVG inline), tema-aware.
-component ThemeToggle inherits Rectangle {
-    callback clicked();
-    width: 38px;
-    height: 38px;
-    border-radius: 19px;
-    background: ta.has-hover ? Theme.surface-2 : transparent;
-    border-width: 1px;
-    border-color: ta.has-hover ? Theme.border : transparent;
-    animate background, border-color { duration: 160ms; }
-
-    // LUA (crescente) — visível no tema CLARO; clicar leva ao escuro.
-    if !Theme.dark: Path {
-        width: 19px;
-        height: 19px;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        viewbox-width: 24;
-        viewbox-height: 24;
-        commands: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z";
-        fill: Theme.text-dim;
-    }
-
-    // SOL (disco + raios) — visível no tema ESCURO; clicar leva ao claro.
-    if Theme.dark: Rectangle {
-        width: 22px;
-        height: 22px;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        // raios (traço)
-        Path {
-            width: 22px;
-            height: 22px;
-            viewbox-width: 24;
-            viewbox-height: 24;
-            commands: "M12 2.2v2.6 M12 19.2v2.6 M2.2 12h2.6 M19.2 12h2.6 M4.8 4.8l1.9 1.9 M17.3 17.3l1.9 1.9 M4.8 19.2l1.9-1.9 M17.3 6.7l1.9-1.9";
-            stroke: Theme.warn;
-            stroke-width: 2px;
-        }
-        // disco central
-        Rectangle {
-            width: 11px;
-            height: 11px;
-            border-radius: 5.5px;
-            background: Theme.warn;
-        }
-    }
-
-    ta := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-}
-
-// Sininho de notificações — botão-ícone no header, com badge numérico. Visível em
-// TODAS as telas. `count` alimenta o badge (esconde se 0); `clicked` abre o painel.
-component Bell inherits Rectangle {
-    in property <int> count: 0;
-    callback clicked();
-    width: 38px;
-    height: 38px;
-    border-radius: 19px;
-    background: bta.has-hover ? Theme.surface-2 : transparent;
-    border-width: 1px;
-    border-color: bta.has-hover ? Theme.border : transparent;
-    animate background, border-color { duration: 160ms; }
-
-    // corpo do sino (traço) — tema-aware.
-    Path {
-        width: 20px;
-        height: 20px;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        viewbox-width: 24;
-        viewbox-height: 24;
-        commands: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0";
-        fill: transparent;
-        stroke: Theme.text-dim;
-        stroke-width: 1.8px;
-    }
-    // badge (contagem > 0).
-    if root.count > 0: Rectangle {
-        x: parent.width - self.width - 3px;
-        y: 3px;
-        width: Math.max(16px, badgetxt.preferred-width + 8px);
-        height: 16px;
-        border-radius: 8px;
-        background: Theme.warn;
-        badgetxt := Text {
-            text: root.count > 99 ? "99+" : root.count;
-            color: #1a1200;
-            font-size: 10.5px;
-            font-weight: 800;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-    bta := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-}
-
-// Painel colapsável (título clicável + corpo mono). Usado nas seções do overdev
-// (Decisões / Plano / Perguntas). Começa fechado.
-component Collapse inherits VerticalLayout {
-    in property <string> title;
-    in property <string> body;
-    property <bool> open: false;
-    spacing: 4px;
-    Rectangle {
-        height: 30px;
-        border-radius: 7px;
-        background: hta.has-hover ? Theme.surface-2 : transparent;
-        animate background { duration: 120ms; }
-        HorizontalLayout {
-            padding-left: 8px;
-            padding-right: 8px;
-            spacing: 8px;
-            Text {
-                text: root.open ? "▾" : "▸";
-                font-size: 12px;
-                color: Theme.text-dim;
-                vertical-alignment: center;
-            }
-            Text {
-                text: root.title;
-                font-size: 13.5px;
-                font-weight: 700;
-                color: Theme.text;
-                vertical-alignment: center;
-            }
-        }
-        hta := TouchArea {
-            mouse-cursor: pointer;
-            clicked => { root.open = !root.open; }
-        }
-    }
-    if root.open: Rectangle {
-        border-radius: 8px;
-        background: Theme.surface;
-        border-width: 1px;
-        border-color: Theme.border;
-        HorizontalLayout {
-            padding: 12px;
-            Text {
-                text: root.body;
-                font-size: 12.5px;
-                color: Theme.text-dim;
-                wrap: word-wrap;
-            }
-        }
-    }
-}
-
-// Chip selecionável (escolha de MÉTODO do environment). Emite `clicked`.
-component Chip inherits Rectangle {
-    in property <string> label;
-    in property <bool> selected: false;
-    in property <bool> enabled: true;
-    callback clicked();
-    height: 28px;
-    border-radius: 8px;
-    background: selected ? Theme.accent-soft : (ta.has-hover && enabled ? Theme.surface-2 : Theme.surface);
-    border-width: 1px;
-    border-color: selected ? Theme.accent : Theme.border;
-    opacity: enabled ? 1.0 : 0.5;
-    animate background, border-color { duration: 120ms; }
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        Text {
-            text: root.label;
-            vertical-alignment: center;
-            color: selected ? Theme.header-fg : Theme.text;
-            font-size: 12.5px;
-            font-weight: selected ? 700 : 600;
-        }
-    }
-    ta := TouchArea { enabled: root.enabled; clicked => { if (root.enabled) { root.clicked(); } } }
-}
-
-// Aba do topo (rótulo + marca de "em breve" para as ainda não implementadas).
-component TabBtn inherits Rectangle {
-    in property <string> label;
-    in property <bool> active: false;
-    in property <bool> soon: false;
-    callback clicked();
-    height: 34px;
-    border-radius: 8px;
-    background: active ? Theme.accent-soft : (ta.has-hover ? Theme.surface-2 : transparent);
-    HorizontalLayout {
-        padding-left: 14px;
-        padding-right: 14px;
-        spacing: 6px;
-        Text {
-            text: root.label;
-            vertical-alignment: center;
-            color: active ? Theme.header-fg : Theme.text-dim;
-            font-size: 13.5px;
-            font-weight: active ? 700 : 600;
-        }
-        if root.soon: Rectangle {
-            y: (parent.height - self.height) / 2;
-            height: 18px;
-            width: soonlbl.preferred-width + 12px;
-            border-radius: 9px;
-            background: Theme.warn.transparentize(0.85);
-            border-width: 1px;
-            border-color: Theme.warn.transparentize(0.55);
-            soonlbl := Text {
-                text: L.coming-soon;
-                color: Theme.warn;
-                font-size: 10px;
-                font-weight: 700;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
-    }
-    ta := TouchArea { clicked => { root.clicked(); } }
-}
-
-// Pill de estado (Atualizar / Em dia / carregando) — usada na página Instaladas.
-component StatePill inherits Rectangle {
-    in property <string> state;
-    in property <string> label;
-    property <color> tone:
-        state == "missing"  ? Theme.warn :
-        state == "outdated" ? Theme.accent : Theme.text-dim;
-    width: txt.preferred-width + 22px;
-    height: 24px;
-    border-radius: 12px;
-    background: tone.transparentize(0.85);
-    border-width: 1px;
-    border-color: tone.transparentize(0.5);
-    txt := Text {
-        text: root.label;
-        color: root.tone;
-        font-size: 12px;
-        font-weight: 600;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-}
-
-// Nome da skill + selo verificado (compartilhado pelas duas páginas).
-component SkillName inherits HorizontalLayout {
-    in property <string> slug;
-    in property <bool> verified;
-    spacing: 7px;
-    alignment: start;
-    VerticalLayout {
-        alignment: center;
-        Text {
-            text: root.slug;
-            font-size: 14.5px;
-            font-weight: 700;
-            color: Theme.text;
-            overflow: elide;
-        }
-    }
-    if root.verified: VerticalLayout {
-        alignment: center;
-        VerifiedCheck { tip: L.verified; }
-    }
-}
-
-// Autor clicável (abre sponsor.url). Compartilhado pelas duas páginas.
-component AuthorCell inherits Rectangle {
-    in property <string> author;
-    in property <string> author-url;
-    callback clicked();
-    height: 24px;
-    HorizontalLayout {
-        alignment: start;
-        Text {
-            text: root.author;
-            font-size: 13.5px;
-            color: root.author-url != "" ? Theme.accent : Theme.text-dim;
-            overflow: elide;
-            vertical-alignment: center;
-        }
-    }
-    TouchArea {
-        enabled: root.author-url != "";
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-}
-
-// Card grande de navegação da Home. O ÍCONE é injetado como `@children` (um Path
-// SVG por card — nunca emoji). `soon` marca destinos ainda não implementados
-// (desabilitado + selo "em breve"). Emite `clicked` só quando ativo.
-component HomeCard inherits Rectangle {
-    in property <string> title;
-    in property <string> desc;
-    in property <bool> soon: false;
-    callback clicked();
-    height: 158px;
-    border-radius: 16px;
-    background: (ha.has-hover && !root.soon) ? Theme.surface-2 : Theme.surface;
-    border-width: 1px;
-    border-color: (ha.has-hover && !root.soon) ? Theme.accent.transparentize(0.45) : Theme.border;
-    opacity: root.soon ? 0.5 : 1.0;
-    animate background, border-color { duration: 140ms; }
-    VerticalLayout {
-        padding: 20px;
-        spacing: 9px;
-        // slot do ícone (28px) — cada uso do card passa seu Path aqui.
-        HorizontalLayout { alignment: start; @children }
-        Text {
-            text: root.title;
-            font-size: 16.5px;
-            font-weight: 800;
-            color: Theme.text;
-        }
-        Text {
-            text: root.desc;
-            font-size: 12.5px;
-            color: Theme.text-dim;
-            wrap: word-wrap;
-        }
-        Rectangle {}  // empurra o selo pra base
-        if root.soon: Rectangle {
-            height: 20px;
-            width: sb.preferred-width + 14px;
-            border-radius: 10px;
-            background: Theme.warn.transparentize(0.85);
-            border-width: 1px;
-            border-color: Theme.warn.transparentize(0.55);
-            sb := Text {
-                text: L.coming-soon;
-                color: Theme.warn;
-                font-size: 10px;
-                font-weight: 700;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
-    }
-    ha := TouchArea {
-        enabled: !root.soon;
-        mouse-cursor: root.soon ? default : pointer;
-        clicked => { if (!root.soon) { root.clicked(); } }
-    }
-}
-
-// Ícone-botão de reload (seta circular SVG). O texto "reload" só aparece no HOVER
-// (tooltip flutuante), como pede o redesenho. Emite `clicked`.
-component ReloadIcon inherits Rectangle {
-    callback clicked();
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    background: ra.has-hover ? Theme.surface-2 : Theme.surface;
-    border-width: 1px;
-    border-color: Theme.border;
-    animate background { duration: 120ms; }
-    Path {
-        width: 18px;
-        height: 18px;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        viewbox-width: 24;
-        viewbox-height: 24;
-        // arco quase-completo + cabeça de seta (estilo "atualizar").
-        commands: "M20 12a8 8 0 1 1-2.34-5.66 M20 4v4h-4";
-        fill: transparent;
-        stroke: ra.has-hover ? Theme.text : Theme.text-dim;
-        stroke-width: 2px;
-    }
-    ra := TouchArea {
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-    if ra.has-hover: Rectangle {
-        y: parent.height + 4px;
-        x: (parent.width - self.width) / 2;
-        height: 22px;
-        width: rtt.preferred-width + 16px;
-        border-radius: 6px;
-        background: Theme.surface-2;
-        border-width: 1px;
-        border-color: Theme.border;
-        rtt := Text {
-            text: L.reload;
-            color: Theme.text;
-            font-size: 11px;
-            font-weight: 600;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-}
-
-// Barra de projeto ENXUTA — uma linha idêntica em Overdev e Grafo:
-//   Projeto: [dropdown] · [Abrir pasta] · [Abrir no VSCode] · [⟳] · [Diretórios de dev]
-// Recebe o modelo/projeto atual e emite callbacks; a gestão de dev_dirs mora num
-// MODAL (fora daqui) — esta barra só ABRE o modal via `manage-dirs`.
-// Botão-ÍCONE compacto: glifo VETORIAL (Path) + tooltip no hover. Mesma linguagem do ReloadIcon —
-// sem emoji (regra da casa), ocupa 34px em vez de um botão de texto largo.
-component IconBtn inherits Rectangle {
-    in property <string> commands;   // path SVG do glifo (viewbox 24x24)
-    in property <string> tip;        // tooltip
-    in property <bool> enabled: true;
-    callback clicked();
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    background: ib.has-hover && root.enabled ? Theme.surface-2 : Theme.surface;
-    border-width: 1px;
-    border-color: Theme.border;
-    opacity: root.enabled ? 1.0 : 0.45;
-    animate background { duration: 120ms; }
-    Path {
-        width: 18px;
-        height: 18px;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-        viewbox-width: 24;
-        viewbox-height: 24;
-        commands: root.commands;
-        fill: transparent;
-        stroke: ib.has-hover && root.enabled ? Theme.text : Theme.text-dim;
-        stroke-width: 2px;
-    }
-    ib := TouchArea {
-        enabled: root.enabled;
-        mouse-cursor: root.enabled ? pointer : default;
-        clicked => { root.clicked(); }
-    }
-    if ib.has-hover && root.tip != "": Rectangle {
-        y: parent.height + 4px;
-        x: (parent.width - self.width) / 2;
-        height: 22px;
-        width: tipt.preferred-width + 16px;
-        border-radius: 6px;
-        background: Theme.surface-2;
-        border-width: 1px;
-        border-color: Theme.border;
-        tipt := Text {
-            text: root.tip;
-            color: Theme.text;
-            font-size: 11px;
-            font-weight: 600;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-}
-
-component ProjectBar inherits Rectangle {
-    in property <[ProjItem]> projects;
-    in property <string> current;
-    callback pick(string);
-    callback open-folder();
-    callback open-vscode();
-    callback reload();
-    callback manage-dirs();
-    callback new-window();  // abre o projeto atual numa JANELA/processo próprio (overdev em paralelo)
-    // Compacto/inline: sem altura fixa nem fundo — vive no CABEÇALHO, ao lado do "← Voltar".
-    HorizontalLayout {
-        padding-left: 0px;
-        padding-right: 0px;
-        spacing: 8px;
-        VerticalLayout {
-            alignment: center;
-            Text { text: L.project; font-size: 13px; font-weight: 600; color: Theme.text-dim; }
-        }
-        // dropdown de projeto (recentes + detectados por projects::scan)
-        VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 240px;
-                height: 34px;
-                border-radius: 8px;
-                background: sela.has-hover ? Theme.surface-2 : Theme.surface;
-                border-width: 1px;
-                border-color: Theme.border;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    spacing: 8px;
-                    Text {
-                        text: root.current != "" ? root.current : "—";
-                        color: root.current != "" ? Theme.text : Theme.text-dim;
-                        font-size: 13.5px;
-                        font-weight: 600;
-                        vertical-alignment: center;
-                        overflow: elide;
-                    }
-                    Rectangle {}
-                    Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
-                }
-                sela := TouchArea { mouse-cursor: pointer; clicked => { selpop.show(); } }
-                selpop := PopupWindow {
-                    x: 0;
-                    y: parent.height + 4px;
-                    width: 300px;
-                    Rectangle {
-                        background: Theme.surface;
-                        border-width: 1px;
-                        border-color: Theme.border;
-                        border-radius: 10px;
-                        VerticalLayout {
-                            padding: 6px;
-                            spacing: 1px;
-                            if root.projects.length == 0: Text {
-                                text: L.no-project;
-                                font-size: 12px;
-                                color: Theme.text-dim;
-                                wrap: word-wrap;
-                            }
-                            for pit[pi] in root.projects: Rectangle {
-                                height: pit.is-header ? 26px : 32px;
-                                border-radius: 6px;
-                                background: (!pit.is-header && sita.has-hover) ? Theme.surface-2 : transparent;
-                                HorizontalLayout {
-                                    padding-left: 8px;
-                                    padding-right: 8px;
-                                    spacing: 8px;
-                                    if pit.is-header: Text {
-                                        text: pit.label;
-                                        font-size: 11px;
-                                        font-weight: 700;
-                                        color: Theme.text-dim;
-                                        vertical-alignment: center;
-                                    }
-                                    if !pit.is-header: Text {
-                                        text: pit.name;
-                                        font-size: 13px;
-                                        font-weight: 600;
-                                        color: Theme.text;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-                                    Rectangle {}
-                                    if !pit.is-header && pit.marker != "": Text {
-                                        text: pit.marker;
-                                        font-size: 11px;
-                                        color: Theme.text-dim;
-                                        vertical-alignment: center;
-                                    }
-                                }
-                                sita := TouchArea {
-                                    enabled: !pit.is-header;
-                                    mouse-cursor: pointer;
-                                    clicked => { root.pick(pit.path); }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        VerticalLayout {
-            alignment: center;
-            HorizontalLayout {
-                spacing: 6px;
-                // Abrir pasta (folder)
-                IconBtn {
-                    commands: "M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z";
-                    tip: L.open-folder;
-                    enabled: root.current != "";
-                    clicked => { root.open-folder(); }
-                }
-                // Abrir no VSCode (chevrons de código)
-                IconBtn {
-                    commands: "M9 8l-4 4 4 4 M15 8l4 4-4 4";
-                    tip: L.open-vscode;
-                    enabled: root.current != "";
-                    clicked => { root.open-vscode(); }
-                }
-                // Recarregar (já é ícone)
-                ReloadIcon { clicked => { root.reload(); } }
-                // Diretórios de desenvolvimento (folder +)
-                IconBtn {
-                    commands: "M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z M12 11v5 M9.5 13.5h5";
-                    tip: L.dev-dirs;
-                    clicked => { root.manage-dirs(); }
-                }
-                // Abrir em nova janela (overdev paralelo — processo isolado)
-                IconBtn {
-                    commands: "M13 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7 M14 4h6v6 M20 4l-8 8";
-                    tip: "Nova janela (overdev paralelo)";
-                    enabled: root.current != "";
-                    clicked => { root.new-window(); }
-                }
-            }
-        }
-        Rectangle {}
-    }
-}
-
-// Controle de paginação simples e consistente (‹ Anterior · página X de Y · Próximo ›).
-// `page` é 0-based; `total` é o nº TOTAL de itens; `per` o tamanho da página.
-component Pager inherits HorizontalLayout {
-    in property <int> page;
-    in property <int> total;
-    in property <int> per: 20;
-    callback prev();
-    callback next();
-    property <int> pages: root.total <= 0 ? 1 : (root.total + root.per - 1) / root.per;
-    spacing: 12px;
-    alignment: center;
-    Btn {
-        label: L.pg-prev; small: true;
-        enabled: root.page > 0;
-        clicked => { root.prev(); }
-    }
-    VerticalLayout {
-        alignment: center;
-        Text {
-            text: "\{root.page + 1} \{L.pg-of} \{root.pages}";
-            font-size: 12.5px;
-            font-weight: 600;
-            color: Theme.text-dim;
-        }
-    }
-    Btn {
-        label: L.pg-next; small: true;
-        enabled: (root.page + 1) * root.per < root.total;
-        clicked => { root.next(); }
-    }
-}
-
-// Canvas do grafo força-dirigido REUSÁVEL — arestas (Path) + nós (círculo) +
-// camada de interação (pan/zoom/arrasto/clique → Rust) + bloco de info do nó
-// selecionado. A física/transformação vive no Rust; aqui só se renderiza e se
-// encaminham os eventos crus. Usado pela aba Grafo (índice §39, com arquivo:linha)
-// E pelo Database builder (grafo do schema, sem loc). `show-loc` esconde a linha
-// de arquivo:linha/editor no caso do schema (tabela não tem local no código).
-component GraphCanvas inherits Rectangle {
-    in property <[GraphNode]> nodes;
-    in property <[GraphEdge]> edges;
-    in property <float> scale: 1.0;
-    in property <float> ox: 0;
-    in property <float> oy: 0;
-    in property <bool> has-sel: false;
-    in property <string> sel-id;
-    in property <string> sel-desc;
-    in property <string> sel-loc;
-    in property <bool> show-loc: true;
-    in property <string> nodesc-label;
-    in property <string> noloc-label;
-    in property <string> open-editor-label;
-    callback press(float, float);
-    callback move(float, float);
-    callback release();
-    callback scroll(float, float, float);
-    callback resized(float, float);
-    callback clear-sel();
-    callback open-editor();
-
-    clip: true;
-    background: Theme.dark ? #14161c : #eef1f8;
-    changed width => { root.resized(self.width / 1px, self.height / 1px); }
-    changed height => { root.resized(self.width / 1px, self.height / 1px); }
-
-    // arestas (uma Path por aresta; viewbox 1:1 com o canvas → coords em px)
-    for e[ei] in root.edges: Path {
-        width: 100%;
-        height: 100%;
-        viewbox-width: root.width / 1px;
-        viewbox-height: root.height / 1px;
-        stroke: e.on ? Theme.accent : Theme.text-dim.transparentize(0.7);
-        stroke-width: e.on ? 1.6px : 1px;
-        MoveTo {
-            x: root.width / 2 / 1px + e.x1 * root.scale + root.ox;
-            y: root.height / 2 / 1px + e.y1 * root.scale + root.oy;
-        }
-        LineTo {
-            x: root.width / 2 / 1px + e.x2 * root.scale + root.ox;
-            y: root.height / 2 / 1px + e.y2 * root.scale + root.oy;
-        }
-    }
-
-    // nós (círculo = Rectangle com border-radius) + rótulo
-    for n[ni] in root.nodes: Rectangle {
-        width: n.r * 2px;
-        height: n.r * 2px;
-        border-radius: n.r * 1px;
-        x: root.width / 2 + (n.x * root.scale + root.ox) * 1px - self.width / 2;
-        y: root.height / 2 + (n.y * root.scale + root.oy) * 1px - self.height / 2;
-        opacity: n.dim ? 0.28 : 1.0;
-        background: n.selected
-            ? (Theme.dark ? #ffffff : #1a1e2b)
-            : (n.has-loc ? Theme.accent : Theme.accent.transparentize(0.4));
-        border-width: n.selected ? 2px : 0px;
-        border-color: Theme.header-fg;
-        if root.scale > 1.15 || n.selected || n.hot: Text {
-            x: parent.width + 4px;
-            y: (parent.height - self.height) / 2;
-            text: n.label;
-            font-size: 11px;
-            font-weight: n.selected ? 700 : 500;
-            color: n.dim ? Theme.text-dim : Theme.text;
-        }
-    }
-
-    // camada de interação (por cima dos visuais): pan/zoom/arrasto/clique → Rust.
-    gta := TouchArea {
-        mouse-cursor: pointer;
-        pointer-event(e) => {
-            if (e.kind == PointerEventKind.down) {
-                root.press(self.mouse-x / 1px, self.mouse-y / 1px);
-            }
-            if (e.kind == PointerEventKind.up) {
-                root.release();
-            }
-        }
-        moved => {
-            root.move(self.mouse-x / 1px, self.mouse-y / 1px);
-        }
-        scroll-event(e) => {
-            root.scroll(self.mouse-x / 1px, self.mouse-y / 1px, e.delta-y / 1px);
-            return accept;
-        }
-    }
-
-    // bloco de info do nó selecionado (canto inferior esquerdo).
-    if root.has-sel: Rectangle {
-        x: 12px;
-        y: parent.height - self.height - 12px;
-        width: min(parent.width - 24px, 440px);
-        height: ginfo.preferred-height;
-        border-radius: 10px;
-        background: Theme.surface;
-        border-width: 1px;
-        border-color: Theme.border;
-        TouchArea {}
-        ginfo := VerticalLayout {
-            padding: 12px;
-            spacing: 6px;
-            HorizontalLayout {
-                spacing: 8px;
-                Text {
-                    text: root.sel-id;
-                    font-size: 14px;
-                    font-weight: 700;
-                    color: Theme.text;
-                    overflow: elide;
-                    horizontal-stretch: 1;
-                }
-                close-ta := TouchArea {
-                    width: 20px;
-                    height: 20px;
-                    mouse-cursor: pointer;
-                    clicked => { root.clear-sel(); }
-                    Text {
-                        text: "✕";
-                        font-size: 13px;
-                        font-weight: 700;
-                        color: close-ta.has-hover ? Theme.text : Theme.text-dim;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                    }
-                }
-            }
-            Text {
-                text: root.sel-desc != "" ? root.sel-desc : root.nodesc-label;
-                font-size: 12px;
-                color: root.sel-desc != "" ? Theme.text : Theme.text-dim;
-                wrap: word-wrap;
-            }
-            if root.show-loc && root.sel-loc != "": Text {
-                text: root.sel-loc;
-                font-size: 12px;
-                color: Theme.accent;
-                overflow: elide;
-            }
-            if root.show-loc && root.sel-loc != "": HorizontalLayout {
-                alignment: start;
-                Btn { label: root.open-editor-label; small: true; clicked => { root.open-editor(); } }
-            }
-            if root.show-loc && root.sel-loc == "": Text {
-                text: root.noloc-label;
-                font-size: 12px;
-                color: Theme.text-dim;
-            }
-        }
-    }
-}
+// Reexporta os globais que o RUST acessa (`app.global::<L>()`): só o que sai do
+// arquivo de entrada aparece na API gerada.
+export { L } from "i18n.slint";
+export { Theme } from "theme.slint";
 
 export component AppWindow inherits Window {
     title: L.window-title;
@@ -1439,7 +68,16 @@ export component AppWindow inherits Window {
     in-out property <int> od-open;
     in-out property <int> od-hold;
     in-out property <int> od-human-open;         // humanos abertos (- [H ])
-    in property <[OverItem]> od-items;
+    in property <[OverItem]> od-items;           // SÓ a página corrente (o resto vive no Rust)
+    // Checklist FATIADO: o repeater do Slint não é virtualizado, então a UI nunca
+    // recebe mais de `checklist::PER_PAGE` itens — o custo de render é constante,
+    // não cresce com o projeto.
+    in-out property <int> od-cl-filter: 0;   // 0 todos · 1 abertos · 2 feitos · 3 on-hold · 4 humanos
+    in-out property <int> od-cl-page: 0;     // página corrente (0-based)
+    in-out property <int> od-cl-pages: 1;    // total de páginas sob o filtro
+    in-out property <int> od-cl-total: 0;    // itens sob o filtro
+    in-out property <int> od-cl-from: 0;     // 1-based do 1º item da página
+    in-out property <int> od-cl-to: 0;       // 1-based do último item da página
     in-out property <string> od-decisoes;
     in-out property <string> od-plano;
     in-out property <string> od-perguntas;
@@ -1448,6 +86,9 @@ export component AppWindow inherits Window {
     in-out property <string> od-editor-content;             // conteúdo editável
     in-out property <string> od-editor-status;              // feedback salvo/erro
     in-out property <bool> od-editor-error: false;          // o status é erro?
+    in-out property <bool> od-editor-open: false;           // editor ABERTO (só aí o TextEdit existe)
+    in-out property <bool> od-editor-too-big: false;        // arquivo acima do teto → só editor externo
+    in-out property <string> od-editor-size;                // tamanho legível do arquivo grande
     // notas / correções (Fase 3)
     in-out property <string> od-notes;                      // read_notes(root)
     in-out property <string> od-note-input;                 // input de nota por task
@@ -1629,6 +270,10 @@ export component AppWindow inherits Window {
     callback od-open-browser();         // abre o painel HTML do projeto no navegador
     // ---- Fase 3: marcar-humano + editor + notas/correção ----
     callback od-mark-human(int);        // fecha o i-ésimo humano aberto (- [H ]→- [H x])
+    callback od-cl-set-page(int);       // checklist fatiado: vai pra página N (0-based)
+    callback od-cl-set-filter(int);     // checklist fatiado: troca o filtro (volta pra página 0)
+    callback od-editor-toggle();        // abre/fecha o editor acoplado (e lê/descarta o conteúdo)
+    callback od-editor-open-external(); // arquivo grande demais → abre no editor do sistema
     callback od-editor-pick(string);    // troca o arquivo do editor (PLAN.md/CHECKLIST.md)
     callback od-editor-save();          // regrava o arquivo do editor no .overdev/
     callback od-add-note(string);       // add_note(root,"task",texto) — ponto por task
@@ -1730,6 +375,7 @@ export component AppWindow inherits Window {
     callback graph-export();                  // exporta o vault Obsidian
     callback graph-open-browser();            // abre o painel HTML no navegador
     callback graph-reindex();                 // dispara o índice §39 num terminal externo (thread)
+    callback graph-enter();             // aba Grafo aberta → carrega (se preciso) e liga a física
     callback graph-reload();                  // re-roda load_graph + node_descriptions e atualiza a UI
     callback graph-clear-sel();               // fecha o bloco de info do nó (deseleciona)
     callback graph-drill();                   // drill-down: abre o grafo detalhado do serviço selecionado
@@ -1812,6 +458,10 @@ export component AppWindow inherits Window {
     changed screen => {
         if (root.screen == 2) { root.od-refresh-history(); }
         if (root.screen == 0) { root.notif-refresh(); }
+        // A aba Grafo carrega o grafo e liga a física SÓ ao ser aberta — parsear o
+        // índice e simular a 60 fps num projeto grande travava o app inteiro quando
+        // isso acontecia junto com a escolha do projeto na aba Overdev.
+        if (root.screen == 3) { root.graph-enter(); }
     }
 
     VerticalLayout {
@@ -3464,7 +2114,24 @@ export component AppWindow inherits Window {
                         }
                     }
                     Rectangle { height: 1px; background: Theme.border; }
-                    // checklist 2-níveis: ícone/cor por estado + etiqueta MÁQUINA vs HUMANO;
+                    // ---- checklist 2-níveis: barra de FILTRO + PAGINAÇÃO ----
+                    // O repeater abaixo NÃO é virtualizado (limitação do Slint), então o
+                    // Rust só entrega uma PÁGINA por vez. Sem isto, um projeto com 500+
+                    // itens instancia milhares de elementos de uma vez e trava o app.
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+                        Chip { label: L.od-cl-all;   selected: root.od-cl-filter == 0; clicked => { root.od-cl-set-filter(0); } }
+                        Chip { label: L.od-cl-open;  selected: root.od-cl-filter == 1; clicked => { root.od-cl-set-filter(1); } }
+                        Chip { label: L.od-cl-done;  selected: root.od-cl-filter == 2; clicked => { root.od-cl-set-filter(2); } }
+                        Chip { label: L.od-cl-hold;  selected: root.od-cl-filter == 3; clicked => { root.od-cl-set-filter(3); } }
+                        Chip { label: L.od-cl-human; selected: root.od-cl-filter == 4; clicked => { root.od-cl-set-filter(4); } }
+                    }
+                    if root.od-cl-total == 0: Text {
+                        text: L.od-cl-empty;
+                        font-size: 12.5px;
+                        color: Theme.text-dim;
+                    }
                     // itens HUMANOS ABERTOS ganham o botão "marcar como feito".
                     for it[ii] in root.od-items: HorizontalLayout {
                         spacing: 8px;
@@ -3514,6 +2181,31 @@ export component AppWindow inherits Window {
                             clicked => { root.od-mark-human(it.hindex); }
                         }
                     }
+                    // navegação de páginas — só aparece quando há mais de uma.
+                    if root.od-cl-pages > 1: HorizontalLayout {
+                        spacing: 10px;
+                        alignment: start;
+                        Btn {
+                            label: "‹";
+                            small: true;
+                            enabled: root.od-cl-page > 0;
+                            clicked => { root.od-cl-set-page(root.od-cl-page - 1); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: "\{root.od-cl-from}–\{root.od-cl-to} \{L.od-cl-of} \{root.od-cl-total}";
+                                font-size: 12.5px;
+                                color: Theme.text-dim;
+                            }
+                        }
+                        Btn {
+                            label: "›";
+                            small: true;
+                            enabled: root.od-cl-page < root.od-cl-pages - 1;
+                            clicked => { root.od-cl-set-page(root.od-cl-page + 1); }
+                        }
+                    }
                     Rectangle { height: 6px; }
                     // ---- editor acoplado de PLAN.md / CHECKLIST.md ----
                     Rectangle { height: 1px; background: Theme.border; }
@@ -3523,18 +2215,39 @@ export component AppWindow inherits Window {
                             spacing: 8px;
                             Text { text: L.od-editor; font-size: 14px; font-weight: 800; color: Theme.text; vertical-alignment: center; }
                             Rectangle {}
-                            Btn {
+                            if root.od-editor-open: Btn {
                                 label: "PLAN.md"; small: true;
                                 primary: root.od-editor-target == "PLAN.md";
                                 clicked => { root.od-editor-pick("PLAN.md"); }
                             }
-                            Btn {
+                            if root.od-editor-open: Btn {
                                 label: "CHECKLIST.md"; small: true;
                                 primary: root.od-editor-target == "CHECKLIST.md";
                                 clicked => { root.od-editor-pick("CHECKLIST.md"); }
                             }
+                            // Abrir/fechar: o TextEdit do Slint faz layout do texto INTEIRO a
+                            // cada medida, então ele só existe enquanto o editor está aberto.
+                            Btn {
+                                label: root.od-editor-open ? L.od-editor-hide : L.od-editor-show;
+                                small: true;
+                                clicked => { root.od-editor-toggle(); }
+                            }
                         }
-                        Rectangle {
+                        // arquivo acima do teto: não entra no TextEdit (travaria) — manda pro externo.
+                        if root.od-editor-open && root.od-editor-too-big: VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "\{L.od-editor-big} (\{root.od-editor-size})";
+                                font-size: 12.5px;
+                                color: Theme.warn;
+                                wrap: word-wrap;
+                            }
+                            HorizontalLayout {
+                                alignment: start;
+                                Btn { label: L.od-editor-external; small: true; clicked => { root.od-editor-open-external(); } }
+                            }
+                        }
+                        if root.od-editor-open && !root.od-editor-too-big: Rectangle {
                             height: 220px;
                             border-radius: 8px;
                             background: Theme.surface;
@@ -3548,7 +2261,7 @@ export component AppWindow inherits Window {
                                 edited(s) => { root.od-editor-content = s; }
                             }
                         }
-                        HorizontalLayout {
+                        if root.od-editor-open && !root.od-editor-too-big: HorizontalLayout {
                             spacing: 12px;
                             alignment: start;
                             Btn { label: L.od-save-plan; primary: true; small: true; clicked => { root.od-editor-save(); } }

@@ -1,0 +1,218 @@
+// Structs da FRONTEIRA Rust <-> UI: cada `struct` daqui vira um tipo gerado no
+// Rust pelo `slint::include_modules!()` e é como uma linha de modelo trafega.
+
+// ---------------------------------------------------------------------------
+// schematize — GUI em Slint (migração incremental egui→Slint).
+//
+// O quê: DUAS páginas de topo — "Instaladas" e "Marketplace" — sobre o MESMO
+// modelo de linhas (uma linha por skill + cabeçalhos de categoria). A página
+// ativa filtra as linhas por ESTADO:
+//   • Marketplace = skills NÃO instaladas (state == "missing") → descobrir/instalar.
+//   • Instaladas  = skills instaladas (state != "missing")     → atualizar/desinstalar.
+// Overdev/Grafo seguem como placeholders ("em breve").
+//
+// Selo verificado: um CHECK pequeno (círculo de acento + ✓), estilo Instagram/X,
+// com tooltip no hover — SEM texto ao lado.
+//
+// i18n: NADA de texto hardcoded — toda string estática vem do `global L`,
+// preenchido pelo Rust a partir de `schematize::i18n` (11 locales).
+// ---------------------------------------------------------------------------
+
+
+// ---- Grafo (aba 4) ----------------------------------------------------------
+// Um nó do grafo force-directed. As posições (x/y) são MUNDO (não-tela) — a física
+// vive no Rust e as escreve a cada tick; o Slint aplica a transformação global
+// (g-scale/g-ox/g-oy + centro do canvas) na hora de renderizar. `r` é o raio EM
+// PIXELS de tela (constante ao zoom, como no egui). `selected`/`hot`/`dim`
+// controlam cor e realce; `has-loc` diz se o nó tem `arquivo:linha` (abrível).
+export struct GraphNode {
+    id: string,
+    label: string,
+    x: float,
+    y: float,
+    r: float,
+    selected: bool,
+    hot: bool,      // vizinho do selecionado OU casa com a busca
+    dim: bool,      // apagado (fora do foco/da busca)
+    has-loc: bool,
+}
+// Uma aresta: as duas pontas em coordenadas de MUNDO (o Slint transforma). `on`
+// realça quando toca o nó selecionado.
+export struct GraphEdge {
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    on: bool,
+}
+
+// Uma linha do modelo. Pode ser um CABEÇALHO de categoria (is-header) ou uma
+// SKILL. Campos preenchidos/atualizados pelo Rust (catálogo + rede + ações).
+export struct SkillRow {
+    is-header: bool,
+    header-label: string,
+    // Cabeçalho: a QUAL página pertence (0 = Instaladas, 1 = Marketplace) e
+    // quantas skills ele agrupa AGORA nessa página (0 → cabeçalho some).
+    page: int,
+    count: int,
+    // Categoria (base/language/external) — usada pelo Rust p/ recontar os
+    // cabeçalhos após instalar/desinstalar (skill muda de página).
+    category: string,
+    slug: string,
+    author: string,
+    author-url: string,
+    installed: string,
+    latest: string,
+    state: string,        // "missing" | "outdated" | "current" | "loading"
+    state-label: string,
+    verified: bool,
+    selected: bool,
+    busy: bool,           // operação (instalar/remover) em andamento nesta linha
+    op-label: string,     // status transitório da linha ("instalando…", erro…)
+    op-error: bool,       // op-label é um erro? (colore em warn)
+    disp: int,            // índice de exibição na página ativa (paginação); -1 fora da página
+    forked: bool,         // skill oficial que virou FORK editável (marca [fork] + habilita Comparar)
+    rating: string,       // nota do marketplace ("★4.7 (12)"); vazio = sem nota (preenchido async)
+}
+
+// Uma linha da aba Environments: uma LINGUAGEM ou FERRAMENTA de dev, seus métodos
+// disponíveis nesta máquina, o método escolhido pra instalar, e o status.
+// Preenchida pelo Rust a partir de `schematize::environments::status()`.
+// `category` ("language" | "tool") separa as duas seções; ferramentas não têm
+// seletor de método (methods vazio) — mostram só o `install-hint`.
+export struct EnvRow {
+    lang: string,           // slug ("go", "rust", "claude", ...) — vira o arg do `schematize env`
+    display: string,        // nome de exibição ("Go", "C# / .NET", "Claude Code", ...)
+    category: string,       // "language" (runtime) | "tool" (ferramenta de dev)
+    install-hint: string,   // rótulo do caminho de instalação (ferramenta: "npm -g" / "official (curl|sh)")
+    section-title: string,  // não-vazio → esta linha ABRE uma seção com este título ("Linguagens"/"Ferramentas de dev")
+    methods: [string],      // métodos utilizáveis AQUI (docker|mise|distro|official); vazio p/ ferramenta
+    method-sel: string,     // método escolhido pra instalar (chip selecionado)
+    installed: bool,        // já instalado (por método detectado OU runtime no PATH)
+    status-label: string,   // texto de status traduzido (instalado via X / instalado / não)
+    op-label: string,       // mensagem transitória da linha (terminal aberto / erro)
+}
+
+// Uma entrada do seletor de projeto da aba Overdev: um CABEÇALHO de grupo
+// (Detectados/Recentes) ou um PROJETO clicável. Preenchida pelo Rust a partir de
+// `schematize::projects::scan()` (detectados) + `config::recent_projects()`.
+export struct ProjItem {
+    is-header: bool,
+    label: string,    // cabeçalho: rótulo do grupo
+    name: string,     // projeto: nome de exibição (basename)
+    path: string,     // projeto: caminho absoluto (arg das ações)
+    marker: string,   // projeto: marcador que o identificou (.git/.overdev/…)
+}
+
+// Um item do checklist 2-níveis do overdev: tipo + texto + origem + índice humano.
+// `kind` decide cor/ícone: máquina "done"=✓verde / "open"=○ / "hold"=~amarelo;
+// humano "hdone"=✓ / "hopen"=○ (marcável pela pessoa). `machine`=🤖 vs 👤.
+// `hindex` = posição 1-based do item entre os HUMANOS ABERTOS (arg de od-mark-human);
+// -1 para itens não-marcáveis.
+export struct OverItem {
+    kind: string,     // "done" | "open" | "hold" | "hopen" | "hdone"
+    text: string,
+    machine: bool,    // true = item de MÁQUINA (agente) · false = item HUMANO
+    hindex: int,      // hopen: 1-based entre humanos abertos · senão -1
+}
+
+// Uma ação declarada por uma skill instalada (gui.json) — vira botão na aba do projeto.
+// Preenchida pelo Rust a partir de `schematize::guiactions::gui_actions()`.
+export struct SkillAction {
+    label: string,        // rótulo do botão ("Q.A.", "Pentest")
+    command: string,      // comando disparado no claude ("/eng-qa")
+    needs-project: bool,  // só habilita com projeto selecionado
+    skill: string,        // slug da skill dona
+}
+
+// Uma chave SSH da máquina (só metadados PÚBLICOS — a privada NUNCA aparece).
+// Preenchida pelo Rust a partir de `schematize::sshkeys::list()`.
+export struct SshRow {
+    name: string,        // nome do arquivo base em ~/.ssh (ex.: "github")
+    kind: string,        // algoritmo (ED25519/RSA/…)
+    comment: string,     // comentário embutido na pública
+    fingerprint: string, // fingerprint SHA256
+    public-path: string, // caminho da PÚBLICA (nunca a privada)
+    op-label: string,    // feedback transitório ("copiado" / erro)
+    op-error: bool,      // op-label é erro?
+}
+
+// Um idioma no seletor de Configurações (código + nome nativo + se é o atual).
+export struct LangItem {
+    code: string,
+    name: string,
+    current: bool,
+}
+
+// Uma linha do histórico do DB do overdev (snapshot). Preenchida pelo Rust a
+// partir de `schematize::overdevdb::history()`. `id` é a chave de Ver/Restaurar.
+export struct SnapRow {
+    id: int,
+    file: string,     // caminho relativo (ex.: .overdev/CHECKLIST.md)
+    date: string,     // ts epoch formatado (AAAA-MM-DD hh:mm)
+    size: string,     // tamanho legível
+    hash: string,     // hash curto
+}
+
+// Uma linha do histórico de commits. Preenchida pelo Rust a partir de
+// `schematize::githist::commits()`. `pushed` decide o marcador ● / ○.
+export struct CommitRow {
+    short: string,
+    date: string,
+    author: string,
+    subject: string,
+    pushed: bool,
+}
+
+// Uma notificação do sininho (mapeada de `schematize::notifications::Notif`).
+// `scope` = "global" | "personal" (agrupador). `has-action` decide se mostra o
+// botão de ação; `kind` decide o rótulo/efeito ("app_update"|"news"|"skill_outdated").
+export struct NotifItem {
+    idx: int,        // posição na lista completa colhida (arg de notif-action)
+    scope: string,
+    title: string,
+    body: string,
+    kind: string,
+    action: string,
+    has-action: bool,
+}
+
+// Um arquivo na comparação fork-ativo vs nova oficial (mapeado de `skills::FileDiff`).
+// `status` = "igual" | "mudou" | "novo" | "removido" (texto já em pt-BR do lib).
+export struct CmpFile {
+    path: string,
+    status: string,
+}
+
+// ---- Database builder (tela 6) ----------------------------------------------
+// Uma COLUNA de uma tabela do schema (espelha database::Column). Flags decidem
+// os marcadores PK/UK/NULL na visualização.
+export struct DbColumn {
+    name: string,
+    ty: string,
+    nullable: bool,
+    pk: bool,
+    unique: bool,
+}
+// Uma chave estrangeira (espelha database::Fk): coluna local → tabela.coluna ref.
+export struct DbFkRow {
+    column: string,
+    ref-table: string,
+    ref-column: string,
+}
+// Um índice (espelha database::Index): nome + colunas (já unidas em texto) + UNIQUE.
+export struct DbIndexRow {
+    name: string,
+    columns-text: string,
+    unique: bool,
+}
+// Uma TABELA do schema carregado — colunas, FKs e índices aninhados (modelos
+// próprios). Preenchida pelo Rust a partir de `database::Schema`.
+export struct DbTableRow {
+    name: string,
+    columns: [DbColumn],
+    fks: [DbFkRow],
+    indexes: [DbIndexRow],
+}
+
+// Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.

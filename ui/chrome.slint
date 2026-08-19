@@ -1,0 +1,340 @@
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { ProjItem, GraphNode, GraphEdge } from "types.slint";
+import { Btn, IconBtn, Chip, ReloadIcon } from "widgets.slint";
+
+// Componentes de moldura: barra de projeto, paginador e o canvas do grafo —
+// peças grandes o suficiente pra merecerem arquivo próprio.
+
+export component ProjectBar inherits Rectangle {
+    in property <[ProjItem]> projects;
+    in property <string> current;
+    callback pick(string);
+    callback open-folder();
+    callback open-vscode();
+    callback reload();
+    callback manage-dirs();
+    callback new-window();  // abre o projeto atual numa JANELA/processo próprio (overdev em paralelo)
+    // Compacto/inline: sem altura fixa nem fundo — vive no CABEÇALHO, ao lado do "← Voltar".
+    HorizontalLayout {
+        padding-left: 0px;
+        padding-right: 0px;
+        spacing: 8px;
+        VerticalLayout {
+            alignment: center;
+            Text { text: L.project; font-size: 13px; font-weight: 600; color: Theme.text-dim; }
+        }
+        // dropdown de projeto (recentes + detectados por projects::scan)
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 240px;
+                height: 34px;
+                border-radius: 8px;
+                background: sela.has-hover ? Theme.surface-2 : Theme.surface;
+                border-width: 1px;
+                border-color: Theme.border;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 8px;
+                    Text {
+                        text: root.current != "" ? root.current : "—";
+                        color: root.current != "" ? Theme.text : Theme.text-dim;
+                        font-size: 13.5px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Rectangle {}
+                    Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
+                }
+                sela := TouchArea { mouse-cursor: pointer; clicked => { selpop.show(); } }
+                selpop := PopupWindow {
+                    x: 0;
+                    y: parent.height + 4px;
+                    width: 300px;
+                    Rectangle {
+                        background: Theme.surface;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        border-radius: 10px;
+                        VerticalLayout {
+                            padding: 6px;
+                            spacing: 1px;
+                            if root.projects.length == 0: Text {
+                                text: L.no-project;
+                                font-size: 12px;
+                                color: Theme.text-dim;
+                                wrap: word-wrap;
+                            }
+                            for pit[pi] in root.projects: Rectangle {
+                                height: pit.is-header ? 26px : 32px;
+                                border-radius: 6px;
+                                background: (!pit.is-header && sita.has-hover) ? Theme.surface-2 : transparent;
+                                HorizontalLayout {
+                                    padding-left: 8px;
+                                    padding-right: 8px;
+                                    spacing: 8px;
+                                    if pit.is-header: Text {
+                                        text: pit.label;
+                                        font-size: 11px;
+                                        font-weight: 700;
+                                        color: Theme.text-dim;
+                                        vertical-alignment: center;
+                                    }
+                                    if !pit.is-header: Text {
+                                        text: pit.name;
+                                        font-size: 13px;
+                                        font-weight: 600;
+                                        color: Theme.text;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    Rectangle {}
+                                    if !pit.is-header && pit.marker != "": Text {
+                                        text: pit.marker;
+                                        font-size: 11px;
+                                        color: Theme.text-dim;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                sita := TouchArea {
+                                    enabled: !pit.is-header;
+                                    mouse-cursor: pointer;
+                                    clicked => { root.pick(pit.path); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                spacing: 6px;
+                // Abrir pasta (folder)
+                IconBtn {
+                    commands: "M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z";
+                    tip: L.open-folder;
+                    enabled: root.current != "";
+                    clicked => { root.open-folder(); }
+                }
+                // Abrir no VSCode (chevrons de código)
+                IconBtn {
+                    commands: "M9 8l-4 4 4 4 M15 8l4 4-4 4";
+                    tip: L.open-vscode;
+                    enabled: root.current != "";
+                    clicked => { root.open-vscode(); }
+                }
+                // Recarregar (já é ícone)
+                ReloadIcon { clicked => { root.reload(); } }
+                // Diretórios de desenvolvimento (folder +)
+                IconBtn {
+                    commands: "M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z M12 11v5 M9.5 13.5h5";
+                    tip: L.dev-dirs;
+                    clicked => { root.manage-dirs(); }
+                }
+                // Abrir em nova janela (overdev paralelo — processo isolado)
+                IconBtn {
+                    commands: "M13 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7 M14 4h6v6 M20 4l-8 8";
+                    tip: "Nova janela (overdev paralelo)";
+                    enabled: root.current != "";
+                    clicked => { root.new-window(); }
+                }
+            }
+        }
+        Rectangle {}
+    }
+}
+
+// Controle de paginação simples e consistente (‹ Anterior · página X de Y · Próximo ›).
+// `page` é 0-based; `total` é o nº TOTAL de itens; `per` o tamanho da página.
+export component Pager inherits HorizontalLayout {
+    in property <int> page;
+    in property <int> total;
+    in property <int> per: 20;
+    callback prev();
+    callback next();
+    property <int> pages: root.total <= 0 ? 1 : (root.total + root.per - 1) / root.per;
+    spacing: 12px;
+    alignment: center;
+    Btn {
+        label: L.pg-prev; small: true;
+        enabled: root.page > 0;
+        clicked => { root.prev(); }
+    }
+    VerticalLayout {
+        alignment: center;
+        Text {
+            text: "\{root.page + 1} \{L.pg-of} \{root.pages}";
+            font-size: 12.5px;
+            font-weight: 600;
+            color: Theme.text-dim;
+        }
+    }
+    Btn {
+        label: L.pg-next; small: true;
+        enabled: (root.page + 1) * root.per < root.total;
+        clicked => { root.next(); }
+    }
+}
+
+// Canvas do grafo força-dirigido REUSÁVEL — arestas (Path) + nós (círculo) +
+// camada de interação (pan/zoom/arrasto/clique → Rust) + bloco de info do nó
+// selecionado. A física/transformação vive no Rust; aqui só se renderiza e se
+// encaminham os eventos crus. Usado pela aba Grafo (índice §39, com arquivo:linha)
+// E pelo Database builder (grafo do schema, sem loc). `show-loc` esconde a linha
+// de arquivo:linha/editor no caso do schema (tabela não tem local no código).
+export component GraphCanvas inherits Rectangle {
+    in property <[GraphNode]> nodes;
+    in property <[GraphEdge]> edges;
+    in property <float> scale: 1.0;
+    in property <float> ox: 0;
+    in property <float> oy: 0;
+    in property <bool> has-sel: false;
+    in property <string> sel-id;
+    in property <string> sel-desc;
+    in property <string> sel-loc;
+    in property <bool> show-loc: true;
+    in property <string> nodesc-label;
+    in property <string> noloc-label;
+    in property <string> open-editor-label;
+    callback press(float, float);
+    callback move(float, float);
+    callback release();
+    callback scroll(float, float, float);
+    callback resized(float, float);
+    callback clear-sel();
+    callback open-editor();
+
+    clip: true;
+    background: Theme.dark ? #14161c : #eef1f8;
+    changed width => { root.resized(self.width / 1px, self.height / 1px); }
+    changed height => { root.resized(self.width / 1px, self.height / 1px); }
+
+    // arestas (uma Path por aresta; viewbox 1:1 com o canvas → coords em px)
+    for e[ei] in root.edges: Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        stroke: e.on ? Theme.accent : Theme.text-dim.transparentize(0.7);
+        stroke-width: e.on ? 1.6px : 1px;
+        MoveTo {
+            x: root.width / 2 / 1px + e.x1 * root.scale + root.ox;
+            y: root.height / 2 / 1px + e.y1 * root.scale + root.oy;
+        }
+        LineTo {
+            x: root.width / 2 / 1px + e.x2 * root.scale + root.ox;
+            y: root.height / 2 / 1px + e.y2 * root.scale + root.oy;
+        }
+    }
+
+    // nós (círculo = Rectangle com border-radius) + rótulo
+    for n[ni] in root.nodes: Rectangle {
+        width: n.r * 2px;
+        height: n.r * 2px;
+        border-radius: n.r * 1px;
+        x: root.width / 2 + (n.x * root.scale + root.ox) * 1px - self.width / 2;
+        y: root.height / 2 + (n.y * root.scale + root.oy) * 1px - self.height / 2;
+        opacity: n.dim ? 0.28 : 1.0;
+        background: n.selected
+            ? (Theme.dark ? #ffffff : #1a1e2b)
+            : (n.has-loc ? Theme.accent : Theme.accent.transparentize(0.4));
+        border-width: n.selected ? 2px : 0px;
+        border-color: Theme.header-fg;
+        if root.scale > 1.15 || n.selected || n.hot: Text {
+            x: parent.width + 4px;
+            y: (parent.height - self.height) / 2;
+            text: n.label;
+            font-size: 11px;
+            font-weight: n.selected ? 700 : 500;
+            color: n.dim ? Theme.text-dim : Theme.text;
+        }
+    }
+
+    // camada de interação (por cima dos visuais): pan/zoom/arrasto/clique → Rust.
+    gta := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) {
+                root.press(self.mouse-x / 1px, self.mouse-y / 1px);
+            }
+            if (e.kind == PointerEventKind.up) {
+                root.release();
+            }
+        }
+        moved => {
+            root.move(self.mouse-x / 1px, self.mouse-y / 1px);
+        }
+        scroll-event(e) => {
+            root.scroll(self.mouse-x / 1px, self.mouse-y / 1px, e.delta-y / 1px);
+            return accept;
+        }
+    }
+
+    // bloco de info do nó selecionado (canto inferior esquerdo).
+    if root.has-sel: Rectangle {
+        x: 12px;
+        y: parent.height - self.height - 12px;
+        width: min(parent.width - 24px, 440px);
+        height: ginfo.preferred-height;
+        border-radius: 10px;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.border;
+        TouchArea {}
+        ginfo := VerticalLayout {
+            padding: 12px;
+            spacing: 6px;
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: root.sel-id;
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: Theme.text;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+                close-ta := TouchArea {
+                    width: 20px;
+                    height: 20px;
+                    mouse-cursor: pointer;
+                    clicked => { root.clear-sel(); }
+                    Text {
+                        text: "✕";
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: close-ta.has-hover ? Theme.text : Theme.text-dim;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+            Text {
+                text: root.sel-desc != "" ? root.sel-desc : root.nodesc-label;
+                font-size: 12px;
+                color: root.sel-desc != "" ? Theme.text : Theme.text-dim;
+                wrap: word-wrap;
+            }
+            if root.show-loc && root.sel-loc != "": Text {
+                text: root.sel-loc;
+                font-size: 12px;
+                color: Theme.accent;
+                overflow: elide;
+            }
+            if root.show-loc && root.sel-loc != "": HorizontalLayout {
+                alignment: start;
+                Btn { label: root.open-editor-label; small: true; clicked => { root.open-editor(); } }
+            }
+            if root.show-loc && root.sel-loc == "": Text {
+                text: root.noloc-label;
+                font-size: 12px;
+                color: Theme.text-dim;
+            }
+        }
+    }
+}

@@ -1,0 +1,558 @@
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+
+// Componentes de base reusáveis (botão, chip, aba, check, painel colapsável…).
+// Sem estado de tela: recebem tudo por propriedade e devolvem por callback.
+
+// Sem texto ao lado do nome — só o ícone (estilo Instagram/X).
+export component VerifiedCheck inherits Rectangle {
+    in property <string> tip;
+    width: 17px;
+    height: 17px;
+    Rectangle {
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        background: Theme.accent;
+        Text {
+            text: "✓";
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 800;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+    ta := TouchArea { mouse-cursor: default; }
+    // tooltip flutuante (aparece no hover; pode transbordar a linha).
+    if ta.has-hover: Rectangle {
+        x: parent.width + 6px;
+        y: (parent.height - self.height) / 2;
+        height: 22px;
+        width: tip-txt.preferred-width + 16px;
+        border-radius: 6px;
+        background: Theme.surface-2;
+        border-width: 1px;
+        border-color: Theme.border;
+        tip-txt := Text {
+            text: root.tip;
+            color: Theme.text;
+            font-size: 11px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Checkbox próprio (controle total do visual + tema). Emite `toggled`.
+export component Check inherits Rectangle {
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled();
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border-width: 1.5px;
+    border-color: checked ? Theme.accent : Theme.text-dim;
+    background: checked ? Theme.accent : transparent;
+    opacity: enabled ? 1.0 : 0.4;
+    animate background, border-color { duration: 120ms; }
+    Text {
+        text: "✓";
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 800;
+        visible: root.checked;
+    }
+    TouchArea { enabled: root.enabled; clicked => { root.toggled(); } }
+}
+
+// Botão de ação com estilo próprio (primário/secundário, normal/compacto).
+export component Btn inherits Rectangle {
+    in property <string> label;
+    in property <bool> primary: false;
+    in property <bool> enabled: true;
+    in property <bool> small: false;
+    in property <bool> danger: false;
+    callback clicked();
+    height: small ? 30px : 38px;
+    border-radius: small ? 7px : 9px;
+    background: primary
+        ? (ta.has-hover && enabled ? #6f9bff : Theme.accent)
+        : (ta.has-hover && enabled ? Theme.surface-2 : Theme.surface);
+    border-width: primary ? 0px : 1px;
+    border-color: danger ? Theme.warn.transparentize(0.4) : Theme.border;
+    opacity: enabled ? 1.0 : 0.45;
+    animate background { duration: 120ms; }
+    HorizontalLayout {
+        padding-left: root.small ? 12px : 16px;
+        padding-right: root.small ? 12px : 16px;
+        Text {
+            text: root.label;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            color: primary ? #ffffff : (danger ? Theme.warn : Theme.text);
+            font-size: small ? 12.5px : 14px;
+            font-weight: 600;
+        }
+    }
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { if (root.enabled) { root.clicked(); } }
+    }
+}
+
+// Toggle de tema discreto estilo sol/lua — botão-ícone pequeno, sem texto.
+// Mostra a LUA quando está no claro (clica → escuro) e o SOL quando está no
+// escuro (clica → claro). Ícones desenhados por Path (SVG inline), tema-aware.
+export component ThemeToggle inherits Rectangle {
+    callback clicked();
+    width: 38px;
+    height: 38px;
+    border-radius: 19px;
+    background: ta.has-hover ? Theme.surface-2 : transparent;
+    border-width: 1px;
+    border-color: ta.has-hover ? Theme.border : transparent;
+    animate background, border-color { duration: 160ms; }
+
+    // LUA (crescente) — visível no tema CLARO; clicar leva ao escuro.
+    if !Theme.dark: Path {
+        width: 19px;
+        height: 19px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z";
+        fill: Theme.text-dim;
+    }
+
+    // SOL (disco + raios) — visível no tema ESCURO; clicar leva ao claro.
+    if Theme.dark: Rectangle {
+        width: 22px;
+        height: 22px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        // raios (traço)
+        Path {
+            width: 22px;
+            height: 22px;
+            viewbox-width: 24;
+            viewbox-height: 24;
+            commands: "M12 2.2v2.6 M12 19.2v2.6 M2.2 12h2.6 M19.2 12h2.6 M4.8 4.8l1.9 1.9 M17.3 17.3l1.9 1.9 M4.8 19.2l1.9-1.9 M17.3 6.7l1.9-1.9";
+            stroke: Theme.warn;
+            stroke-width: 2px;
+        }
+        // disco central
+        Rectangle {
+            width: 11px;
+            height: 11px;
+            border-radius: 5.5px;
+            background: Theme.warn;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Sininho de notificações — botão-ícone no header, com badge numérico. Visível em
+// TODAS as telas. `count` alimenta o badge (esconde se 0); `clicked` abre o painel.
+export component Bell inherits Rectangle {
+    in property <int> count: 0;
+    callback clicked();
+    width: 38px;
+    height: 38px;
+    border-radius: 19px;
+    background: bta.has-hover ? Theme.surface-2 : transparent;
+    border-width: 1px;
+    border-color: bta.has-hover ? Theme.border : transparent;
+    animate background, border-color { duration: 160ms; }
+
+    // corpo do sino (traço) — tema-aware.
+    Path {
+        width: 20px;
+        height: 20px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0";
+        fill: transparent;
+        stroke: Theme.text-dim;
+        stroke-width: 1.8px;
+    }
+    // badge (contagem > 0).
+    if root.count > 0: Rectangle {
+        x: parent.width - self.width - 3px;
+        y: 3px;
+        width: Math.max(16px, badgetxt.preferred-width + 8px);
+        height: 16px;
+        border-radius: 8px;
+        background: Theme.warn;
+        badgetxt := Text {
+            text: root.count > 99 ? "99+" : root.count;
+            color: #1a1200;
+            font-size: 10.5px;
+            font-weight: 800;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+    bta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Painel colapsável (título clicável + corpo mono). Usado nas seções do overdev
+// (Decisões / Plano / Perguntas). Começa fechado.
+export component Collapse inherits VerticalLayout {
+    in property <string> title;
+    in property <string> body;
+    property <bool> open: false;
+    spacing: 4px;
+    Rectangle {
+        height: 30px;
+        border-radius: 7px;
+        background: hta.has-hover ? Theme.surface-2 : transparent;
+        animate background { duration: 120ms; }
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+            Text {
+                text: root.open ? "▾" : "▸";
+                font-size: 12px;
+                color: Theme.text-dim;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.title;
+                font-size: 13.5px;
+                font-weight: 700;
+                color: Theme.text;
+                vertical-alignment: center;
+            }
+        }
+        hta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.open = !root.open; }
+        }
+    }
+    if root.open: Rectangle {
+        border-radius: 8px;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.border;
+        HorizontalLayout {
+            padding: 12px;
+            Text {
+                text: root.body;
+                font-size: 12.5px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
+// Chip selecionável (escolha de MÉTODO do environment). Emite `clicked`.
+export component Chip inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 28px;
+    border-radius: 8px;
+    background: selected ? Theme.accent-soft : (ta.has-hover && enabled ? Theme.surface-2 : Theme.surface);
+    border-width: 1px;
+    border-color: selected ? Theme.accent : Theme.border;
+    opacity: enabled ? 1.0 : 0.5;
+    animate background, border-color { duration: 120ms; }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        Text {
+            text: root.label;
+            vertical-alignment: center;
+            color: selected ? Theme.header-fg : Theme.text;
+            font-size: 12.5px;
+            font-weight: selected ? 700 : 600;
+        }
+    }
+    ta := TouchArea { enabled: root.enabled; clicked => { if (root.enabled) { root.clicked(); } } }
+}
+
+// Aba do topo (rótulo + marca de "em breve" para as ainda não implementadas).
+export component TabBtn inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+    in property <bool> soon: false;
+    callback clicked();
+    height: 34px;
+    border-radius: 8px;
+    background: active ? Theme.accent-soft : (ta.has-hover ? Theme.surface-2 : transparent);
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 6px;
+        Text {
+            text: root.label;
+            vertical-alignment: center;
+            color: active ? Theme.header-fg : Theme.text-dim;
+            font-size: 13.5px;
+            font-weight: active ? 700 : 600;
+        }
+        if root.soon: Rectangle {
+            y: (parent.height - self.height) / 2;
+            height: 18px;
+            width: soonlbl.preferred-width + 12px;
+            border-radius: 9px;
+            background: Theme.warn.transparentize(0.85);
+            border-width: 1px;
+            border-color: Theme.warn.transparentize(0.55);
+            soonlbl := Text {
+                text: L.coming-soon;
+                color: Theme.warn;
+                font-size: 10px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    ta := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Pill de estado (Atualizar / Em dia / carregando) — usada na página Instaladas.
+export component StatePill inherits Rectangle {
+    in property <string> state;
+    in property <string> label;
+    property <color> tone:
+        state == "missing"  ? Theme.warn :
+        state == "outdated" ? Theme.accent : Theme.text-dim;
+    width: txt.preferred-width + 22px;
+    height: 24px;
+    border-radius: 12px;
+    background: tone.transparentize(0.85);
+    border-width: 1px;
+    border-color: tone.transparentize(0.5);
+    txt := Text {
+        text: root.label;
+        color: root.tone;
+        font-size: 12px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// Nome da skill + selo verificado (compartilhado pelas duas páginas).
+export component SkillName inherits HorizontalLayout {
+    in property <string> slug;
+    in property <bool> verified;
+    spacing: 7px;
+    alignment: start;
+    VerticalLayout {
+        alignment: center;
+        Text {
+            text: root.slug;
+            font-size: 14.5px;
+            font-weight: 700;
+            color: Theme.text;
+            overflow: elide;
+        }
+    }
+    if root.verified: VerticalLayout {
+        alignment: center;
+        VerifiedCheck { tip: L.verified; }
+    }
+}
+
+// Autor clicável (abre sponsor.url). Compartilhado pelas duas páginas.
+export component AuthorCell inherits Rectangle {
+    in property <string> author;
+    in property <string> author-url;
+    callback clicked();
+    height: 24px;
+    HorizontalLayout {
+        alignment: start;
+        Text {
+            text: root.author;
+            font-size: 13.5px;
+            color: root.author-url != "" ? Theme.accent : Theme.text-dim;
+            overflow: elide;
+            vertical-alignment: center;
+        }
+    }
+    TouchArea {
+        enabled: root.author-url != "";
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Card grande de navegação da Home. O ÍCONE é injetado como `@children` (um Path
+// SVG por card — nunca emoji). `soon` marca destinos ainda não implementados
+// (desabilitado + selo "em breve"). Emite `clicked` só quando ativo.
+export component HomeCard inherits Rectangle {
+    in property <string> title;
+    in property <string> desc;
+    in property <bool> soon: false;
+    callback clicked();
+    height: 158px;
+    border-radius: 16px;
+    background: (ha.has-hover && !root.soon) ? Theme.surface-2 : Theme.surface;
+    border-width: 1px;
+    border-color: (ha.has-hover && !root.soon) ? Theme.accent.transparentize(0.45) : Theme.border;
+    opacity: root.soon ? 0.5 : 1.0;
+    animate background, border-color { duration: 140ms; }
+    VerticalLayout {
+        padding: 20px;
+        spacing: 9px;
+        // slot do ícone (28px) — cada uso do card passa seu Path aqui.
+        HorizontalLayout { alignment: start; @children }
+        Text {
+            text: root.title;
+            font-size: 16.5px;
+            font-weight: 800;
+            color: Theme.text;
+        }
+        Text {
+            text: root.desc;
+            font-size: 12.5px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+        Rectangle {}  // empurra o selo pra base
+        if root.soon: Rectangle {
+            height: 20px;
+            width: sb.preferred-width + 14px;
+            border-radius: 10px;
+            background: Theme.warn.transparentize(0.85);
+            border-width: 1px;
+            border-color: Theme.warn.transparentize(0.55);
+            sb := Text {
+                text: L.coming-soon;
+                color: Theme.warn;
+                font-size: 10px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    ha := TouchArea {
+        enabled: !root.soon;
+        mouse-cursor: root.soon ? default : pointer;
+        clicked => { if (!root.soon) { root.clicked(); } }
+    }
+}
+
+// Ícone-botão de reload (seta circular SVG). O texto "reload" só aparece no HOVER
+// (tooltip flutuante), como pede o redesenho. Emite `clicked`.
+export component ReloadIcon inherits Rectangle {
+    callback clicked();
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: ra.has-hover ? Theme.surface-2 : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    animate background { duration: 120ms; }
+    Path {
+        width: 18px;
+        height: 18px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        // arco quase-completo + cabeça de seta (estilo "atualizar").
+        commands: "M20 12a8 8 0 1 1-2.34-5.66 M20 4v4h-4";
+        fill: transparent;
+        stroke: ra.has-hover ? Theme.text : Theme.text-dim;
+        stroke-width: 2px;
+    }
+    ra := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    if ra.has-hover: Rectangle {
+        y: parent.height + 4px;
+        x: (parent.width - self.width) / 2;
+        height: 22px;
+        width: rtt.preferred-width + 16px;
+        border-radius: 6px;
+        background: Theme.surface-2;
+        border-width: 1px;
+        border-color: Theme.border;
+        rtt := Text {
+            text: L.reload;
+            color: Theme.text;
+            font-size: 11px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Barra de projeto ENXUTA — uma linha idêntica em Overdev e Grafo:
+//   Projeto: [dropdown] · [Abrir pasta] · [Abrir no VSCode] · [⟳] · [Diretórios de dev]
+// Recebe o modelo/projeto atual e emite callbacks; a gestão de dev_dirs mora num
+// MODAL (fora daqui) — esta barra só ABRE o modal via `manage-dirs`.
+// Botão-ÍCONE compacto: glifo VETORIAL (Path) + tooltip no hover. Mesma linguagem do ReloadIcon —
+// sem emoji (regra da casa), ocupa 34px em vez de um botão de texto largo.
+export component IconBtn inherits Rectangle {
+    in property <string> commands;   // path SVG do glifo (viewbox 24x24)
+    in property <string> tip;        // tooltip
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: ib.has-hover && root.enabled ? Theme.surface-2 : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    opacity: root.enabled ? 1.0 : 0.45;
+    animate background { duration: 120ms; }
+    Path {
+        width: 18px;
+        height: 18px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: root.commands;
+        fill: transparent;
+        stroke: ib.has-hover && root.enabled ? Theme.text : Theme.text-dim;
+        stroke-width: 2px;
+    }
+    ib := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+    if ib.has-hover && root.tip != "": Rectangle {
+        y: parent.height + 4px;
+        x: (parent.width - self.width) / 2;
+        height: 22px;
+        width: tipt.preferred-width + 16px;
+        border-radius: 6px;
+        background: Theme.surface-2;
+        border-width: 1px;
+        border-color: Theme.border;
+        tipt := Text {
+            text: root.tip;
+            color: Theme.text;
+            font-size: 11px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
