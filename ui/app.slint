@@ -1817,6 +1817,31 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
+                // Versão em uso + bolinha de update quando há nova (sempre visível). Clica → Configurações.
+                VerticalLayout {
+                    alignment: center;
+                    verchip := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.screen = 5; }
+                        HorizontalLayout {
+                            spacing: 5px;
+                            Text {
+                                text: root.app-version;
+                                font-size: 11.5px;
+                                font-weight: 600;
+                                color: root.app-has-update ? Theme.header-fg : (verchip.has-hover ? Theme.text : Theme.text-dim);
+                                vertical-alignment: center;
+                            }
+                            if root.app-has-update: Rectangle {
+                                width: 9px;
+                                height: 9px;
+                                border-radius: 4.5px;
+                                background: Theme.header-fg;
+                                y: 3px;
+                            }
+                        }
+                    }
+                }
                 VerticalLayout {
                     alignment: center;
                     Bell {

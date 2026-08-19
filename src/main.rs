@@ -4703,6 +4703,19 @@ fn main() -> Result<(), slint::PlatformError> {
     }
     // Estado inicial do prompt: o updater está presente?
     app.set_updater_missing(selfupdate::updater_bin().is_none());
+    // Startup: checa update do app em background pra a bolinha de update do header (versão) acender
+    // sozinha, sem o usuário precisar clicar "Verificar atualização".
+    {
+        let weak = app.as_weak();
+        std::thread::spawn(move || {
+            let has = upgrade::app_update_available().is_some();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(app) = weak.upgrade() {
+                    app.set_app_has_update(has);
+                }
+            });
+        });
+    }
 
     // ==================== Sininho de notificaÃ§Ãµes ====================
     // Os modelos (Global/Pessoal) sÃ£o REMONTADOS no event loop a cada abertura (nÃ£o
