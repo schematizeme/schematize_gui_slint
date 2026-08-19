@@ -1403,6 +1403,14 @@ fn refresh_proj_models(
 
 /// Carrega o estado do overdev do `proj` (ou limpa se None) nas propriedades do app.
 /// Espelha o overdev_view do egui: objetivo, mode, progresso, checklist e seÃ§Ãµes.
+/// Ícone da janela desenhado em código (`schematize::appicon::rgba`) — resiliente: não depende de
+/// arquivo (não some nem quebra o build), e sai nítido em qualquer tamanho (antialiasing no lib).
+fn make_app_icon() -> slint::Image {
+    let (rgba, w, h) = schematize::appicon::rgba(256);
+    let buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(&rgba, w, h);
+    slint::Image::from_rgba8(buf)
+}
+
 /// Recomputa o orçamento do governador de concorrência e joga nos props da GUI (linha "máquina:
 /// teto/livre/load/rodando" + clampa o K do split ao teto). Persiste ~/.schematize/agents.json.
 fn apply_agent_budget(app: &AppWindow) {
@@ -2365,7 +2373,8 @@ fn main() -> Result<(), slint::PlatformError> {
     let app = AppWindow::new()?;
     install_i18n(&app);
     // Logo da janela (tÃ­tulo/taskbar) â mesma marca do egui.
-    // Ícone da janela agora é embutido no .slint (`icon: @image-url(...)`).
+    // Ícone da janela DESENHADO em código (resiliente — sem depender de arquivo).
+    app.set_app_icon(make_app_icon());
     // VersÃ£o do app (ConfiguraÃ§Ãµes) â ex.: "schematize v0.25.1".
     app.set_app_version(format!("schematize v{}", upgrade::app_version()).into());
     app.set_rows(ModelRc::from(model.clone()));

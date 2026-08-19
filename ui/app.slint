@@ -1323,9 +1323,9 @@ component GraphCanvas inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: L.window-title;
-    // Ícone da janela EMBUTIDO em compile-time (o desenhado, node-graph da casa) — antes vinha do
-    // placeholder programático `appicon::rgba`. O launcher .desktop usa o mesmo via hicolor.
-    icon: @image-url("../assets/icon-256.png");
+    // Ícone da janela DESENHADO EM CÓDIGO (`appicon::rgba`, o node-graph da casa) — resiliente: não
+    // depende de arquivo (não some, não quebra o build). O launcher .desktop usa o mesmo via hicolor.
+    icon: root.app-icon;
     preferred-width: 1040px;
     preferred-height: 680px;
     min-width: 820px;
@@ -1334,7 +1334,8 @@ export component AppWindow inherits Window {
     default-font-size: 14px;
 
     // Logo da janela (barra de título/taskbar). Setada pelo Rust a partir de
-    // `schematize::appicon::rgba(256)` (mesma marca do egui).
+    // `schematize::appicon::rgba(256)` — desenhada em código, resiliente.
+    in property <image> app-icon;
 
     in property <[SkillRow]> rows;
     in-out property <string> status: "";
