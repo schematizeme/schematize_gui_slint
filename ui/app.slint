@@ -1323,7 +1323,9 @@ component GraphCanvas inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: L.window-title;
-    icon: root.app-icon;
+    // Ícone da janela EMBUTIDO em compile-time (o desenhado, node-graph da casa) — antes vinha do
+    // placeholder programático `appicon::rgba`. O launcher .desktop usa o mesmo via hicolor.
+    icon: @image-url("../assets/icon-256.png");
     preferred-width: 1040px;
     preferred-height: 680px;
     min-width: 820px;
@@ -1333,7 +1335,6 @@ export component AppWindow inherits Window {
 
     // Logo da janela (barra de título/taskbar). Setada pelo Rust a partir de
     // `schematize::appicon::rgba(256)` (mesma marca do egui).
-    in property <image> app-icon;
 
     in property <[SkillRow]> rows;
     in-out property <string> status: "";
@@ -3166,6 +3167,16 @@ export component AppWindow inherits Window {
                                 small: true;
                                 enabled: !root.od-session-running;
                                 clicked => { root.od-attach(); }
+                            }
+                            // Regenera/complementa os afazeres do overdev a partir do histórico
+                            // recuperável do archive (dispara a skill schematize-archive num
+                            // terminal). Disponível MESMO com overdev já existente (antes só
+                            // aparecia no empty-state), pra enriquecer o checklist a qualquer hora.
+                            Btn {
+                                label: L.od-gen-archive;
+                                small: true;
+                                enabled: root.od-has-project && !root.od-session-running;
+                                clicked => { root.od-gen-from-archive(); }
                             }
                             // pill de estado (active/parado) enquanto o monitor vive.
                             if root.od-session-running: VerticalLayout {

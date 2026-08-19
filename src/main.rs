@@ -435,13 +435,6 @@ fn strings_model(v: Vec<String>) -> ModelRc<SharedString> {
 // Logo da janela â MESMA marca do egui (`schematize::appicon::rgba(256)`),
 // convertida num `slint::Image` pra alimentar a propriedade `icon` do Window.
 // ---------------------------------------------------------------------------
-fn make_app_icon() -> slint::Image {
-    let (rgba, w, h) = schematize::appicon::rgba(256);
-    // clone_from_slice reinterpreta os bytes RGBA (u8) como pixels Rgba8.
-    let buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(&rgba, w, h);
-    slint::Image::from_rgba8(buf)
-}
-
 // ---------------------------------------------------------------------------
 // RelanÃ§a o app numa janela NOVA e encerra este processo. CONSERTO do bug do
 // "reiniciar" (pÃ³s self-update) que sÃ³ fechava e nÃ£o reabria: fazemos um spawn
@@ -1305,16 +1298,24 @@ fn build_proj_items(projects: &[projects::Project], recent: &[String]) -> Vec<Pr
     out
 }
 
-/// Caminho do CHECKLIST de `<root>/.overdev`.
-fn checklist_path(root: &Path) -> PathBuf {
-    root.join(".overdev").join("CHECKLIST.md")
+/// Dir de overdev do projeto pela regra "ler ambos" do lib: `.schematize/overdev` (novo, vivo) se
+/// existir; senão `.overdev` legado; senão o novo default. Era hardcoded `.overdev` — por isso a GUI
+/// mostrava 0/0/0 e editor vazio em projetos já migrados pro `.schematize/` (gerava no novo, lia no
+/// antigo). Usa o MESMO resolvedor do CLI (`panel::load_overdev`), então GUI e CLI concordam.
+fn overdev_dir(root: &Path) -> PathBuf {
+    schematize::paths::overdev_dir_at(root)
 }
 
-/// Caminho de um arquivo do editor (`PLAN.md`/`CHECKLIST.md`) sob `<root>/.overdev`.
-/// Sanitiza `target` a um basename simples pra a GUI nunca escrever fora do `.overdev`.
+/// Caminho do CHECKLIST do overdev do projeto (dir resolvido por `overdev_dir`).
+fn checklist_path(root: &Path) -> PathBuf {
+    overdev_dir(root).join("CHECKLIST.md")
+}
+
+/// Caminho de um arquivo do editor (`PLAN.md`/`CHECKLIST.md`) no dir de overdev resolvido.
+/// Sanitiza `target` a um basename simples pra a GUI nunca escrever fora do dir de overdev.
 fn overdev_file_path(root: &Path, target: &str) -> PathBuf {
     let name = Path::new(target).file_name().and_then(|s| s.to_str()).unwrap_or("PLAN.md");
-    root.join(".overdev").join(name)
+    overdev_dir(root).join(name)
 }
 
 /// Parseia o CHECKLIST 2-nÃ­veis de `<root>` em `OverItem`s (kind + origem + Ã­ndice).
@@ -1745,6 +1746,9 @@ struct GraphState {
     canvas_w: f32,
     canvas_h: f32,
     fit_pending: bool,
+    // `true` quando o grafo global foi AGREGADO por microserviço (índice flat > cap, sem
+    // GRAFO_GLOBAL.md): cada nó é um serviço ("<serviço> · N funções") e o drill abre o detalhe.
+    aggregated: bool,
 }
 
 impl GraphState {
@@ -1950,7 +1954,11 @@ fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
     let Some(p) = proj else {
         return;
     };
-    let (nodes, edges, _idx) = panel::load_graph(p);
+    // Grafo global PAGINADO: GRAFO_GLOBAL.md autorado; senão, se o flat passar do cap, AGREGA por
+    // microserviço (1 nó por serviço) — o "1600 nós ilegíveis" vira mapa mental; o drill ("Grafo do
+    // serviço") abre o detalhe via `load_service_graph` (fallback pelo flat).
+    let (nodes, edges, _idx, aggregated) = panel::load_graph_global(p);
+    st.aggregated = aggregated;
     // descriÃ§Ãµes dos nÃ³s (nome -> "O quÃª") do Ã­ndice/MAPA, guardadas p/ o bloco lateral.
     st.descs = panel::node_descriptions(p);
     let mut id_to_idx: HashMap<String, usize> = HashMap::new();
@@ -2340,7 +2348,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let app = AppWindow::new()?;
     install_i18n(&app);
     // Logo da janela (tÃ­tulo/taskbar) â mesma marca do egui.
-    app.set_app_icon(make_app_icon());
+    // Ícone da janela agora é embutido no .slint (`icon: @image-url(...)`).
     // VersÃ£o do app (ConfiguraÃ§Ãµes) â ex.: "schematize v0.25.1".
     app.set_app_version(format!("schematize v{}", upgrade::app_version()).into());
     app.set_rows(ModelRc::from(model.clone()));
@@ -3392,7 +3400,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 app.set_od_run_status(tor("gui.od_pick_first", "Selecione um projeto primeiro.").into());
                 return;
             };
-            if !p.join(".overdev").is_dir() {
+            if !overdev_dir(&p).is_dir() {
                 app.set_od_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
                 return;
             }
@@ -3425,7 +3433,7 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_od_refresh_tokens(move || {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                if p.join(".overdev").is_dir() {
+                if overdev_dir(&p).is_dir() {
                     spawn_usage(weak.clone(), p);
                 } else {
                     app.set_od_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
@@ -5213,10 +5221,13 @@ nÃ£o Ã© item
 
     #[test]
     fn editor_path_nunca_escapa_do_overdev() {
+        // Sem `.overdev` nem `.schematize/overdev` no disco, o resolvedor "ler ambos" devolve o novo
+        // default `.schematize/overdev`. O que o teste garante é a sanitização a basename (anti-traversal).
         let root = std::path::Path::new("/proj");
-        assert_eq!(overdev_file_path(root, "PLAN.md"), root.join(".overdev").join("PLAN.md"));
-        assert_eq!(overdev_file_path(root, "CHECKLIST.md"), root.join(".overdev").join("CHECKLIST.md"));
-        // tentativa de path traversal Ã© reduzida ao basename.
-        assert_eq!(overdev_file_path(root, "../../etc/passwd"), root.join(".overdev").join("passwd"));
+        let od = root.join(".schematize").join("overdev");
+        assert_eq!(overdev_file_path(root, "PLAN.md"), od.join("PLAN.md"));
+        assert_eq!(overdev_file_path(root, "CHECKLIST.md"), od.join("CHECKLIST.md"));
+        // tentativa de path traversal é reduzida ao basename.
+        assert_eq!(overdev_file_path(root, "../../etc/passwd"), od.join("passwd"));
     }
 }
