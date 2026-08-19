@@ -1403,6 +1403,20 @@ fn refresh_proj_models(
 
 /// Carrega o estado do overdev do `proj` (ou limpa se None) nas propriedades do app.
 /// Espelha o overdev_view do egui: objetivo, mode, progresso, checklist e seÃ§Ãµes.
+/// Ações de skills instaladas (gui.json) → linhas do modelo Slint. Cada uma vira um botão na aba do
+/// projeto; Q.A./Pentest aparecem quando as skills schematize-engineering/pentest estão instaladas.
+fn skill_action_rows() -> Vec<SkillAction> {
+    schematize::guiactions::gui_actions()
+        .into_iter()
+        .map(|a| SkillAction {
+            label: a.label.into(),
+            command: a.command.into(),
+            needs_project: a.needs_project,
+            skill: a.skill.into(),
+        })
+        .collect()
+}
+
 /// Ícone da janela desenhado em código (`schematize::appicon::rgba`) — resiliente: não depende de
 /// arquivo (não some nem quebra o build), e sai nítido em qualquer tamanho (antialiasing no lib).
 fn make_app_icon() -> slint::Image {
@@ -2375,6 +2389,8 @@ fn main() -> Result<(), slint::PlatformError> {
     // Logo da janela (tÃ­tulo/taskbar) â mesma marca do egui.
     // Ícone da janela DESENHADO em código (resiliente — sem depender de arquivo).
     app.set_app_icon(make_app_icon());
+    // Ações declaradas por skills instaladas (gui.json) → botões (Q.A., Pentest, …) na aba do projeto.
+    app.set_skill_actions(ModelRc::from(Rc::new(VecModel::from(skill_action_rows()))));
     // VersÃ£o do app (ConfiguraÃ§Ãµes) â ex.: "schematize v0.25.1".
     app.set_app_version(format!("schematize v{}", upgrade::app_version()).into());
     app.set_rows(ModelRc::from(model.clone()));
@@ -3141,6 +3157,23 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_od_refresh_agents(move || {
             if let Some(app) = weak.upgrade() {
                 apply_agent_budget(&app);
+            }
+        });
+    }
+    // Ação de skill (Q.A./Pentest/…): dispara o `command` (ex.: /eng-qa) no claude de um terminal
+    // externo, no projeto selecionado. É o botão declarado via gui.json.
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.on_run_skill_action(move |command| {
+            let Some(app) = weak.upgrade() else { return };
+            let Some(project) = cur.borrow().clone() else {
+                app.set_od_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
+                return;
+            };
+            match schematize::agentrun::launch_prompt_in_terminal(&project, command.as_str()) {
+                Ok(_) => app.set_od_run_status(format!("Rodando {command} num terminal externo…").into()),
+                Err(e) => app.set_od_run_status(format!("falhou ao rodar {command}: {e}").into()),
             }
         });
     }

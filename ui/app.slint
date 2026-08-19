@@ -114,6 +114,15 @@ export struct OverItem {
     hindex: int,      // hopen: 1-based entre humanos abertos · senão -1
 }
 
+// Uma ação declarada por uma skill instalada (gui.json) — vira botão na aba do projeto.
+// Preenchida pelo Rust a partir de `schematize::guiactions::gui_actions()`.
+export struct SkillAction {
+    label: string,        // rótulo do botão ("Q.A.", "Pentest")
+    command: string,      // comando disparado no claude ("/eng-qa")
+    needs-project: bool,  // só habilita com projeto selecionado
+    skill: string,        // slug da skill dona
+}
+
 // Uma chave SSH da máquina (só metadados PÚBLICOS — a privada NUNCA aparece).
 // Preenchida pelo Rust a partir de `schematize::sshkeys::list()`.
 export struct SshRow {
@@ -1540,6 +1549,9 @@ export component AppWindow inherits Window {
     in-out property <string> od-split-status: ""; // feedback do último split
     callback od-split(int, bool);       // divide o checklist em K parts; bool = também lançar (dispatch)
     callback od-refresh-agents();       // recomputa o orçamento do governador
+    // ---- Ações de skills instaladas (gui.json → botões: Q.A., Pentest, …) ----
+    in property <[SkillAction]> skill-actions;
+    callback run-skill-action(string);  // dispara o `command` da ação no claude de um terminal
     callback od-add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
     callback od-remove-dev-dir(string); // remove um diretório de desenvolvimento
     callback od-pin-folder();           // fixa uma pasta como projeto (picker nativo → pin_project)
@@ -3064,6 +3076,28 @@ export component AppWindow inherits Window {
                 }
             }
             // Empty-state: projeto sem run de overdev — oferece GERAR afazeres do archive recuperável.
+            // Ações declaradas por skills instaladas (Q.A., Pentest, …) — aparecem quando a skill
+            // tem gui.json. Visível sempre que há um projeto (com ou sem overdev).
+            if root.od-has-project && root.skill-actions.length > 0: VerticalLayout {
+                padding-left: 20px;
+                padding-right: 20px;
+                padding-top: 14px;
+                spacing: 8px;
+                Text {
+                    text: "Ações de skills";
+                    font-size: 12px; font-weight: 700; color: Theme.text-dim;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    for a in root.skill-actions: Btn {
+                        label: a.label;
+                        small: true;
+                        enabled: !a.needs-project || root.od-has-project;
+                        clicked => { root.run-skill-action(a.command); }
+                    }
+                    Rectangle {}
+                }
+            }
             if root.od-has-project && !root.od-has-overdev: VerticalLayout {
                 alignment: center;
                 spacing: 14px;
