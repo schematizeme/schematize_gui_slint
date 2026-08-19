@@ -1,18 +1,18 @@
-//! schematize â aba Skills em Slint (1Âº incremento REAL da migraÃ§Ã£o eguiâSlint).
+//! schematize — aba Skills em Slint (1º incremento REAL da migração egui→Slint).
 //!
-//! O quÃª: a aba Skills como GESTOR de verdade. Reusa a LÃGICA do crate irmÃ£o
-//! `schematize` (sem a GUI egui): catÃ¡logo (`registry::catalog`), versÃµes e
-//! aÃ§Ãµes (`skills::installed_version` / `resolve_latest` / `install` / `remove`),
-//! e i18n (`schematize::i18n`, 11 locales). O visual Ã© Slint (ver `ui/app.slint`).
+//! O quê: a aba Skills como GESTOR de verdade. Reusa a LÓGICA do crate irmão
+//! `schematize` (sem a GUI egui): catálogo (`registry::catalog`), versões e
+//! ações (`skills::installed_version` / `resolve_latest` / `install` / `remove`),
+//! e i18n (`schematize::i18n`, 11 locales). O visual é Slint (ver `ui/app.slint`).
 //!
-//! AssÃ­ncrono: `resolve_latest` e as aÃ§Ãµes (instalar/remover) sÃ£o REDE/IO â rodam
-//! em threads e devolvem resultado Ã  UI via `slint::invoke_from_event_loop` +
-//! `Weak<AppWindow>::upgrade` (o padrÃ£o do Slint pra threadâUI). O event loop
-//! nunca bloqueia. As aÃ§Ãµes em massa disparam em PARALELO (thread::scope),
+//! Assíncrono: `resolve_latest` e as ações (instalar/remover) são REDE/IO — rodam
+//! em threads e devolvem resultado à UI via `slint::invoke_from_event_loop` +
+//! `Weak<AppWindow>::upgrade` (o padrão do Slint pra thread→UI). O event loop
+//! nunca bloqueia. As ações em massa disparam em PARALELO (thread::scope),
 //! espelhando o `run_batch` do egui; o lib serializa o `state.json` (STATE_LOCK).
 //!
-//! Escopo deste incremento: SÃ a aba Skills funcional. Overdev/Grafo ficam como
-//! placeholders "em breve" na barra de abas (prÃ³ximos incrementos).
+//! Escopo deste incremento: SÓ a aba Skills funcional. Overdev/Grafo ficam como
+//! placeholders "em breve" na barra de abas (próximos incrementos).
 
 use schematize::agentrun;
 use schematize::i18n::{self, t, tf};
@@ -36,7 +36,7 @@ use std::time::{Duration, Instant};
 slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/app.slint
 
 // ---------------------------------------------------------------------------
-// DetecÃ§Ã£o de ambiente grÃ¡fico (Wayland vs X11 + desktop). SÃ³ loga â o backend
+// Detecção de ambiente gráfico (Wayland vs X11 + desktop). Só loga — o backend
 // winit do Slint escolhe sozinho o transporte certo em runtime.
 // ---------------------------------------------------------------------------
 fn detect_display_env() {
@@ -50,21 +50,21 @@ fn detect_display_env() {
         (None, Some(d)) => format!("X11 (DISPLAY={d})"),
         (None, None) => "NENHUM display detectado (headless/sandbox)".into(),
     };
-    eprintln!("[env] servidor grÃ¡fico : {server}");
+    eprintln!("[env] servidor gráfico : {server}");
     eprintln!("[env] XDG_SESSION_TYPE : {}", if session.is_empty() { "?".into() } else { session });
     eprintln!("[env] desktop          : {desktop}");
     eprintln!("[env] idioma i18n      : {}", i18n::current_code());
-    eprintln!("[env] backend Slint    : winit (default) â cobre Wayland E X11; renderer femtovg (OpenGL/GLES)");
+    eprintln!("[env] backend Slint    : winit (default) — cobre Wayland E X11; renderer femtovg (OpenGL/GLES)");
     if wayland.is_none() && x11.is_none() {
-        eprintln!("[env] AVISO: sem display, a janela nÃ£o abre. Este incremento valida COMPILAÃÃO; a exibiÃ§Ã£o precisa de um servidor Wayland/X11.");
+        eprintln!("[env] AVISO: sem display, a janela não abre. Este incremento valida COMPILAÇÃO; a exibição precisa de um servidor Wayland/X11.");
     }
 }
 
-/// Traduz uma chave; se ela AINDA nÃ£o existe no lib (o `t()` do lib devolve a
-/// prÃ³pria chave quando nÃ£o acha), cai no `fallback` embutido. Usado sÃ³ para as
-/// chaves NOVAS desta fase (Home/navegaÃ§Ã£o) â assim a UI jÃ¡ mostra texto decente
-/// e, quando o lib ganhar essas chaves, passa a usar a traduÃ§Ã£o automaticamente.
-/// As chaves novas estÃ£o listadas no relatÃ³rio de entrega.
+/// Traduz uma chave; se ela AINDA não existe no lib (o `t()` do lib devolve a
+/// própria chave quando não acha), cai no `fallback` embutido. Usado só para as
+/// chaves NOVAS desta fase (Home/navegação) — assim a UI já mostra texto decente
+/// e, quando o lib ganhar essas chaves, passa a usar a tradução automaticamente.
+/// As chaves novas estão listadas no relatório de entrega.
 fn tor(key: &str, fallback: &str) -> String {
     let v = t(key);
     if v == key {
@@ -75,8 +75,8 @@ fn tor(key: &str, fallback: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// i18n: injeta TODOS os rÃ³tulos estÃ¡ticos da UI no `global L` do .slint. Nada de
-// texto hardcoded no Slint â as strings vÃªm de `schematize::i18n` (11 locales).
+// i18n: injeta TODOS os rótulos estáticos da UI no `global L` do .slint. Nada de
+// texto hardcoded no Slint — as strings vêm de `schematize::i18n` (11 locales).
 // ---------------------------------------------------------------------------
 fn install_i18n(app: &AppWindow) {
     let l = app.global::<L>();
@@ -100,7 +100,7 @@ fn install_i18n(app: &AppWindow) {
     l.set_col_latest(t("gui.col_latest").into());
     l.set_col_state(t("gui.col_state").into());
     l.set_col_actions(t("gui.col_actions").into());
-    // Tooltip do selo verificado (sÃ³ o check + hover; sem texto ao lado).
+    // Tooltip do selo verificado (só o check + hover; sem texto ao lado).
     l.set_verified(t("gui.verified_badge").into());
     l.set_tab_installed(t("gui.tab_installed").into());
     l.set_tab_marketplace(t("gui.tab_marketplace").into());
@@ -115,12 +115,12 @@ fn install_i18n(app: &AppWindow) {
     l.set_env_intro(t("gui.env_intro").into());
     l.set_env_method(t("gui.env_method").into());
     l.set_env_no_methods(t("gui.env_no_methods").into());
-    // modal de instalaÃ§Ã£o do Marketplace
+    // modal de instalação do Marketplace
     l.set_mp_recommends_note(t("gui.mp_recommends_note").into());
     l.set_mp_env_note(t("gui.mp_env_note").into());
     l.set_mp_confirm(t("gui.mp_confirm").into());
     l.set_mp_cancel(t("gui.mp_cancel").into());
-    // aba Overdev (seletor de projeto + view) â reusa as chaves do egui.
+    // aba Overdev (seletor de projeto + view) — reusa as chaves do egui.
     l.set_project(t("gui.project").into());
     l.set_no_project(t("gui.no_project").into());
     l.set_detected_projects(t("gui.detected_projects").into());
@@ -131,56 +131,56 @@ fn install_i18n(app: &AppWindow) {
     l.set_add_dev_dir(t("gui.add_dev_dir").into());
     l.set_dev_dirs_empty(t("gui.dev_dirs_empty").into());
     l.set_remove(t("gui.remove").into());
-    // Projetos fixados (pins) â chaves NOVAS com fallback embutido via `tor`.
+    // Projetos fixados (pins) — chaves NOVAS com fallback embutido via `tor`.
     l.set_pinned_projects(tor("gui.pinned_projects", "Projetos fixados").into());
-    l.set_pin_folder(tor("gui.pin_folder", "Fixar pastaâ¦").into());
+    l.set_pin_folder(tor("gui.pin_folder", "Fixar pasta…").into());
     l.set_unpin(tor("gui.unpin", "Desafixar").into());
     l.set_pin_hint(tor(
         "gui.pin_hint",
-        "Uma pasta fixada vira UM projeto no selector â Ãºtil pra workspace de microserviÃ§os.",
+        "Uma pasta fixada vira UM projeto no selector — útil pra workspace de microserviços.",
     ).into());
     l.set_no_overdev(t("gui.no_overdev").into());
     l.set_od_decisions(t("gui.od_decisions").into());
     l.set_od_plan(t("gui.od_plan").into());
     l.set_od_questions(t("gui.od_questions").into());
     l.set_open_browser(t("gui.open_browser").into());
-    // aba Overdev â Fase 3 (editor + tasks + checklist 2-nÃ­veis). Chaves NOVAS com
-    // fallback embutido via `tor` atÃ© serem adicionadas ao lib (ver relatÃ³rio).
+    // aba Overdev — Fase 3 (editor + tasks + checklist 2-níveis). Chaves NOVAS com
+    // fallback embutido via `tor` até serem adicionadas ao lib (ver relatório).
     l.set_od_human(tor("gui.od_human", "humano").into());
-    l.set_od_machine(tor("gui.od_machine", "mÃ¡quina").into());
+    l.set_od_machine(tor("gui.od_machine", "máquina").into());
     l.set_od_mark_human(tor("gui.od_mark_human", "marcar como feito").into());
     l.set_od_editor(tor("gui.od_editor", "Editor").into());
     l.set_od_save_plan(tor("gui.od_save_plan", "Salvar").into());
     l.set_od_tasks(tor("gui.od_tasks", "Tarefas e notas").into());
     l.set_od_add_note(tor("gui.od_add_note", "Adicionar nota").into());
-    l.set_od_note(tor("gui.od_note", "Nota para esta tarefaâ¦").into());
-    l.set_od_correction(tor("gui.od_correction", "Prompt de correÃ§Ã£o do overdev").into());
-    l.set_od_notes_title(tor("gui.od_notes", "Notas e correÃ§Ãµes").into());
-    // aba Overdev â Fase 4 (terminal externo + monitor leve). Chaves NOVAS via `tor`.
+    l.set_od_note(tor("gui.od_note", "Nota para esta tarefa…").into());
+    l.set_od_correction(tor("gui.od_correction", "Prompt de correção do overdev").into());
+    l.set_od_notes_title(tor("gui.od_notes", "Notas e correções").into());
+    // aba Overdev — Fase 4 (terminal externo + monitor leve). Chaves NOVAS via `tor`.
     l.set_od_run(tor("gui.od_run", "Executar overdev").into());
     l.set_od_gen_archive(tor("gui.od_gen_archive", "Gerar afazeres do archive").into());
     l.set_od_stop(tor("gui.od_stop", "Parar").into());
-    l.set_od_running(tor("gui.od_running", "monitorandoâ¦").into());
+    l.set_od_running(tor("gui.od_running", "monitorando…").into());
     l.set_od_mon_active(tor("gui.od_mon_active", "rodando").into());
     l.set_od_confirm_run(tor(
         "gui.od_confirm_run",
-        "Isto abre o `claude` num TERMINAL EXTERNO (processo prÃ³prio, fora do app) e roda o overdev \
-         neste projeto com acesso ao seu ambiente â ele pode editar arquivos. O app apenas MONITORA o \
+        "Isto abre o `claude` num TERMINAL EXTERNO (processo próprio, fora do app) e roda o overdev \
+         neste projeto com acesso ao seu ambiente — ele pode editar arquivos. O app apenas MONITORA o \
          progresso. Confira o comando abaixo antes de confirmar.",
     ).into());
-    l.set_od_run_done(tor("gui.od_done", "concluÃ­do").into());
+    l.set_od_run_done(tor("gui.od_done", "concluído").into());
     l.set_od_agent_cmd(tor("gui.od_agent_cmd", "Comando do agente").into());
     l.set_od_ext_terminal(tor(
         "gui.od_ext_terminal",
-        "claude rodando em terminal externo (processo prÃ³prio) â o load dele fica fora do app.",
+        "claude rodando em terminal externo (processo próprio) — o load dele fica fora do app.",
     ).into());
-    l.set_od_mon_iters(tor("gui.od_mon_iters", "iteraÃ§Ãµes").into());
-    l.set_od_mon_open_title(tor("gui.od_mon_open_title", "Itens abertos (mÃ¡quina)").into());
-    // Reload/Acompanhar + log de conclusÃµes + tokens (anexar monitor a run externo).
+    l.set_od_mon_iters(tor("gui.od_mon_iters", "iterações").into());
+    l.set_od_mon_open_title(tor("gui.od_mon_open_title", "Itens abertos (máquina)").into());
+    // Reload/Acompanhar + log de conclusões + tokens (anexar monitor a run externo).
     l.set_od_attach(tor("gui.od_attach", "Reload / Acompanhar").into());
     l.set_od_refresh_tokens(tor("gui.od_refresh_tokens", "Atualizar tokens").into());
-    l.set_od_completions_title(tor("gui.od_completions_title", "ConclusÃµes").into());
-    // aba Grafo â reusa as chaves do egui (todas jÃ¡ nos 11 locales do lib).
+    l.set_od_completions_title(tor("gui.od_completions_title", "Conclusões").into());
+    // aba Grafo — reusa as chaves do egui (todas já nos 11 locales do lib).
     l.set_g_search_hint(t("gui.search").into());
     l.set_g_nodes_suffix(t("gui.graph_nodes").into());
     l.set_g_fit(t("gui.fit").into());
@@ -188,128 +188,128 @@ fn install_i18n(app: &AppWindow) {
     l.set_g_export_obsidian(t("gui.export_obsidian").into());
     l.set_g_open_editor(t("gui.open_editor").into());
     l.set_g_no_loc(t("gui.no_loc").into());
-    // BotÃµes/estados NOVOS da aba Grafo (reindexar + recarregar + nÃ³ sem descriÃ§Ã£o).
-    // Chaves novas com fallback pt-BR embutido via `tor` atÃ© entrarem no lib.
+    // Botões/estados NOVOS da aba Grafo (reindexar + recarregar + nó sem descrição).
+    // Chaves novas com fallback pt-BR embutido via `tor` até entrarem no lib.
     l.set_g_reindex(tor("gui.g_reindex", "Reindexar").into());
     l.set_g_reload(tor("gui.g_reload", "Recarregar").into());
     l.set_g_drill(tor("gui.g_drill", "Grafo do serviço").into());
     l.set_g_global(tor("gui.g_global", "← Grafo global").into());
-    l.set_g_node_nodesc(tor("gui.g_node_nodesc", "(sem descriÃ§Ã£o no Ã­ndice â rode Reindexar)").into());
-    // Home + navegaÃ§Ã£o (Fase 1) â chaves NOVAS, com fallback embutido via `tor`
-    // atÃ© serem adicionadas ao lib. Ver lista no relatÃ³rio de entrega.
-    l.set_home(tor("gui.home", "InÃ­cio").into());
-    l.set_home_title(tor("gui.home_title", "O que vocÃª quer fazer?").into());
+    l.set_g_node_nodesc(tor("gui.g_node_nodesc", "(sem descrição no índice — rode Reindexar)").into());
+    // Home + navegação (Fase 1) — chaves NOVAS, com fallback embutido via `tor`
+    // até serem adicionadas ao lib. Ver lista no relatório de entrega.
+    l.set_home(tor("gui.home", "Início").into());
+    l.set_home_title(tor("gui.home_title", "O que você quer fazer?").into());
     l.set_home_market(tor("gui.home_market", "Mercado de Skills").into());
-    l.set_home_overdev_desc(tor("gui.home_overdev_desc", "Acompanhe o desenvolvimento contÃ­nuo do projeto.").into());
+    l.set_home_overdev_desc(tor("gui.home_overdev_desc", "Acompanhe o desenvolvimento contínuo do projeto.").into());
     l.set_home_market_desc(tor("gui.home_market_desc", "Instale, atualize e descubra skills e environments.").into());
-    l.set_home_graph_desc(tor("gui.home_graph_desc", "Explore o grafo de microfunÃ§Ãµes do projeto.").into());
+    l.set_home_graph_desc(tor("gui.home_graph_desc", "Explore o grafo de microfunções do projeto.").into());
     l.set_home_environments(tor("gui.home_environments", "Environments").into());
     l.set_home_environments_desc(tor("gui.home_environments_desc", "Gerencie os runtimes de linguagem.").into());
     l.set_home_ssh(tor("gui.home_ssh", "SSH").into());
     l.set_home_ssh_desc(tor("gui.home_ssh_desc", "Chaves e acesso remoto.").into());
-    l.set_home_settings(tor("gui.home_settings", "ConfiguraÃ§Ãµes").into());
-    l.set_home_settings_desc(tor("gui.home_settings_desc", "Idioma, tema e preferÃªncias.").into());
+    l.set_home_settings(tor("gui.home_settings", "Configurações").into());
+    l.set_home_settings_desc(tor("gui.home_settings_desc", "Idioma, tema e preferências.").into());
     l.set_open_vscode(tor("gui.open_vscode", "Abrir no VSCode").into());
-    l.set_open_loose_project(tor("gui.open_loose_project", "Abrir projeto avulsoâ¦").into());
-    // aba Gerenciar (criar + editar skills) â chaves NOVAS via `tor`. Ver relatÃ³rio.
+    l.set_open_loose_project(tor("gui.open_loose_project", "Abrir projeto avulso…").into());
+    // aba Gerenciar (criar + editar skills) — chaves NOVAS via `tor`. Ver relatório.
     l.set_manage(tor("gui.manage", "Gerenciar").into());
     l.set_create_skill(tor("gui.create_skill", "Criar skill").into());
     l.set_edit_skill(tor("gui.edit_skill", "Editar skill").into());
     l.set_skill_slug(tor("gui.skill_slug", "Slug").into());
     l.set_skill_name(tor("gui.skill_name", "Nome").into());
-    l.set_skill_desc(tor("gui.skill_desc", "DescriÃ§Ã£o").into());
+    l.set_skill_desc(tor("gui.skill_desc", "Descrição").into());
     l.set_create(tor("gui.create", "Criar").into());
     l.set_save(tor("gui.save", "Salvar").into());
     l.set_saved(tor("gui.saved", "Salvo").into());
-    l.set_slug_invalid(tor("gui.slug_invalid", "slug invÃ¡lido â use sÃ³ [a-z0-9-], comeÃ§ando por letra/dÃ­gito").into());
-    l.set_skill_exists(tor("gui.skill_exists", "essa skill jÃ¡ existe").into());
-    l.set_pick_skill(tor("gui.pick_skill", "Escolha uma skillâ¦").into());
+    l.set_slug_invalid(tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito").into());
+    l.set_skill_exists(tor("gui.skill_exists", "essa skill já existe").into());
+    l.set_pick_skill(tor("gui.pick_skill", "Escolha uma skill…").into());
     l.set_pick_file(tor("gui.pick_file", "Arquivos").into());
     l.set_skill_created(tor("gui.skill_created", "Skill criada em").into());
     l.set_no_installed_skills(tor("gui.no_installed_skills", "Nenhuma skill instalada para editar").into());
     l.set_edit_now(tor("gui.edit_now", "Editar agora").into());
     l.set_pick_file_hint(tor("gui.pick_file_hint", "Selecione um arquivo na barra lateral para editar").into());
-    // Tela SSH â chaves NOVAS via `tor`.
+    // Tela SSH — chaves NOVAS via `tor`.
     l.set_ssh_title(tor("gui.ssh_title", "Chaves SSH").into());
     l.set_ssh_generate(tor("gui.ssh_generate", "Gerar chave").into());
     l.set_ssh_name(tor("gui.ssh_name", "Nome").into());
     l.set_ssh_kind(tor("gui.ssh_kind", "Tipo").into());
-    l.set_ssh_comment(tor("gui.ssh_comment", "ComentÃ¡rio").into());
+    l.set_ssh_comment(tor("gui.ssh_comment", "Comentário").into());
     l.set_ssh_passphrase(tor("gui.ssh_passphrase", "Passphrase (opcional)").into());
-    l.set_ssh_copy_pub(tor("gui.ssh_copy_pub", "Copiar pÃºblica").into());
+    l.set_ssh_copy_pub(tor("gui.ssh_copy_pub", "Copiar pública").into());
     l.set_ssh_copied(tor("gui.ssh_copied", "copiado").into());
     l.set_ssh_remove(tor("gui.ssh_remove", "Remover").into());
-    l.set_ssh_empty(tor("gui.ssh_empty", "Nenhuma chave em ~/.ssh â gere uma acima.").into());
-    l.set_ssh_priv_note(tor("gui.ssh_priv_note", "A chave privada nunca Ã© exposta â sÃ³ a pÃºblica sai.").into());
+    l.set_ssh_empty(tor("gui.ssh_empty", "Nenhuma chave em ~/.ssh — gere uma acima.").into());
+    l.set_ssh_priv_note(tor("gui.ssh_priv_note", "A chave privada nunca é exposta — só a pública sai.").into());
     l.set_ssh_keys_title(tor("gui.ssh_keys_title", "Suas chaves").into());
-    // SSH â entropia (do lib, por tipo) + prova + Bitwarden. Chaves NOVAS via `tor`.
+    // SSH — entropia (do lib, por tipo) + prova + Bitwarden. Chaves NOVAS via `tor`.
     l.set_ssh_entropy_ed25519(sshkeys::entropy_note(sshkeys::KeyKind::Ed25519).into());
     l.set_ssh_entropy_rsa(sshkeys::entropy_note(sshkeys::KeyKind::Rsa4096).into());
     l.set_ssh_kind_hint(tor(
         "gui.ssh_kind_hint",
-        "ed25519 Ã© o default forte da casa; use RSA sÃ³ para hosts legados â e nunca abaixo de 4096 bits.",
+        "ed25519 é o default forte da casa; use RSA só para hosts legados — e nunca abaixo de 4096 bits.",
     ).into());
-    l.set_ssh_proof_label(tor("gui.ssh_proof_label", "Prova da chave (bits Â· fingerprint Â· tipo)").into());
-    l.set_ssh_export_bw(tor("gui.ssh_export_bw", "Exportar â Bitwarden").into());
+    l.set_ssh_proof_label(tor("gui.ssh_proof_label", "Prova da chave (bits · fingerprint · tipo)").into());
+    l.set_ssh_export_bw(tor("gui.ssh_export_bw", "Exportar → Bitwarden").into());
     l.set_ssh_bw_note(tor(
         "gui.ssh_bw_note",
-        "Exportar â Bitwarden salva a chave no seu cofre (se destravado) ou gera um arquivo de import 600. \
+        "Exportar → Bitwarden salva a chave no seu cofre (se destravado) ou gera um arquivo de import 600. \
          A chave PRIVADA nunca aparece nesta tela.",
     ).into());
-    // Tela ConfiguraÃ§Ãµes â chaves NOVAS via `tor`.
-    l.set_cfg_title(tor("gui.cfg_title", "ConfiguraÃ§Ãµes").into());
+    // Tela Configurações — chaves NOVAS via `tor`.
+    l.set_cfg_title(tor("gui.cfg_title", "Configurações").into());
     l.set_cfg_language(tor("gui.cfg_language", "Idioma").into());
     l.set_cfg_theme(tor("gui.cfg_theme", "Tema").into());
     l.set_cfg_autostart(tor("gui.cfg_autostart", "Autostart do agente").into());
-    l.set_cfg_autostart_desc(tor("gui.cfg_autostart_desc", "Inicia o agente de atualizaÃ§Ã£o junto com a sua sessÃ£o.").into());
+    l.set_cfg_autostart_desc(tor("gui.cfg_autostart_desc", "Inicia o agente de atualização junto com a sua sessão.").into());
     l.set_cfg_hooks(tor("gui.cfg_hooks", "Hooks do overdev").into());
     l.set_cfg_hooks_desc(tor("gui.cfg_hooks_desc", "Registra os hooks (Stop/PreToolUse) do overdev no Claude Code.").into());
-    l.set_cfg_dirs(tor("gui.cfg_dirs", "DiretÃ³rios de dev e projetos fixados").into());
+    l.set_cfg_dirs(tor("gui.cfg_dirs", "Diretórios de dev e projetos fixados").into());
     l.set_cfg_dirs_desc(tor("gui.cfg_dirs_desc", "Onde o schematize procura os seus projetos.").into());
-    l.set_cfg_manage(tor("gui.cfg_manage", "Gerenciarâ¦").into());
+    l.set_cfg_manage(tor("gui.cfg_manage", "Gerenciar…").into());
     l.set_cfg_on(tor("gui.cfg_on", "ligado").into());
     l.set_cfg_off(tor("gui.cfg_off", "desligado").into());
-    // DiagnÃ³stico (relatÃ³rio de debug) â chaves NOVAS via `tor`.
-    l.set_cfg_debug_title(tor("gui.cfg_debug_title", "DiagnÃ³stico").into());
-    l.set_cfg_debug_btn(tor("gui.cfg_debug_btn", "Gerar relatÃ³rio de debug").into());
-    l.set_cfg_debug_generating(tor("gui.cfg_debug_generating", "Gerandoâ¦").into());
+    // Diagnóstico (relatório de debug) — chaves NOVAS via `tor`.
+    l.set_cfg_debug_title(tor("gui.cfg_debug_title", "Diagnóstico").into());
+    l.set_cfg_debug_btn(tor("gui.cfg_debug_btn", "Gerar relatório de debug").into());
+    l.set_cfg_debug_generating(tor("gui.cfg_debug_generating", "Gerando…").into());
     l.set_cfg_debug_open(tor("gui.cfg_debug_open", "Abrir pasta").into());
     l.set_cfg_debug_note(tor(
         "gui.cfg_debug_note",
-        "modo 600 Â· segredos redigidos Â· revise antes de compartilhar",
+        "modo 600 · segredos redigidos · revise antes de compartilhar",
     ).into());
-    l.set_cfg_debug_net(tor("gui.cfg_debug_net", "incluir diagnÃ³stico de rede (mais lento)").into());
-    l.set_cfg_debug_saved(tor("gui.cfg_debug_saved", "RelatÃ³rio gravado em").into());
-    // Overdev â aditivos.
-    l.set_od_history(tor("gui.od_history", "HistÃ³rico (cÃ³pia de seguranÃ§a)").into());
-    l.set_od_history_note(tor("gui.od_history_note", "O agente pode editar/apagar os arquivos do .overdev/ â este Ã© o backup versionado deles.").into());
+    l.set_cfg_debug_net(tor("gui.cfg_debug_net", "incluir diagnóstico de rede (mais lento)").into());
+    l.set_cfg_debug_saved(tor("gui.cfg_debug_saved", "Relatório gravado em").into());
+    // Overdev — aditivos.
+    l.set_od_history(tor("gui.od_history", "Histórico (cópia de segurança)").into());
+    l.set_od_history_note(tor("gui.od_history_note", "O agente pode editar/apagar os arquivos do .overdev/ — este é o backup versionado deles.").into());
     l.set_od_view(tor("gui.od_view", "Ver").into());
     l.set_od_restore(tor("gui.od_restore", "Restaurar").into());
     l.set_od_snap_empty(tor("gui.od_snap_empty", "Sem snapshots ainda.").into());
     l.set_od_commits(tor("gui.od_commits", "Commits e push").into());
-    l.set_od_commits_empty(tor("gui.od_commits_empty", "Sem commits (ou nÃ£o Ã© um repositÃ³rio git).").into());
+    l.set_od_commits_empty(tor("gui.od_commits_empty", "Sem commits (ou não é um repositório git).").into());
     l.set_od_close(tor("gui.od_close", "Fechar").into());
-    // PaginaÃ§Ã£o.
-    l.set_pg_prev(tor("gui.pg_prev", "â¹ Anterior").into());
-    l.set_pg_next(tor("gui.pg_next", "PrÃ³ximo âº").into());
+    // Paginação.
+    l.set_pg_prev(tor("gui.pg_prev", "‹ Anterior").into());
+    l.set_pg_next(tor("gui.pg_next", "Próximo ›").into());
     l.set_pg_of(tor("gui.pg_of", "de").into());
-    // VersÃ£o do app + self-update (ConfiguraÃ§Ãµes). Chaves NOVAS via `tor`.
-    l.set_app_version_title(tor("gui.app_version_title", "VersÃ£o do app").into());
-    l.set_app_check_update(tor("gui.app_check_update", "Verificar atualizaÃ§Ã£o").into());
-    l.set_app_checking(tor("gui.app_checking", "Verificandoâ¦").into());
-    l.set_app_up_to_date(tor("gui.app_up_to_date", "VocÃª estÃ¡ atualizado").into());
+    // Versão do app + self-update (Configurações). Chaves NOVAS via `tor`.
+    l.set_app_version_title(tor("gui.app_version_title", "Versão do app").into());
+    l.set_app_check_update(tor("gui.app_check_update", "Verificar atualização").into());
+    l.set_app_checking(tor("gui.app_checking", "Verificando…").into());
+    l.set_app_up_to_date(tor("gui.app_up_to_date", "Você está atualizado").into());
     l.set_app_update_btn(tor("gui.app_update_btn", "Atualizar app").into());
-    l.set_app_updating(tor("gui.app_updating", "Atualizandoâ¦").into());
-    l.set_app_restart_hint(tor("gui.app_restart_hint", "AtualizaÃ§Ã£o concluÃ­da â reinicie o app.").into());
+    l.set_app_updating(tor("gui.app_updating", "Atualizando…").into());
+    l.set_app_restart_hint(tor("gui.app_restart_hint", "Atualização concluída — reinicie o app.").into());
     l.set_app_restart(tor("gui.app_restart", "Reiniciar").into());
     l.set_updater_missing_msg(tor("gui.updater_missing", "O gestor de atualizações (schematize-updater) não está instalado — ele cuida de instalar/atualizar o app.").into());
     l.set_updater_install_btn(tor("gui.updater_install", "Instalar gestor de atualizações").into());
-    // Sininho de notificaÃ§Ãµes.
-    l.set_notif_title(tor("gui.notif_title", "NotificaÃ§Ãµes").into());
-    l.set_notif_empty(tor("gui.notif_empty", "Sem notificaÃ§Ãµes").into());
+    // Sininho de notificações.
+    l.set_notif_title(tor("gui.notif_title", "Notificações").into());
+    l.set_notif_empty(tor("gui.notif_empty", "Sem notificações").into());
     l.set_notif_global(tor("gui.notif_global", "Globais").into());
     l.set_notif_personal(tor("gui.notif_personal", "Pessoais").into());
-    l.set_notif_loading(tor("gui.notif_loading", "Carregandoâ¦").into());
+    l.set_notif_loading(tor("gui.notif_loading", "Carregando…").into());
     l.set_notif_do_update(tor("gui.notif_do_update", "Atualizar").into());
     l.set_notif_open(tor("gui.notif_open", "Abrir").into());
     l.set_notif_go_installed(tor("gui.notif_go_installed", "Ver instaladas").into());
@@ -317,39 +317,39 @@ fn install_i18n(app: &AppWindow) {
     l.set_fork_badge(tor("gui.fork_badge", "fork").into());
     l.set_fork_will(tor(
         "gui.fork_will",
-        "Esta Ã© uma skill OFICIAL. Ao editÃ¡-la, ela serÃ¡ forkada: uma cÃ³pia editÃ¡vel fica ativa e a versÃ£o oficial Ã© preservada para comparar depois.",
+        "Esta é uma skill OFICIAL. Ao editá-la, ela será forkada: uma cópia editável fica ativa e a versão oficial é preservada para comparar depois.",
     ).into());
     l.set_fork_active(tor(
         "gui.fork_active",
-        "Fork ativo â a versÃ£o oficial estÃ¡ preservada para vocÃª comparar.",
+        "Fork ativo — a versão oficial está preservada para você comparar.",
     ).into());
     l.set_compare_official(tor("gui.compare_official", "Comparar com oficial").into());
     l.set_compare_note(tor(
         "gui.compare_note",
-        "Comparar NÃO sobrescreve nada â apenas mostra as diferenÃ§as entre o seu fork e a versÃ£o oficial nova.",
+        "Comparar NÃO sobrescreve nada — apenas mostra as diferenças entre o seu fork e a versão oficial nova.",
     ).into());
     l.set_compare_files(tor("gui.compare_files", "Arquivos").into());
-    l.set_compare_loading(tor("gui.compare_loading", "Comparandoâ¦").into());
-    // Conta (login via device flow) â chaves NOVAS via `tor`.
+    l.set_compare_loading(tor("gui.compare_loading", "Comparando…").into());
+    // Conta (login via device flow) — chaves NOVAS via `tor`.
     l.set_acc_section(tor("gui.acc_section", "Conta").into());
     l.set_acc_login(tor("gui.acc_login", "Entrar na plataforma").into());
     l.set_acc_logout(tor("gui.acc_logout", "Sair").into());
     l.set_acc_connected_as(tor("gui.acc_connected_as", "Conectado como").into());
     l.set_acc_logged_out_hint(tor(
         "gui.acc_logged_out_hint",
-        "Entre na plataforma para receber notificaÃ§Ãµes e sincronizar suas skills.",
+        "Entre na plataforma para receber notificações e sincronizar suas skills.",
     ).into());
     l.set_acc_modal_title(tor("gui.acc_modal_title", "Entrar na plataforma").into());
     l.set_acc_code_label(tor(
         "gui.acc_code_label",
-        "Abra o endereÃ§o abaixo no navegador e digite este cÃ³digo:",
+        "Abra o endereço abaixo no navegador e digite este código:",
     ).into());
     l.set_acc_open_browser(tor("gui.acc_open_browser", "Abrir no navegador").into());
     l.set_acc_verification_at(tor("gui.acc_verification_at", "Acesse:").into());
-    l.set_acc_waiting(tor("gui.acc_waiting", "Aguardando confirmaÃ§Ã£oâ¦").into());
+    l.set_acc_waiting(tor("gui.acc_waiting", "Aguardando confirmação…").into());
     l.set_acc_cancel(tor("gui.acc_cancel", "Cancelar").into());
-    l.set_acc_indicator_tip(tor("gui.acc_indicator_tip", "Conectado â abrir Conta").into());
-    // Database builder (tela 6) â chaves NOVAS via `tor`.
+    l.set_acc_indicator_tip(tor("gui.acc_indicator_tip", "Conectado — abrir Conta").into());
+    // Database builder (tela 6) — chaves NOVAS via `tor`.
     l.set_home_database(tor("gui.home_database", "Banco de dados").into());
     l.set_home_database_desc(tor("gui.home_database_desc", "Leia, modele e gere o schema do seu banco.").into());
     l.set_db_title(tor("gui.db_title", "Database builder").into());
@@ -359,15 +359,15 @@ fn install_i18n(app: &AppWindow) {
     l.set_db_sub_graph(tor("gui.db_sub_graph", "Grafo").into());
     l.set_db_sqlite_label(tor("gui.db_sqlite_label", "Arquivo SQLite").into());
     l.set_db_pg_label(tor("gui.db_pg_label", "Connection string Postgres").into());
-    l.set_db_pick_file(tor("gui.db_pick_file", "Escolherâ¦").into());
+    l.set_db_pick_file(tor("gui.db_pick_file", "Escolher…").into());
     l.set_db_introspect(tor("gui.db_introspect", "Introspectar").into());
     l.set_db_load_json(tor("gui.db_load_json", "Carregar schema.json").into());
     l.set_db_save_json(tor("gui.db_save_json", "Salvar schema.json").into());
-    l.set_db_no_schema(tor("gui.db_no_schema", "Nenhum schema carregado â introspecte um banco, carregue um schema.json ou adicione uma tabela.").into());
+    l.set_db_no_schema(tor("gui.db_no_schema", "Nenhum schema carregado — introspecte um banco, carregue um schema.json ou adicione uma tabela.").into());
     l.set_db_tables_title(tor("gui.db_tables_title", "Tabelas").into());
     l.set_db_cols_label(tor("gui.db_cols_label", "Colunas").into());
     l.set_db_fks_label(tor("gui.db_fks_label", "Chaves estrangeiras").into());
-    l.set_db_indexes_label(tor("gui.db_indexes_label", "Ãndices").into());
+    l.set_db_indexes_label(tor("gui.db_indexes_label", "Índices").into());
     l.set_db_editor_title(tor("gui.db_editor_title", "Editar schema").into());
     l.set_db_add_table(tor("gui.db_add_table", "Adicionar tabela").into());
     l.set_db_table_name(tor("gui.db_table_name", "Nome da tabela").into());
@@ -384,9 +384,9 @@ fn install_i18n(app: &AppWindow) {
     l.set_db_fk_refcol(tor("gui.db_fk_refcol", "Coluna ref.").into());
     l.set_db_gen_sql(tor("gui.db_gen_sql", "Gerar SQL").into());
     l.set_db_gen_migration(tor("gui.db_gen_migration", "Gerar migration").into());
-    l.set_db_gen_save(tor("gui.db_gen_save", "Salvar em arquivoâ¦").into());
-    l.set_db_ai_title(tor("gui.db_ai_title", "Gerar por descriÃ§Ã£o (IA)").into());
-    l.set_db_ai_hint(tor("gui.db_ai_hint", "Descreva o domÃ­nio do sistemaâ¦").into());
+    l.set_db_gen_save(tor("gui.db_gen_save", "Salvar em arquivo…").into());
+    l.set_db_ai_title(tor("gui.db_ai_title", "Gerar por descrição (IA)").into());
+    l.set_db_ai_hint(tor("gui.db_ai_hint", "Descreva o domínio do sistema…").into());
     l.set_db_ai_generate(tor("gui.db_ai_generate", "Gerar com IA").into());
     l.set_db_ai_note(tor(
         "gui.db_ai_note",
@@ -398,10 +398,10 @@ fn install_i18n(app: &AppWindow) {
 }
 
 // ---------------------------------------------------------------------------
-// aba Gerenciar â lista os SLUGS das skills instaladas escaneando o diretÃ³rio
+// aba Gerenciar — lista os SLUGS das skills instaladas escaneando o diretório
 // de skills (`~/.claude/skills/schematize-<slug>/` com SKILL.md). Cobre tanto as
-// skills do catÃ¡logo quanto as criadas pelo usuÃ¡rio (que nÃ£o estÃ£o no catÃ¡logo).
-// Retorna Vec<String> (Send) â seguro pra rodar em thread e postar via event loop.
+// skills do catálogo quanto as criadas pelo usuário (que não estão no catálogo).
+// Retorna Vec<String> (Send) — seguro pra rodar em thread e postar via event loop.
 // ---------------------------------------------------------------------------
 fn installed_skill_slugs() -> Vec<String> {
     let dir = util::skills_dir();
@@ -432,22 +432,22 @@ fn strings_model(v: Vec<String>) -> ModelRc<SharedString> {
 }
 
 // ---------------------------------------------------------------------------
-// Logo da janela â MESMA marca do egui (`schematize::appicon::rgba(256)`),
+// Logo da janela — MESMA marca do egui (`schematize::appicon::rgba(256)`),
 // convertida num `slint::Image` pra alimentar a propriedade `icon` do Window.
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-// RelanÃ§a o app numa janela NOVA e encerra este processo. CONSERTO do bug do
-// "reiniciar" (pÃ³s self-update) que sÃ³ fechava e nÃ£o reabria: fazemos um spawn
-// DESACOPLADO do binÃ¡rio atual (nova sessÃ£o de processos via `process_group(0)`
-// + stdio em /dev/null) ANTES do `exit(0)`, entÃ£o a janela nova sobe sozinha e
-// sobrevive Ã  saÃ­da deste. Chamado pelo callback `restart` do Slint.
+// Relança o app numa janela NOVA e encerra este processo. CONSERTO do bug do
+// "reiniciar" (pós self-update) que só fechava e não reabria: fazemos um spawn
+// DESACOPLADO do binário atual (nova sessão de processos via `process_group(0)`
+// + stdio em /dev/null) ANTES do `exit(0)`, então a janela nova sobe sozinha e
+// sobrevive à saída deste. Chamado pelo callback `restart` do Slint.
 // ---------------------------------------------------------------------------
 fn restart_app() -> ! {
     if let Ok(exe) = std::env::current_exe() {
         let mut cmd = std::process::Command::new(&exe);
         cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-        cmd.process_group(0); // grupo prÃ³prio â nÃ£o morre com o processo atual
-        let _ = cmd.spawn(); // best-effort: se falhar, ainda saÃ­mos limpo
+        cmd.process_group(0); // grupo próprio → não morre com o processo atual
+        let _ = cmd.spawn(); // best-effort: se falhar, ainda saímos limpo
     }
     std::process::exit(0);
 }
@@ -460,7 +460,7 @@ fn open_path_in_files(root: &Path) {
 }
 
 // ---------------------------------------------------------------------------
-// Abre o projeto no VSCode: `code <root>` se o binÃ¡rio existe; senÃ£o cai no
+// Abre o projeto no VSCode: `code <root>` se o binário existe; senão cai no
 // esquema `vscode://file/<root>` (best-effort via xdg-open).
 // ---------------------------------------------------------------------------
 fn open_in_vscode(root: &Path) {
@@ -479,31 +479,31 @@ fn open_in_vscode(root: &Path) {
 }
 
 // ---------------------------------------------------------------------------
-// Estado derivado (missing/outdated/current/loading) + rÃ³tulo traduzido.
+// Estado derivado (missing/outdated/current/loading) + rótulo traduzido.
 // ---------------------------------------------------------------------------
 fn compute_state(installed: &Option<String>, latest: &Option<String>) -> (String, String) {
     match (installed, latest) {
-        // NÃ£o instalada â mesmo com latest desconhecido, dÃ¡ pra instalar.
+        // Não instalada — mesmo com latest desconhecido, dá pra instalar.
         (None, _) => ("missing".into(), t("common.not_installed")),
-        // Instalada, mas ainda resolvendo o latest (rede) â spinner.
-        (Some(_), None) => ("loading".into(), "â¦".into()),
+        // Instalada, mas ainda resolvendo o latest (rede) → spinner.
+        (Some(_), None) => ("loading".into(), "…".into()),
         (Some(i), Some(l)) if i == l => ("current".into(), t("common.current")),
-        // Desatualizada: "UPDATE (XâY)".
-        (Some(i), Some(l)) => ("outdated".into(), format!("{} ({}â{})", t("common.update"), i, l)),
+        // Desatualizada: "UPDATE (X→Y)".
+        (Some(i), Some(l)) => ("outdated".into(), format!("{} ({}→{})", t("common.update"), i, l)),
     }
 }
 
 // ---------------------------------------------------------------------------
-// Montagem inicial do modelo (cabeÃ§alhos de categoria + skills). Retorna as
-// linhas E o Item alinhado a cada linha (None nos cabeÃ§alhos), pra as aÃ§Ãµes.
+// Montagem inicial do modelo (cabeçalhos de categoria + skills). Retorna as
+// linhas E o Item alinhado a cada linha (None nos cabeçalhos), pra as ações.
 // ---------------------------------------------------------------------------
-/// Categoria normalizada de um item (vazio â "language").
+/// Categoria normalizada de um item (vazio → "language").
 fn category_of(it: &Item) -> &str {
     if it.category.is_empty() { "language" } else { it.category.as_str() }
 }
 
-/// CabeÃ§alho de categoria de UMA pÃ¡gina (page 0 = Instaladas, 1 = Marketplace).
-/// `count` Ã© preenchido/atualizado por `recompute_headers` (esconde vazios).
+/// Cabeçalho de categoria de UMA página (page 0 = Instaladas, 1 = Marketplace).
+/// `count` é preenchido/atualizado por `recompute_headers` (esconde vazios).
 fn header_row(label: &str, cat: &str, page: i32) -> SkillRow {
     SkillRow {
         is_header: true,
@@ -529,14 +529,14 @@ fn header_row(label: &str, cat: &str, page: i32) -> SkillRow {
     }
 }
 
-/// Linha inicial de uma skill: instalada lida do disco (rÃ¡pido), latest ainda
-/// "â¦" (resolvido depois, assÃ­ncrono). Estado derivado do que jÃ¡ se sabe.
-/// `forked` = a skill oficial virou fork editÃ¡vel (marca [fork] + habilita Comparar).
+/// Linha inicial de uma skill: instalada lida do disco (rápido), latest ainda
+/// "…" (resolvido depois, assíncrono). Estado derivado do que já se sabe.
+/// `forked` = a skill oficial virou fork editável (marca [fork] + habilita Comparar).
 fn skill_row(it: &Item, forked: bool) -> SkillRow {
     let author = it.sponsor.as_ref().map(|s| s.name.clone()).unwrap_or_default();
     let author_url = it.sponsor.as_ref().map(|s| s.url.clone()).unwrap_or_default();
     let installed = skills::installed_version(it);
-    let latest: Option<String> = None; // resolvido assÃ­ncrono apÃ³s subir a janela
+    let latest: Option<String> = None; // resolvido assíncrono após subir a janela
     let (state, state_label) = compute_state(&installed, &latest);
     SkillRow {
         is_header: false,
@@ -547,8 +547,8 @@ fn skill_row(it: &Item, forked: bool) -> SkillRow {
         slug: it.slug.clone().into(),
         author: author.into(),
         author_url: author_url.into(),
-        installed: installed.unwrap_or_else(|| "â".into()).into(),
-        latest: "â¦".into(),
+        installed: installed.unwrap_or_else(|| "—".into()).into(),
+        latest: "…".into(),
         state: state.into(),
         state_label: state_label.into(),
         verified: it.verified,
@@ -573,9 +573,9 @@ fn forked_slugs() -> HashSet<String> {
 }
 
 /// Ordena os itens em grupos (base, language, external). Por categoria emite
-/// DOIS cabeÃ§alhos (Instaladas page=0 e Marketplace page=1) seguidos das skills;
-/// a pÃ¡gina ativa mostra o cabeÃ§alho certo e as skills cujo estado casa (o Slint
-/// filtra por `state`). Devolve o Item por linha (None nos cabeÃ§alhos).
+/// DOIS cabeçalhos (Instaladas page=0 e Marketplace page=1) seguidos das skills;
+/// a página ativa mostra o cabeçalho certo e as skills cujo estado casa (o Slint
+/// filtra por `state`). Devolve o Item por linha (None nos cabeçalhos).
 fn build_rows(items: &[Item]) -> (Vec<SkillRow>, Vec<Option<Item>>) {
     let groups = [
         ("base", t("gui.cat_base")),
@@ -590,7 +590,7 @@ fn build_rows(items: &[Item]) -> (Vec<SkillRow>, Vec<Option<Item>>) {
         if group.is_empty() {
             continue;
         }
-        // page 0 = Instaladas, page 1 = Marketplace â sÃ³ um aparece por vez.
+        // page 0 = Instaladas, page 1 = Marketplace — só um aparece por vez.
         rows.push(header_row(&label, cat, 0));
         row_items.push(None);
         rows.push(header_row(&label, cat, 1));
@@ -603,8 +603,8 @@ fn build_rows(items: &[Item]) -> (Vec<SkillRow>, Vec<Option<Item>>) {
     (rows, row_items)
 }
 
-/// Atualiza o marcador `forked` da linha de uma skill (por slug) no modelo do app â
-/// chamado apÃ³s uma ediÃ§Ã£o que forka uma skill oficial, pra o badge [fork] e o botÃ£o
+/// Atualiza o marcador `forked` da linha de uma skill (por slug) no modelo do app —
+/// chamado após uma edição que forka uma skill oficial, pra o badge [fork] e o botão
 /// Comparar aparecerem sem recarregar a lista inteira. Opera sobre `app.get_rows()`
 /// (roda no event loop; nada de Rc cruzando thread).
 fn mark_row_forked(app: &AppWindow, slug: &str, forked: bool) {
@@ -621,10 +621,10 @@ fn mark_row_forked(app: &AppWindow, slug: &str, forked: bool) {
 }
 
 // ---------------------------------------------------------------------------
-// Reconta os cabeÃ§alhos: cada cabeÃ§alho (page, categoria) ganha o nÂº de skills
-// que estÃ£o AGORA na sua pÃ¡gina (Instaladas = state != "missing"; Marketplace =
-// state == "missing"). count==0 â o Slint esconde o cabeÃ§alho. Roda no event
-// loop (sÃ³ usa o modelo do app; nada de dados !Send).
+// Reconta os cabeçalhos: cada cabeçalho (page, categoria) ganha o nº de skills
+// que estão AGORA na sua página (Instaladas = state != "missing"; Marketplace =
+// state == "missing"). count==0 → o Slint esconde o cabeçalho. Roda no event
+// loop (só usa o modelo do app; nada de dados !Send).
 // ---------------------------------------------------------------------------
 fn recompute_headers(app: &AppWindow) {
     let rows = app.get_rows();
@@ -641,7 +641,7 @@ fn recompute_headers(app: &AppWindow) {
                     continue;
                 }
                 let missing = r.state == "missing";
-                // page 0 = Instaladas (nÃ£o-missing); page 1 = Marketplace (missing).
+                // page 0 = Instaladas (não-missing); page 1 = Marketplace (missing).
                 if (h.page == 1 && missing) || (h.page == 0 && !missing) {
                     count += 1;
                 }
@@ -656,9 +656,9 @@ fn recompute_headers(app: &AppWindow) {
 }
 
 // ---------------------------------------------------------------------------
-// PaginaÃ§Ã£o do Mercado: numera (disp) as skills VISÃVEIS na pÃ¡gina-tab ativa em
-// ordem sequencial; -1 nas que nÃ£o pertencem Ã  pÃ¡gina. O Slint mostra sÃ³ as
-// cujo `disp` cai na janela `[mkt-page*20, +20)`. Total â controla o Pager.
+// Paginação do Mercado: numera (disp) as skills VISÍVEIS na página-tab ativa em
+// ordem sequencial; -1 nas que não pertencem à página. O Slint mostra só as
+// cujo `disp` cai na janela `[mkt-page*20, +20)`. Total → controla o Pager.
 // ---------------------------------------------------------------------------
 fn recompute_pagination(app: &AppWindow) {
     let tab = app.get_active_tab();
@@ -688,7 +688,7 @@ fn recompute_pagination(app: &AppWindow) {
 }
 
 // ---------------------------------------------------------------------------
-// Status global (contagem de pendÃªncias) â mesma regra do egui.
+// Status global (contagem de pendências) — mesma regra do egui.
 // ---------------------------------------------------------------------------
 fn update_status(app: &AppWindow) {
     let rows = app.get_rows();
@@ -709,7 +709,7 @@ fn update_status(app: &AppWindow) {
 }
 
 // ---------------------------------------------------------------------------
-// threadâUI: posta a atualizaÃ§Ã£o de versÃµes (installed + latest) de uma linha.
+// thread→UI: posta a atualização de versões (installed + latest) de uma linha.
 // ---------------------------------------------------------------------------
 fn post_versions(weak: Weak<AppWindow>, idx: usize, installed: Option<String>, latest: Option<String>) {
     let _ = slint::invoke_from_event_loop(move || {
@@ -717,7 +717,7 @@ fn post_versions(weak: Weak<AppWindow>, idx: usize, installed: Option<String>, l
             let rows = app.get_rows();
             if let Some(mut r) = rows.row_data(idx) {
                 let (state, label) = compute_state(&installed, &latest);
-                r.installed = installed.clone().unwrap_or_else(|| "â".into()).into();
+                r.installed = installed.clone().unwrap_or_else(|| "—".into()).into();
                 r.latest = latest.clone().unwrap_or_else(|| "?".into()).into();
                 r.state = state.into();
                 r.state_label = label.into();
@@ -729,7 +729,7 @@ fn post_versions(weak: Weak<AppWindow>, idx: usize, installed: Option<String>, l
     });
 }
 
-/// threadâUI: marca uma linha como ocupada (operaÃ§Ã£o em andamento) com rÃ³tulo.
+/// thread→UI: marca uma linha como ocupada (operação em andamento) com rótulo.
 fn post_row_busy(weak: Weak<AppWindow>, idx: usize, label: String) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
@@ -744,9 +744,9 @@ fn post_row_busy(weak: Weak<AppWindow>, idx: usize, label: String) {
     });
 }
 
-/// threadâUI: resultado de uma operaÃ§Ã£o numa linha. Instalar â instalada=latest
-/// (o release baixado Ã o latest) e estado "current"; remover â nÃ£o instalada.
-/// Erro â mantÃ©m e mostra o rÃ³tulo em warn.
+/// thread→UI: resultado de uma operação numa linha. Instalar → instalada=latest
+/// (o release baixado É o latest) e estado "current"; remover → não instalada.
+/// Erro → mantém e mostra o rótulo em warn.
 fn post_row_result(weak: Weak<AppWindow>, idx: usize, install: bool, res: Result<String, String>) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
@@ -763,7 +763,7 @@ fn post_row_result(weak: Weak<AppWindow>, idx: usize, install: bool, res: Result
                             r.state = "current".into();
                             r.state_label = t("common.current").into();
                         } else {
-                            r.installed = "â".into();
+                            r.installed = "—".into();
                             r.state = "missing".into();
                             r.state_label = t("common.not_installed").into();
                         }
@@ -781,7 +781,7 @@ fn post_row_result(weak: Weak<AppWindow>, idx: usize, install: bool, res: Result
     });
 }
 
-/// threadâUI: fim do lote â solta o `busy` global e mostra o toast final.
+/// thread→UI: fim do lote — solta o `busy` global e mostra o toast final.
 fn post_batch_done(weak: Weak<AppWindow>, ok: usize, err: usize) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
@@ -794,8 +794,8 @@ fn post_batch_done(weak: Weak<AppWindow>, ok: usize, err: usize) {
 }
 
 // ---------------------------------------------------------------------------
-// ResoluÃ§Ã£o assÃ­ncrona do latest de UMA skill (rede). Detached: reusa install/
-// check. Re-lÃª a instalada (barato) pra refletir mudanÃ§as de disco.
+// Resolução assíncrona do latest de UMA skill (rede). Detached: reusa install/
+// check. Re-lê a instalada (barato) pra refletir mudanças de disco.
 // ---------------------------------------------------------------------------
 fn spawn_resolve(weak: Weak<AppWindow>, idx: usize, item: Item) {
     std::thread::spawn(move || {
@@ -805,18 +805,18 @@ fn spawn_resolve(weak: Weak<AppWindow>, idx: usize, item: Item) {
     });
 }
 
-/// Dispara a resoluÃ§Ã£o do latest de todas as skills em paralelo (uma thread por
-/// skill; sÃ£o poucas). Antes, zera a coluna latest de volta pra "â¦".
+/// Dispara a resolução do latest de todas as skills em paralelo (uma thread por
+/// skill; são poucas). Antes, zera a coluna latest de volta pra "…".
 fn kick_resolve_all(weak: &Weak<AppWindow>, row_items: &Rc<Vec<Option<Item>>>) {
     if let Some(app) = weak.upgrade() {
         let rows = app.get_rows();
         for (idx, maybe) in row_items.iter().enumerate() {
             if let Some(it) = maybe {
                 if let Some(mut r) = rows.row_data(idx) {
-                    r.latest = "â¦".into();
-                    if r.installed != "â" {
+                    r.latest = "…".into();
+                    if r.installed != "—" {
                         r.state = "loading".into();
-                        r.state_label = "â¦".into();
+                        r.state_label = "…".into();
                     }
                     rows.set_row_data(idx, r);
                 }
@@ -827,10 +827,10 @@ fn kick_resolve_all(weak: &Weak<AppWindow>, row_items: &Rc<Vec<Option<Item>>>) {
 }
 
 // ---------------------------------------------------------------------------
-// Notas do marketplace: busca TODAS as mÃ©dias numa thread (1 request) e preenche
-// a coluna `rating` de cada linha de skill por slug. Sem nota (count 0 / None) â
-// `format_rating` devolve "" e o badge some. Falha de rede = HashMap vazio â sÃ³
-// nÃ£o mostra nota (a UI nunca trava; nada de bloqueio no event loop).
+// Notas do marketplace: busca TODAS as médias numa thread (1 request) e preenche
+// a coluna `rating` de cada linha de skill por slug. Sem nota (count 0 / None) →
+// `format_rating` devolve "" e o badge some. Falha de rede = HashMap vazio → só
+// não mostra nota (a UI nunca trava; nada de bloqueio no event loop).
 // ---------------------------------------------------------------------------
 fn kick_market_ratings(weak: Weak<AppWindow>) {
     std::thread::spawn(move || {
@@ -856,7 +856,7 @@ fn kick_market_ratings(weak: Weak<AppWindow>) {
 }
 
 // ---------------------------------------------------------------------------
-// AÃ§Ãµes em massa/paralelo (espelha o run_batch do egui). ops = (idx, install?, Item).
+// Ações em massa/paralelo (espelha o run_batch do egui). ops = (idx, install?, Item).
 // ---------------------------------------------------------------------------
 fn run_batch(weak: Weak<AppWindow>, ops: Vec<(usize, bool, Item)>) {
     if ops.is_empty() {
@@ -864,14 +864,14 @@ fn run_batch(weak: Weak<AppWindow>, ops: Vec<(usize, bool, Item)>) {
     }
     if let Some(app) = weak.upgrade() {
         if app.get_busy() {
-            return; // jÃ¡ tem lote rodando
+            return; // já tem lote rodando
         }
         app.set_busy(true);
     }
     std::thread::spawn(move || {
         let ok = AtomicUsize::new(0);
         let err = AtomicUsize::new(0);
-        // marca cada linha como ocupada antes de comeÃ§ar
+        // marca cada linha como ocupada antes de começar
         for (idx, install, _) in &ops {
             let label = if *install { t("gui.installing") } else { t("gui.removing") };
             post_row_busy(weak.clone(), *idx, label);
@@ -902,7 +902,7 @@ fn run_batch(weak: Weak<AppWindow>, ops: Vec<(usize, bool, Item)>) {
 }
 
 /// Coleta ops (idx, install?, Item) das linhas que casam com o predicado.
-/// `install=true` â instalar/atualizar; `install=false` â remover.
+/// `install=true` → instalar/atualizar; `install=false` → remover.
 fn collect_ops(
     app: &AppWindow,
     row_items: &Rc<Vec<Option<Item>>>,
@@ -923,28 +923,28 @@ fn collect_ops(
     ops
 }
 
-/// NÃO instalada (pertence ao Marketplace).
+/// NÃO instalada (pertence ao Marketplace).
 fn is_missing(r: &SkillRow) -> bool {
     r.state == "missing"
 }
-/// Instalada (pertence a Instaladas) â qualquer estado que nÃ£o seja "missing".
+/// Instalada (pertence a Instaladas) — qualquer estado que não seja "missing".
 fn is_installed(r: &SkillRow) -> bool {
     r.state != "missing"
 }
-/// Instalada E desatualizada (installed Some E latest > installed). Ã o ÃNICO
+/// Instalada E desatualizada (installed Some E latest > installed). É o ÚNICO
 /// alvo de "Atualizar tudo"/"Atualizar selecionadas": jamais instala nova.
 fn is_outdated(r: &SkillRow) -> bool {
     r.state == "outdated"
 }
 
 // ===========================================================================
-// ENVIRONMENTS â gestÃ£o dos runtimes de linguagem (aba 2).
-// A GUI sÃ³ MONTA o comando e ABRE UM TERMINAL rodando `schematize env â¦`; o plano
+// ENVIRONMENTS — gestão dos runtimes de linguagem (aba 2).
+// A GUI só MONTA o comando e ABRE UM TERMINAL rodando `schematize env …`; o plano
 // exato + consentimento (e o sudo) acontecem no terminal (honesto). NUNCA executa
 // o instalador de environment de dentro do processo da GUI.
 // ===========================================================================
 
-/// RÃ³tulo de status de um environment â mesmas chaves i18n que o `list()` do CLI usa.
+/// Rótulo de status de um environment — mesmas chaves i18n que o `list()` do CLI usa.
 fn env_status_label(le: &environments::LangEnv) -> String {
     if let Some(m) = le.installed {
         tf("env.installed_via", &[("method", m.slug())])
@@ -955,9 +955,9 @@ fn env_status_label(le: &environments::LangEnv) -> String {
     }
 }
 
-/// ConstrÃ³i uma linha da aba Environments a partir do status do lib. O
+/// Constrói uma linha da aba Environments a partir do status do lib. O
 /// `section_title` fica vazio aqui; quem monta a lista (build_env_rows_from) o
-/// preenche na PRIMEIRA linha de cada seÃ§Ã£o (linguagens Ã ferramentas).
+/// preenche na PRIMEIRA linha de cada seção (linguagens × ferramentas).
 fn env_row(le: &environments::LangEnv) -> EnvRow {
     let methods: Vec<SharedString> = le.methods_available.iter().map(|m| m.slug().into()).collect();
     let method_sel = methods.first().cloned().unwrap_or_default();
@@ -975,7 +975,7 @@ fn env_row(le: &environments::LangEnv) -> EnvRow {
     }
 }
 
-/// TÃ­tulo traduzido da seÃ§Ã£o de uma categoria ("language" | "tool").
+/// Título traduzido da seção de uma categoria ("language" | "tool").
 fn env_section_title(category: &str) -> String {
     match category {
         "tool" => tor("gui.env_tools_title", "Ferramentas de dev"),
@@ -983,8 +983,8 @@ fn env_section_title(category: &str) -> String {
     }
 }
 
-/// Monta as linhas a partir de um status jÃ¡ sondado, marcando o `section_title`
-/// na primeira linha de cada categoria (o `status()` do lib jÃ¡ lista linguagens
+/// Monta as linhas a partir de um status já sondado, marcando o `section_title`
+/// na primeira linha de cada categoria (o `status()` do lib já lista linguagens
 /// primeiro e ferramentas depois). Assim a UI renderiza os dois blocos separados.
 fn build_env_rows_from(status: &[environments::LangEnv]) -> Vec<EnvRow> {
     let mut last_cat = String::new();
@@ -1001,14 +1001,14 @@ fn build_env_rows_from(status: &[environments::LangEnv]) -> Vec<EnvRow> {
         .collect()
 }
 
-/// ConstrÃ³i o modelo inteiro da aba Environments a partir de `environments::status()`.
+/// Constrói o modelo inteiro da aba Environments a partir de `environments::status()`.
 fn build_env_rows() -> Vec<EnvRow> {
     build_env_rows_from(&environments::status())
 }
 
 // ---------------------------------------------------------------------------
-// SSH â modelo da tela de chaves a partir de `sshkeys::list()` (sÃ³ metadados
-// PÃBLICOS; a privada nunca Ã© lida/exposta). Igual ao padrÃ£o dos demais modelos.
+// SSH — modelo da tela de chaves a partir de `sshkeys::list()` (só metadados
+// PÚBLICOS; a privada nunca é lida/exposta). Igual ao padrão dos demais modelos.
 // ---------------------------------------------------------------------------
 fn build_ssh_rows() -> Vec<SshRow> {
     sshkeys::list()
@@ -1026,7 +1026,7 @@ fn build_ssh_rows() -> Vec<SshRow> {
 }
 
 // ---------------------------------------------------------------------------
-// Idiomas p/ o seletor de ConfiguraÃ§Ãµes (cÃ³digo + nome nativo + marca do atual).
+// Idiomas p/ o seletor de Configurações (código + nome nativo + marca do atual).
 // ---------------------------------------------------------------------------
 fn build_lang_items(current: &str) -> Vec<LangItem> {
     i18n::LANGS
@@ -1040,12 +1040,12 @@ fn build_lang_items(current: &str) -> Vec<LangItem> {
 }
 
 // ---------------------------------------------------------------------------
-// FormataÃ§Ã£o p/ o histÃ³rico do DB do overdev. Sem crate de data: converte o
+// Formatação p/ o histórico do DB do overdev. Sem crate de data: converte o
 // epoch (UTC) via o algoritmo civil de Howard Hinnant.
 // ---------------------------------------------------------------------------
 fn fmt_ts(ts: i64) -> String {
     if ts <= 0 {
-        return "â".into();
+        return "—".into();
     }
     let days = ts.div_euclid(86_400);
     let secs = ts.rem_euclid(86_400);
@@ -1063,7 +1063,7 @@ fn fmt_ts(ts: i64) -> String {
     format!("{y:04}-{m:02}-{d:02} {h:02}:{mi:02}")
 }
 
-/// Tamanho legÃ­vel (B / KB / MB).
+/// Tamanho legível (B / KB / MB).
 fn fmt_size(bytes: i64) -> String {
     if bytes < 1024 {
         format!("{bytes} B")
@@ -1074,21 +1074,21 @@ fn fmt_size(bytes: i64) -> String {
     }
 }
 
-/// Linha de upstream (branch â remote Â· âahead âbehind); vazia se sem tracking.
+/// Linha de upstream (branch → remote · ↑ahead ↓behind); vazia se sem tracking.
 fn fmt_upstream(up: Option<githist::Upstream>) -> String {
     match up {
         Some(u) => {
-            let remote = u.remote.unwrap_or_else(|| "â".into());
-            format!("{} â {} Â· â{} â{}", u.branch, remote, u.ahead, u.behind)
+            let remote = u.remote.unwrap_or_else(|| "—".into());
+            format!("{} → {} · ↑{} ↓{}", u.branch, remote, u.ahead, u.behind)
         }
         None => String::new(),
     }
 }
 
-/// Tamanho da pÃ¡gina das listas paginadas (mercado, histÃ³rico do DB, commits).
+/// Tamanho da página das listas paginadas (mercado, histórico do DB, commits).
 const PAGE: usize = 20;
 
-/// Uma pÃ¡gina do histÃ³rico do DB (metadados â SnapRow).
+/// Uma página do histórico do DB (metadados → SnapRow).
 fn snap_rows_page(all: &[overdevdb::SnapshotMeta], page: i32) -> Vec<SnapRow> {
     let start = (page.max(0) as usize) * PAGE;
     all.iter()
@@ -1104,7 +1104,7 @@ fn snap_rows_page(all: &[overdevdb::SnapshotMeta], page: i32) -> Vec<SnapRow> {
         .collect()
 }
 
-/// Uma pÃ¡gina do histÃ³rico de commits (Commit â CommitRow).
+/// Uma página do histórico de commits (Commit → CommitRow).
 fn commit_rows_page(all: &[githist::Commit], page: i32) -> Vec<CommitRow> {
     let start = (page.max(0) as usize) * PAGE;
     all.iter()
@@ -1120,8 +1120,8 @@ fn commit_rows_page(all: &[githist::Commit], page: i32) -> Vec<CommitRow> {
         .collect()
 }
 
-/// Localiza o binÃ¡rio `schematize` (CLI) pra montar o comando do terminal:
-/// primeiro um irmÃ£o do executÃ¡vel atual; senÃ£o o do PATH.
+/// Localiza o binário `schematize` (CLI) pra montar o comando do terminal:
+/// primeiro um irmão do executável atual; senão o do PATH.
 fn schematize_bin() -> String {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -1134,7 +1134,7 @@ fn schematize_bin() -> String {
     "schematize".into()
 }
 
-/// Um binÃ¡rio existe no PATH?
+/// Um binário existe no PATH?
 fn which_bin(cmd: &str) -> bool {
     std::process::Command::new("sh")
         .arg("-c")
@@ -1146,7 +1146,7 @@ fn which_bin(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Abre um terminal grÃ¡fico rodando `inner` (bash -c). Mesmo padrÃ£o do gui.rs (egui):
+/// Abre um terminal gráfico rodando `inner` (bash -c). Mesmo padrão do gui.rs (egui):
 /// cobre konsole/gnome-terminal/xfce4-terminal/x-terminal-emulator/kitty/alacritty/tilix/xterm.
 fn launch_terminal(inner: &str) -> bool {
     let cands: &[(&str, &[&str])] = &[
@@ -1176,19 +1176,19 @@ fn launch_terminal(inner: &str) -> bool {
 }
 
 /// Monta o comando do terminal p/ `schematize env <action> <lang> --method <m>`.
-/// SEM `--yes`: o CLI mostra o plano e PEDE confirmaÃ§Ã£o ali dentro (consentimento honesto).
+/// SEM `--yes`: o CLI mostra o plano e PEDE confirmação ali dentro (consentimento honesto).
 fn env_terminal_inner(bin: &str, action: &str, lang: &str, method: &str) -> String {
-    // Ferramentas nÃ£o tÃªm mÃ©todo (o CLI ignora `--method` pra elas) â omite o flag
-    // quando `method` vem vazio, pra nÃ£o passar um `--method ` sem valor.
+    // Ferramentas não têm método (o CLI ignora `--method` pra elas) → omite o flag
+    // quando `method` vem vazio, pra não passar um `--method ` sem valor.
     let (tag, method_arg) = if method.is_empty() {
         (String::new(), String::new())
     } else {
         (format!(" ({method})"), format!(" --method {method}"))
     };
     format!(
-        "echo 'ââ schematize env {action} {lang}{tag} ââ'; echo; \
+        "echo '── schematize env {action} {lang}{tag} ──'; echo; \
          {bin} env {action} {lang}{method_arg}; \
-         echo; read -n1 -s -r -p 'â¦'",
+         echo; read -n1 -s -r -p '…'",
         action = action,
         lang = lang,
         tag = tag,
@@ -1197,8 +1197,8 @@ fn env_terminal_inner(bin: &str, action: &str, lang: &str, method: &str) -> Stri
     )
 }
 
-/// Dispara o terminal p/ uma aÃ§Ã£o de environment e devolve o rÃ³tulo transitÃ³rio a exibir
-/// na linha (terminal aberto, ou instruÃ§Ã£o manual quando nenhum terminal foi encontrado).
+/// Dispara o terminal p/ uma ação de environment e devolve o rótulo transitório a exibir
+/// na linha (terminal aberto, ou instrução manual quando nenhum terminal foi encontrado).
 fn run_env_action(action: &str, lang: &str, method: &str) -> String {
     let bin = schematize_bin();
     let inner = env_terminal_inner(&bin, action, lang, method);
@@ -1211,7 +1211,7 @@ fn run_env_action(action: &str, lang: &str, method: &str) -> String {
     }
 }
 
-/// Uma skill (por slug) estÃ¡ instalada AGORA? (lÃª o modelo de linhas de skills.)
+/// Uma skill (por slug) está instalada AGORA? (lê o modelo de linhas de skills.)
 fn slug_installed(model: &VecModel<SkillRow>, slug: &str) -> bool {
     for i in 0..model.row_count() {
         if let Some(r) = model.row_data(i) {
@@ -1223,15 +1223,15 @@ fn slug_installed(model: &VecModel<SkillRow>, slug: &str) -> bool {
     false
 }
 
-/// Ãndice da linha de uma skill (por slug) no vetor de itens alinhado ao modelo.
+/// Índice da linha de uma skill (por slug) no vetor de itens alinhado ao modelo.
 fn row_idx_of_slug(row_items: &[Option<Item>], slug: &str) -> Option<usize> {
     row_items
         .iter()
         .position(|m| m.as_ref().map(|it| it.slug == slug).unwrap_or(false))
 }
 
-/// Estado do modal de instalaÃ§Ã£o do Marketplace, guardado no lado Rust (o Slint
-/// carrega sÃ³ o visual). Preenchido ao abrir; lido no confirmar.
+/// Estado do modal de instalação do Marketplace, guardado no lado Rust (o Slint
+/// carrega só o visual). Preenchido ao abrir; lido no confirmar.
 #[derive(Default, Clone)]
 struct ModalState {
     skill_idx: usize,   // linha da skill sendo instalada
@@ -1240,8 +1240,8 @@ struct ModalState {
 }
 
 // ===========================================================================
-// OVERDEV â seletor de projeto (porte do project_bar do egui) + view nativa
-// (porte do overdev_view). LÃª `schematize::projects::scan()` + `config` p/ o
+// OVERDEV — seletor de projeto (porte do project_bar do egui) + view nativa
+// (porte do overdev_view). Lê `schematize::projects::scan()` + `config` p/ o
 // seletor e `schematize::panel::load_overdev()` p/ o estado. Persiste a escolha
 // via `config::add_recent_project`.
 // ===========================================================================
@@ -1254,7 +1254,7 @@ fn basename_of(p: &Path) -> String {
         .unwrap_or_else(|| p.to_string_lossy().into_owned())
 }
 
-/// CabeÃ§alho de grupo do seletor (Detectados / Recentes).
+/// Cabeçalho de grupo do seletor (Detectados / Recentes).
 fn proj_header(label: &str) -> ProjItem {
     ProjItem {
         is_header: true,
@@ -1266,7 +1266,7 @@ fn proj_header(label: &str) -> ProjItem {
 }
 
 /// Monta o modelo do seletor: grupo "detectados" (marcadores) + grupo "recentes"
-/// (os que nÃ£o estÃ£o jÃ¡ entre os detectados). Espelha o combo do project_bar egui.
+/// (os que não estão já entre os detectados). Espelha o combo do project_bar egui.
 fn build_proj_items(projects: &[projects::Project], recent: &[String]) -> Vec<ProjItem> {
     let mut out = Vec::new();
     if !projects.is_empty() {
@@ -1318,9 +1318,9 @@ fn overdev_file_path(root: &Path, target: &str) -> PathBuf {
     overdev_dir(root).join(name)
 }
 
-/// Parseia o CHECKLIST 2-nÃ­veis de `<root>` em `OverItem`s (kind + origem + Ã­ndice).
-/// Casa `- [H ...]` ANTES de `- [ ]`/`- [x]` (senÃ£o o humano cai no ramo de mÃ¡quina).
-/// `hindex` numera 1-based sÃ³ os HUMANOS ABERTOS (- [H ]) â Ã© o arg de `od-mark-human`.
+/// Parseia o CHECKLIST 2-níveis de `<root>` em `OverItem`s (kind + origem + índice).
+/// Casa `- [H ...]` ANTES de `- [ ]`/`- [x]` (senão o humano cai no ramo de máquina).
+/// `hindex` numera 1-based só os HUMANOS ABERTOS (- [H ]) — é o arg de `od-mark-human`.
 fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
     // Multi-arquivo: CHECKLIST.md E/OU a pasta checklist/*.md (granularidade / split multiagent) —
     // mesmo resolvedor do lib, pra a GUI contar certo depois de um split.
@@ -1354,12 +1354,12 @@ fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
     out
 }
 
-/// Fecha o `index`-Ã©simo (1-based) item HUMANO ABERTO de `<root>`: `- [H ]`â`- [H x]`.
-/// Path-aware (o `overdev::human_done` do lib opera no cwd, nÃ£o serve Ã  GUI que
-/// monitora outro projeto) â replica a regra do lib editando o arquivo direto.
+/// Fecha o `index`-ésimo (1-based) item HUMANO ABERTO de `<root>`: `- [H ]`→`- [H x]`.
+/// Path-aware (o `overdev::human_done` do lib opera no cwd, não serve à GUI que
+/// monitora outro projeto) — replica a regra do lib editando o arquivo direto.
 fn mark_human_done_at(root: &Path, index: i32) -> Result<(), String> {
     if index < 1 {
-        return Err("Ã­ndice humano invÃ¡lido".into());
+        return Err("índice humano inválido".into());
     }
     let path = checklist_path(root);
     let s = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
@@ -1379,14 +1379,14 @@ fn mark_human_done_at(root: &Path, index: i32) -> Result<(), String> {
         })
         .collect();
     if !hit {
-        return Err(format!("nÃ£o hÃ¡ {index}Âº item humano aberto"));
+        return Err(format!("não há {index}º item humano aberto"));
     }
     std::fs::write(&path, out.join("\n")).map_err(|e| e.to_string())
 }
 
-/// Re-sonda dev_dirs + pins + projetos e reconstrÃ³i os modelos do seletor, da lista
+/// Re-sonda dev_dirs + pins + projetos e reconstrói os modelos do seletor, da lista
 /// de dev_dirs e da lista de pastas FIXADAS. O scan agora inclui os pins (pastas
-/// fixadas pelo usuÃ¡rio) â elas aparecem no seletor mesmo sem marcador git.
+/// fixadas pelo usuário) — elas aparecem no seletor mesmo sem marcador git.
 fn refresh_proj_models(
     proj_model: &VecModel<ProjItem>,
     dev_model: &VecModel<SharedString>,
@@ -1402,7 +1402,7 @@ fn refresh_proj_models(
 }
 
 /// Carrega o estado do overdev do `proj` (ou limpa se None) nas propriedades do app.
-/// Espelha o overdev_view do egui: objetivo, mode, progresso, checklist e seÃ§Ãµes.
+/// Espelha o overdev_view do egui: objetivo, mode, progresso, checklist e seções.
 /// Ações de skills instaladas (gui.json) → linhas do modelo Slint. Cada uma vira um botão na aba do
 /// projeto; Q.A./Pentest aparecem quando as skills schematize-engineering/pentest estão instaladas.
 fn skill_action_rows() -> Vec<SkillAction> {
@@ -1454,7 +1454,7 @@ fn load_overdev_into(app: &AppWindow, items: &VecModel<OverItem>, proj: Option<&
     apply_agent_budget(app); // linha do governador (teto/livre/load) na aba Overdev
     app.set_od_current(basename_of(p).into());
     let ov = panel::load_overdev(p);
-    // Checklist 2-nÃ­veis parseado direto (o panel::load_overdev do lib ignora os
+    // Checklist 2-níveis parseado direto (o panel::load_overdev do lib ignora os
     // marcadores humanos `- [H ]`/`- [H x]`; aqui a GUI precisa deles).
     let its = parse_checklist_items(p);
     // Sem run: objetivo vazio E sem itens (mesma regra do egui).
@@ -1467,8 +1467,8 @@ fn load_overdev_into(app: &AppWindow, items: &VecModel<OverItem>, proj: Option<&
         app.set_od_notes(SharedString::new());
         return;
     }
-    // Contagem 4-categorias derivada do MESMO parse 2-nÃ­veis (mÃ¡quina-abertos/feitos/
-    // on-hold/humanos-abertos). `done` = feitos totais (mÃ¡quina `- [x]` + humano
+    // Contagem 4-categorias derivada do MESMO parse 2-níveis (máquina-abertos/feitos/
+    // on-hold/humanos-abertos). `done` = feitos totais (máquina `- [x]` + humano
     // `- [H x]`), como o `Counts::done()` do engine do lib.
     let (mut done, mut open, mut hold, mut human) = (0i32, 0i32, 0i32, 0i32);
     for it in &its {
@@ -1495,8 +1495,8 @@ fn load_overdev_into(app: &AppWindow, items: &VecModel<OverItem>, proj: Option<&
     app.set_od_notes(overdev::read_notes(p).into());
 }
 
-/// Carrega no editor o conteÃºdo do arquivo escolhido (`od-editor-target`) de `<root>/.overdev`.
-/// Limpa o feedback de status. Arquivo ausente â editor vazio (o Salvar cria).
+/// Carrega no editor o conteúdo do arquivo escolhido (`od-editor-target`) de `<root>/.overdev`.
+/// Limpa o feedback de status. Arquivo ausente → editor vazio (o Salvar cria).
 fn load_editor_content(app: &AppWindow, root: &Path) {
     let target = app.get_od_editor_target().to_string();
     let content = std::fs::read_to_string(overdev_file_path(root, &target)).unwrap_or_default();
@@ -1524,28 +1524,28 @@ fn select_project(
 }
 
 // ===========================================================================
-// FASE 4 â overdev em TERMINAL EXTERNO + MONITOR leve. DECISÃO do dono: o `claude`
-// NÃO roda mais acoplado (PTY) dentro do app â carregava o LOAD dele aqui (RAM,
-// inchaÃ§o tipo VSCode) e nem submetia na TUI. Agora o botÃ£o sÃ³ chama
-// `agentrun::launch_in_terminal` (processo PRÃPRIO num terminal do sistema,
-// DESACOPLADO) e o app apenas MONITORA o `.overdev/` a cada ~3s (sÃ³ LÃ arquivos,
-// nÃ£o segura processo). O "nÃ£o pare" Ã© imposto pelo Stop hook do overdev â nada
-// de auto-continue/nudge aqui. SÃ³ `String`/`PathBuf`/`Weak<AppWindow>` +
-// `Arc<AtomicBool>` cruzam a fronteira de thread; a UI Ã© tocada por `post_*`.
+// FASE 4 — overdev em TERMINAL EXTERNO + MONITOR leve. DECISÃO do dono: o `claude`
+// NÃO roda mais acoplado (PTY) dentro do app — carregava o LOAD dele aqui (RAM,
+// inchaço tipo VSCode) e nem submetia na TUI. Agora o botão só chama
+// `agentrun::launch_in_terminal` (processo PRÓPRIO num terminal do sistema,
+// DESACOPLADO) e o app apenas MONITORA o `.overdev/` a cada ~3s (só LÊ arquivos,
+// não segura processo). O "não pare" é imposto pelo Stop hook do overdev — nada
+// de auto-continue/nudge aqui. Só `String`/`PathBuf`/`Weak<AppWindow>` +
+// `Arc<AtomicBool>` cruzam a fronteira de thread; a UI é tocada por `post_*`.
 // ===========================================================================
 
-/// Intervalo do monitor leve do `.overdev/` (sÃ³ relÃª arquivos de progresso).
+/// Intervalo do monitor leve do `.overdev/` (só relê arquivos de progresso).
 const OD_MONITOR_EVERY: Duration = Duration::from_secs(3);
 
-/// Teto de itens abertos listados no monitor (o `claude` roda fora; isto Ã© sÃ³ espelho).
+/// Teto de itens abertos listados no monitor (o `claude` roda fora; isto é só espelho).
 const OD_MONITOR_ITEMS: usize = 10;
 
-/// Intervalo MÃNIMO entre leituras de `usage::agent_usage` dentro do monitor.
-/// CUIDADO PERF: `agent_usage` parseia os `.jsonl` do Claude (100MB+) â jamais a
-/// cada ciclo. Relemos os tokens no mÃ¡x. a cada 30s (e sempre em thread prÃ³pria).
+/// Intervalo MÍNIMO entre leituras de `usage::agent_usage` dentro do monitor.
+/// CUIDADO PERF: `agent_usage` parseia os `.jsonl` do Claude (100MB+) — jamais a
+/// cada ciclo. Relemos os tokens no máx. a cada 30s (e sempre em thread própria).
 const OD_USAGE_EVERY: Duration = Duration::from_secs(30);
 
-/// Agrupa milhares com `.` (separador pt-BR): 1234567 â "1.234.567". PURO.
+/// Agrupa milhares com `.` (separador pt-BR): 1234567 → "1.234.567". PURO.
 fn sep_thousands(n: u64) -> String {
     let s = n.to_string();
     let bytes = s.as_bytes();
@@ -1561,7 +1561,7 @@ fn sep_thousands(n: u64) -> String {
 }
 
 /// Converte um epoch (segundos) pra `HH:MM:SS` na hora LOCAL via `chrono::Local`.
-/// Fallback improvÃ¡vel (timestamp fora de faixa) â string vazia.
+/// Fallback improvável (timestamp fora de faixa) → string vazia.
 fn fmt_ts_local(ts: i64) -> String {
     use chrono::TimeZone;
     chrono::Local
@@ -1571,8 +1571,8 @@ fn fmt_ts_local(ts: i64) -> String {
         .unwrap_or_default()
 }
 
-/// Materializa as conclusÃµes (`overdev::completions`) em linhas prontas pra UI:
-/// `HH:MM:SS  <texto>` (hora local). MantÃ©m a ordem do lib (ts asc â recentes embaixo).
+/// Materializa as conclusões (`overdev::completions`) em linhas prontas pra UI:
+/// `HH:MM:SS  <texto>` (hora local). Mantém a ordem do lib (ts asc → recentes embaixo).
 fn fmt_completions(cs: Vec<overdev::Completion>) -> Vec<String> {
     cs.into_iter()
         .map(|c| {
@@ -1587,11 +1587,11 @@ fn fmt_completions(cs: Vec<overdev::Completion>) -> Vec<String> {
 }
 
 /// Monta a linha de tokens do painel do monitor a partir de `usage::Usage`.
-/// "Tokens: <total> (in <in> / out <out> Â· cache-read <cr>) Â· Modelo: <main>".
+/// "Tokens: <total> (in <in> / out <out> · cache-read <cr>) · Modelo: <main>".
 fn fmt_usage(u: &usage::Usage) -> String {
-    let model = u.main_model().unwrap_or("â");
+    let model = u.main_model().unwrap_or("—");
     format!(
-        "{}: {} (in {} / out {} Â· cache-read {}) Â· {}: {}",
+        "{}: {} (in {} / out {} · cache-read {}) · {}: {}",
         tor("gui.od_tokens", "Tokens"),
         sep_thousands(u.total),
         sep_thousands(u.input),
@@ -1602,7 +1602,7 @@ fn fmt_usage(u: &usage::Usage) -> String {
     )
 }
 
-/// threadâUI: espelha o log de conclusÃµes (linhas jÃ¡ formatadas `HH:MM:SS texto`).
+/// thread→UI: espelha o log de conclusões (linhas já formatadas `HH:MM:SS texto`).
 fn post_completions(weak: &Weak<AppWindow>, lines: Vec<String>) {
     let w = weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
@@ -1613,7 +1613,7 @@ fn post_completions(weak: &Weak<AppWindow>, lines: Vec<String>) {
     });
 }
 
-/// threadâUI: escreve a linha de tokens/modelo jÃ¡ formatada.
+/// thread→UI: escreve a linha de tokens/modelo já formatada.
 fn post_usage(weak: &Weak<AppWindow>, line: String) {
     let w = weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
@@ -1623,7 +1623,7 @@ fn post_usage(weak: &Weak<AppWindow>, line: String) {
     });
 }
 
-/// LÃª `usage::agent_usage` (PESADO: parseia .jsonl de 100MB+) numa thread PRÃPRIA e
+/// Lê `usage::agent_usage` (PESADO: parseia .jsonl de 100MB+) numa thread PRÓPRIA e
 /// posta a linha formatada. Nunca no event loop, nunca no ritmo de 3s do monitor.
 fn spawn_usage(weak: Weak<AppWindow>, project: PathBuf) {
     std::thread::spawn(move || {
@@ -1632,7 +1632,7 @@ fn spawn_usage(weak: Weak<AppWindow>, project: PathBuf) {
     });
 }
 
-/// threadâUI: espelha o snapshot do `.overdev/` (estado + contadores + iteraÃ§Ãµes +
+/// thread→UI: espelha o snapshot do `.overdev/` (estado + contadores + iterações +
 /// lista de itens abertos). Cria um `VecModel` novo pra a lista (roda na UI thread).
 fn post_monitor(weak: &Weak<AppWindow>, prog: overdev::Progress, items: Vec<String>) {
     let w = weak.clone();
@@ -1651,7 +1651,7 @@ fn post_monitor(weak: &Weak<AppWindow>, prog: overdev::Progress, items: Vec<Stri
     });
 }
 
-/// threadâUI: FIM do monitor â larga o flag de "monitorando", fixa o modo final e
+/// thread→UI: FIM do monitor — larga o flag de "monitorando", fixa o modo final e
 /// re-sonda o projeto (`od-reload`) pra o checklist/contagem refletirem o disco.
 fn post_monitor_end(weak: &Weak<AppWindow>, mode: String) {
     let w = weak.clone();
@@ -1664,24 +1664,24 @@ fn post_monitor_end(weak: &Weak<AppWindow>, mode: String) {
     });
 }
 
-/// MONITOR leve: a cada ~3s lÃª `overdev::progress_at` + `open_items_at` + o log de
+/// MONITOR leve: a cada ~3s lê `overdev::progress_at` + `open_items_at` + o log de
 /// `overdev::completions` (tudo BARATO) e espelha na UI; os tokens (`agent_usage`,
-/// PESADO) sÃ³ no arranque e a cada ~30s, sempre em thread prÃ³pria. NÃO segura o
-/// processo do `claude` (ele roda no terminal externo). Para quando o botÃ£o Parar
+/// PESADO) só no arranque e a cada ~30s, sempre em thread própria. NÃO segura o
+/// processo do `claude` (ele roda no terminal externo). Para quando o botão Parar
 /// levanta a `stop`, ou quando o run some/termina (`mode == "stopped"` /
-/// `Progress::finished()`), MAS sÃ³ depois de ter visto o run ficar `active` uma vez â
-/// assim um `state.json` velho ("stopped") nÃ£o encerra o monitor antes de o overdev
+/// `Progress::finished()`), MAS só depois de ter visto o run ficar `active` uma vez —
+/// assim um `state.json` velho ("stopped") não encerra o monitor antes de o overdev
 /// sequer arrancar no terminal.
 ///
-/// `attach`: quando `true` (botÃ£o "Reload / Acompanhar", anexando a um run que jÃ¡
-/// roda POR FORA), comeÃ§amos com `seen_active = true` â assim um run jÃ¡ em
-/// andamento (mode "active") Ã© seguido de imediato e um run jÃ¡ FINALIZADO
+/// `attach`: quando `true` (botão "Reload / Acompanhar", anexando a um run que já
+/// roda POR FORA), começamos com `seen_active = true` — assim um run já em
+/// andamento (mode "active") é seguido de imediato e um run já FINALIZADO
 /// ("stopped") posta o snapshot final uma vez e encerra, em vez de exigir que o
-/// monitor testemunhe a transiÃ§Ã£o pra active (que jÃ¡ aconteceu antes de anexarmos).
+/// monitor testemunhe a transição pra active (que já aconteceu antes de anexarmos).
 fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>, attach: bool) {
     std::thread::spawn(move || {
         let mut seen_active = attach;
-        // Arranque: tokens uma vez (thread prÃ³pria) â o resto Ã© relido a cada ciclo.
+        // Arranque: tokens uma vez (thread própria) — o resto é relido a cada ciclo.
         spawn_usage(weak.clone(), project.clone());
         let mut last_usage = Instant::now();
         loop {
@@ -1692,7 +1692,7 @@ fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>, a
             let prog = overdev::progress_at(&project);
             let items = overdev::open_items_at(&project, OD_MONITOR_ITEMS);
             post_completions(&weak, fmt_completions(overdev::completions(&project)));
-            // Tokens: no MÃX. a cada 30s, sempre fora do event loop.
+            // Tokens: no MÁX. a cada 30s, sempre fora do event loop.
             if last_usage.elapsed() >= OD_USAGE_EVERY {
                 spawn_usage(weak.clone(), project.clone());
                 last_usage = Instant::now();
@@ -1707,7 +1707,7 @@ fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>, a
                 post_monitor_end(&weak, if mode.is_empty() { "stopped".into() } else { mode });
                 return;
             }
-            // Dorme em fatias curtas pra responder rÃ¡pido ao botÃ£o Parar.
+            // Dorme em fatias curtas pra responder rápido ao botão Parar.
             let mut slept = Duration::ZERO;
             while slept < OD_MONITOR_EVERY {
                 if stop.load(Ordering::SeqCst) {
@@ -1721,31 +1721,31 @@ fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>, a
 }
 
 // ===========================================================================
-// GRAFO â porte do graph_view + step_graph do egui (schematize_cli_rs::gui).
-// A fÃ­sica Ã© force-directed em Rust (repulsÃ£o O(nÂ²) + molas nas arestas +
-// gravidade/centralizaÃ§Ã£o + damping), rodada num `slint::Timer` a ~60fps que
-// RELAXA (para) quando a energia (alpha) cai. As posiÃ§Ãµes (mundo) vivem aqui; a
-// cada tick empurramos os `VecModel` de nÃ³s/arestas que o `.slint` renderiza. A
-// transformaÃ§Ã£o (scale/ox/oy) tambÃ©m Ã© dona daqui (o Slint sÃ³ a lÃª pra desenhar).
-// InteraÃ§Ã£o (pan/zoom/arrasto/clique) chega crua do Slint; o hit-test Ã© aqui.
+// GRAFO — porte do graph_view + step_graph do egui (schematize_cli_rs::gui).
+// A física é force-directed em Rust (repulsão O(n²) + molas nas arestas +
+// gravidade/centralização + damping), rodada num `slint::Timer` a ~60fps que
+// RELAXA (para) quando a energia (alpha) cai. As posições (mundo) vivem aqui; a
+// cada tick empurramos os `VecModel` de nós/arestas que o `.slint` renderiza. A
+// transformação (scale/ox/oy) também é dona daqui (o Slint só a lê pra desenhar).
+// Interação (pan/zoom/arrasto/clique) chega crua do Slint; o hit-test é aqui.
 // ===========================================================================
 
-/// Raio de um nÃ³ EM PIXELS de tela (constante ao zoom) â idÃªntico ao egui.
+/// Raio de um nó EM PIXELS de tela (constante ao zoom) — idêntico ao egui.
 fn nsize(deg: f32) -> f32 {
     3.0 + (deg.sqrt() * 1.7).min(9.0)
 }
 
-/// RÃ³tulo curto do nÃ³ (id truncado, seguro a UTF-8) â o egui truncava em 33+"â¦".
+/// Rótulo curto do nó (id truncado, seguro a UTF-8) — o egui truncava em 33+"…".
 fn trunc_label(id: &str) -> String {
     if id.chars().count() > 34 {
         let s: String = id.chars().take(33).collect();
-        format!("{s}â¦")
+        format!("{s}…")
     } else {
         id.to_string()
     }
 }
 
-/// NÃ³ com estado de simulaÃ§Ã£o + flags de realce (recomputadas em `refresh_flags`).
+/// Nó com estado de simulação + flags de realce (recomputadas em `refresh_flags`).
 struct GNode {
     id: String,
     loc: Option<String>,
@@ -1769,8 +1769,8 @@ struct GraphState {
     // Drill-down: `Some(servico)` = vendo o grafo DETALHADO daquele microserviço
     // (`.schematize/grafos/<servico>.md`); `None` = a visão GLOBAL da aplicação.
     service: Option<String>,
-    // DescriÃ§Ã£o por nÃ³ (nome -> "O quÃª"), vinda do Ã­ndice/MAPA (Â§39). Carregada
-    // junto do grafo; consultada ao selecionar um nÃ³ pra mostrar no bloco lateral.
+    // Descrição por nó (nome -> "O quê"), vinda do índice/MAPA (§39). Carregada
+    // junto do grafo; consultada ao selecionar um nó pra mostrar no bloco lateral.
     descs: HashMap<String, String>,
     sel: Option<usize>,
     search: String,
@@ -1791,7 +1791,7 @@ struct GraphState {
 }
 
 impl GraphState {
-    /// Um passo da fÃ­sica (idÃªntico ao `step_graph` do egui). No-op se relaxado.
+    /// Um passo da física (idêntico ao `step_graph` do egui). No-op se relaxado.
     fn step(&mut self) {
         if self.alpha < 0.02 {
             return;
@@ -1841,14 +1841,14 @@ impl GraphState {
         self.alpha *= 0.994;
     }
 
-    /// Tela (px relativo ao canvas) â mundo, desfazendo o centro + pan + zoom.
+    /// Tela (px relativo ao canvas) → mundo, desfazendo o centro + pan + zoom.
     fn to_world(&self, mx: f32, my: f32) -> (f32, f32) {
         let cx = self.canvas_w / 2.0;
         let cy = self.canvas_h / 2.0;
         ((mx - cx - self.ox) / self.scale, (my - cy - self.oy) / self.scale)
     }
 
-    /// NÃ³ sob o ponto de mundo (raio de tela convertido pra mundo) â como o egui.
+    /// Nó sob o ponto de mundo (raio de tela convertido pra mundo) — como o egui.
     fn hit(&self, wx: f32, wy: f32) -> Option<usize> {
         let mut best = None;
         let mut bd = f32::MAX;
@@ -1863,7 +1863,7 @@ impl GraphState {
         best
     }
 
-    /// Enquadra todos os nÃ³s no canvas atual (idÃªntico ao `fit` do egui).
+    /// Enquadra todos os nós no canvas atual (idêntico ao `fit` do egui).
     fn fit(&mut self) {
         if self.nodes.is_empty() || self.canvas_w < 1.0 {
             return;
@@ -1882,7 +1882,7 @@ impl GraphState {
         self.oy = -self.scale * (miny + maxy) / 2.0;
     }
 
-    /// Recomputa selected/hot/dim (sÃ³ muda em seleÃ§Ã£o/busca â nÃ£o a cada tick).
+    /// Recomputa selected/hot/dim (só muda em seleção/busca — não a cada tick).
     fn refresh_flags(&mut self) {
         let q = self.search.trim().to_lowercase();
         let focus = self.sel;
@@ -1903,7 +1903,7 @@ impl GraphState {
     }
 }
 
-/// ConstrÃ³i uma linha do modelo de nÃ³s a partir do estado de simulaÃ§Ã£o.
+/// Constrói uma linha do modelo de nós a partir do estado de simulação.
 fn graph_node_row(n: &GNode) -> GraphNode {
     GraphNode {
         id: n.id.clone().into(),
@@ -1918,7 +1918,7 @@ fn graph_node_row(n: &GNode) -> GraphNode {
     }
 }
 
-/// ConstrÃ³i uma linha do modelo de arestas (pontas em mundo + realce).
+/// Constrói uma linha do modelo de arestas (pontas em mundo + realce).
 fn graph_edge_row(st: &GraphState, a: usize, b: usize) -> GraphEdge {
     let on = st.sel == Some(a) || st.sel == Some(b);
     GraphEdge {
@@ -1930,9 +1930,9 @@ fn graph_edge_row(st: &GraphState, a: usize, b: usize) -> GraphEdge {
     }
 }
 
-/// Empurra TUDO pro Slint: transformaÃ§Ã£o (props), seleÃ§Ã£o (info) e os dois
-/// VecModel (nÃ³s/arestas). Atualiza in-place quando o tamanho casa (sem realloc
-/// no loop da fÃ­sica); senÃ£o troca o vec inteiro (carga/relayout).
+/// Empurra TUDO pro Slint: transformação (props), seleção (info) e os dois
+/// VecModel (nós/arestas). Atualiza in-place quando o tamanho casa (sem realloc
+/// no loop da física); senão troca o vec inteiro (carga/relayout).
 fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edges: &VecModel<GraphEdge>) {
     app.set_g_scale(st.scale);
     app.set_g_ox(st.ox);
@@ -1947,7 +1947,7 @@ fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edg
             app.set_g_has_sel(true);
             app.set_g_sel_id(st.nodes[i].id.clone().into());
             app.set_g_sel_loc(st.nodes[i].loc.clone().unwrap_or_default().into());
-            // descriÃ§Ã£o do nÃ³ selecionado (por nome). "" â o Slint mostra a dica de reindexar.
+            // descrição do nó selecionado (por nome). "" → o Slint mostra a dica de reindexar.
             let desc = st.descs.get(&st.nodes[i].id).cloned().unwrap_or_default();
             app.set_g_sel_desc(desc.into());
         }
@@ -1975,7 +1975,7 @@ fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edg
 }
 
 /// Carrega o grafo do `proj` (ou limpa se None) no estado. Espelha o
-/// `reload_project` do egui: posiÃ§Ãµes em espiral inicial, graus, e fit pendente.
+/// `reload_project` do egui: posições em espiral inicial, graus, e fit pendente.
 fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
     st.nodes.clear();
     st.edges.clear();
@@ -1998,12 +1998,12 @@ fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
     // serviço") abre o detalhe via `load_service_graph` (fallback pelo flat).
     let (nodes, edges, _idx, aggregated) = panel::load_graph_global(p);
     st.aggregated = aggregated;
-    // descriÃ§Ãµes dos nÃ³s (nome -> "O quÃª") do Ã­ndice/MAPA, guardadas p/ o bloco lateral.
+    // descrições dos nós (nome -> "O quê") do índice/MAPA, guardadas p/ o bloco lateral.
     st.descs = panel::node_descriptions(p);
     let mut id_to_idx: HashMap<String, usize> = HashMap::new();
     for (i, n) in nodes.iter().enumerate() {
         id_to_idx.insert(n.id.clone(), i);
-        let a = i as f32 * 2.399_963; // Ã¢ngulo Ã¡ureo â espiral inicial (evita sobreposiÃ§Ã£o)
+        let a = i as f32 * 2.399_963; // ângulo áureo → espiral inicial (evita sobreposição)
         let r = 40.0 + 9.0 * (i as f32).sqrt();
         st.nodes.push(GNode {
             id: n.id.clone(),
@@ -2086,8 +2086,8 @@ fn load_service_into(st: &mut GraphState, proj: Option<&Path>, servico: &str) ->
     true
 }
 
-/// (Re)liga o Timer da fÃ­sica se estiver parado. O tick roda um passo, sincroniza,
-/// e PARA (relaxa) quando alpha < 0.02 â nÃ£o queima CPU parado. Reinicia via arrasto/carga.
+/// (Re)liga o Timer da física se estiver parado. O tick roda um passo, sincroniza,
+/// e PARA (relaxa) quando alpha < 0.02 — não queima CPU parado. Reinicia via arrasto/carga.
 fn graph_kick(
     timer: &Rc<slint::Timer>,
     weak: Weak<AppWindow>,
@@ -2113,7 +2113,7 @@ fn graph_kick(
     });
 }
 
-/// Carrega o grafo do projeto no estado, sincroniza e (re)liga a fÃ­sica.
+/// Carrega o grafo do projeto no estado, sincroniza e (re)liga a física.
 fn graph_load_and_kick(
     proj: Option<&Path>,
     timer: &Rc<slint::Timer>,
@@ -2130,15 +2130,15 @@ fn graph_load_and_kick(
 }
 
 // ===========================================================================
-// DATABASE BUILDER (tela 6) â modelo de tabelas + grafo do schema.
-// O Schema canÃ´nico vive num `Arc<Mutex<database::Schema>>` (Send+Sync: cruza pra
-// a thread da introspecÃ§Ã£o Postgres E Ã© lido pelos callbacks na UI thread). A UI
+// DATABASE BUILDER (tela 6) — modelo de tabelas + grafo do schema.
+// O Schema canônico vive num `Arc<Mutex<database::Schema>>` (Send+Sync: cruza pra
+// a thread da introspecção Postgres E é lido pelos callbacks na UI thread). A UI
 // reflete via models Slint REMONTADOS no event loop. O grafo do schema reusa a
-// MESMA engine forÃ§a-dirigida (GraphState) num estado DEDICADO â nÃ£o colide com o
-// grafo do Ã­ndice Â§39 da aba Grafo.
+// MESMA engine força-dirigida (GraphState) num estado DEDICADO — não colide com o
+// grafo do índice §39 da aba Grafo.
 // ===========================================================================
 
-/// ConstrÃ³i as linhas do modelo de tabelas (colunas/FKs/Ã­ndices aninhados) a partir
+/// Constrói as linhas do modelo de tabelas (colunas/FKs/índices aninhados) a partir
 /// de um `database::Schema`. Roda no event loop (cria VecModels novos por tabela).
 fn build_db_table_rows(schema: &database::Schema) -> Vec<DbTableRow> {
     schema
@@ -2185,7 +2185,7 @@ fn build_db_table_rows(schema: &database::Schema) -> Vec<DbTableRow> {
 }
 
 /// Reflete o `database::Schema` na UI: modelo de tabelas + nomes (dropdown) + flag
-/// has-schema. MantÃ©m a tabela alvo do editor se ainda existir; senÃ£o pega a 1Âª.
+/// has-schema. Mantém a tabela alvo do editor se ainda existir; senão pega a 1ª.
 fn db_rebuild(app: &AppWindow, schema: &database::Schema) {
     app.set_db_tables(ModelRc::from(Rc::new(VecModel::from(build_db_table_rows(schema)))));
     let names: Vec<String> = schema.tables.iter().map(|t| t.name.clone()).collect();
@@ -2197,8 +2197,8 @@ fn db_rebuild(app: &AppWindow, schema: &database::Schema) {
     }
 }
 
-/// Carrega um grafo jÃ¡ pronto (nÃ³s/arestas/descriÃ§Ãµes vindos de `database::to_graph`
-/// + `table_descriptions`) no estado â sem projeto no disco. Espelha o arranjo em
+/// Carrega um grafo já pronto (nós/arestas/descrições vindos de `database::to_graph`
+/// + `table_descriptions`) no estado — sem projeto no disco. Espelha o arranjo em
 /// espiral + graus + fit pendente do `load_graph_into`.
 fn load_db_graph_into(
     st: &mut GraphState,
@@ -2249,7 +2249,7 @@ fn load_db_graph_into(
 }
 
 /// Como `graph_sync`, mas escreve as propriedades `db-g-*` do grafo do SCHEMA (sem
-/// arquivo:linha â tabela nÃ£o tem local no cÃ³digo; sÃ³ nome + descriÃ§Ã£o das colunas).
+/// arquivo:linha — tabela não tem local no código; só nome + descrição das colunas).
 fn db_graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edges: &VecModel<GraphEdge>) {
     app.set_db_g_scale(st.scale);
     app.set_db_g_ox(st.ox);
@@ -2285,7 +2285,7 @@ fn db_graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, 
     }
 }
 
-/// (Re)liga o Timer da fÃ­sica do grafo do SCHEMA (relaxa quando alpha < 0.02).
+/// (Re)liga o Timer da física do grafo do SCHEMA (relaxa quando alpha < 0.02).
 fn db_graph_kick(
     timer: &Rc<slint::Timer>,
     weak: Weak<AppWindow>,
@@ -2311,34 +2311,34 @@ fn db_graph_kick(
     });
 }
 
-/// Monta o prompt em LINGUAGEM NATURAL do "gerar por descriÃ§Ã£o (IA)": pede pra seguir
+/// Monta o prompt em LINGUAGEM NATURAL do "gerar por descrição (IA)": pede pra seguir
 /// a disciplina de modelagem da casa (schematize-database) e emitir schema.json +
-/// schema.sql + migration em `<projeto>_archive/database/`, a partir da descriÃ§Ã£o do
-/// usuÃ¡rio. NÃO usa o slash `/database-design` (nÃ£o roda como arg do claude).
+/// schema.sql + migration em `<projeto>_archive/database/`, a partir da descrição do
+/// usuário. NÃO usa o slash `/database-design` (não roda como arg do claude).
 fn db_ai_prompt(project_basename: &str, desc: &str) -> String {
     format!(
-        "Modele o banco de dados deste projeto a partir da descriÃ§Ã£o de domÃ­nio no fim desta mensagem, \
-         usando a DISCIPLINA DE MODELAGEM DA CASA (a skill schematize-database): normalizaÃ§Ã£o 1FNâ3FN, \
-         PK surrogate ULID/UUIDv7 interna + a chave natural como UNIQUE (identidade â  email), tipos corretos \
-         por coluna (dinheiro em inteiro/numeric, tempo em timestamptz UTC, enum como domÃ­nio), constraints \
-         conscientes (NOT NULL/default, UNIQUE, CHECK, FOREIGN KEY com ON DELETE consciente), Ã­ndices \
-         conscientes (sem redundÃ¢ncia; PII nunca vira chave de Ã­ndice) e o piso de privacidade (coluna PII \
-         marcada, base legal + retenÃ§Ã£o â LGPD). \
-         EMITA os artefatos na pasta `{proj}_archive/database/` (crie se nÃ£o existir): \
-         (1) `schema.json` no formato do database builder â um objeto JSON com `tables` (array), cada tabela \
+        "Modele o banco de dados deste projeto a partir da descrição de domínio no fim desta mensagem, \
+         usando a DISCIPLINA DE MODELAGEM DA CASA (a skill schematize-database): normalização 1FN–3FN, \
+         PK surrogate ULID/UUIDv7 interna + a chave natural como UNIQUE (identidade ≠ email), tipos corretos \
+         por coluna (dinheiro em inteiro/numeric, tempo em timestamptz UTC, enum como domínio), constraints \
+         conscientes (NOT NULL/default, UNIQUE, CHECK, FOREIGN KEY com ON DELETE consciente), índices \
+         conscientes (sem redundância; PII nunca vira chave de índice) e o piso de privacidade (coluna PII \
+         marcada, base legal + retenção — LGPD). \
+         EMITA os artefatos na pasta `{proj}_archive/database/` (crie se não existir): \
+         (1) `schema.json` no formato do database builder — um objeto JSON com `tables` (array), cada tabela \
          com `name`, `columns` (cada uma {{name, ty, nullable, pk, unique}}), `fks` (cada uma \
          {{column, ref_table, ref_column}}) e `indexes` (cada um {{name, columns[], unique}}); \
-         (2) `schema.sql` com os CREATE TABLE; (3) `migration.sql` no estilo expand-contract reversÃ­vel. \
-         NÃ£o pare enquanto os trÃªs arquivos nÃ£o estiverem gravados e consistentes.\n\n\
-         DescriÃ§Ã£o do domÃ­nio:\n{desc}",
+         (2) `schema.sql` com os CREATE TABLE; (3) `migration.sql` no estilo expand-contract reversível. \
+         Não pare enquanto os três arquivos não estiverem gravados e consistentes.\n\n\
+         Descrição do domínio:\n{desc}",
         proj = project_basename,
         desc = desc,
     )
 }
 
-/// (Re)carrega o histÃ³rico do DB do overdev + os commits do projeto `proj` nos
-/// modelos, reseta a paginaÃ§Ã£o e escreve a linha de upstream. None â limpa tudo.
-/// SÃ­ncrono (sqlite/git locais e rÃ¡pidos â mesma escolha do env status).
+/// (Re)carrega o histórico do DB do overdev + os commits do projeto `proj` nos
+/// modelos, reseta a paginação e escreve a linha de upstream. None → limpa tudo.
+/// Síncrono (sqlite/git locais e rápidos — mesma escolha do env status).
 fn refresh_od_history(
     app: &AppWindow,
     snaps_all: &RefCell<Vec<overdevdb::SnapshotMeta>>,
@@ -2386,37 +2386,37 @@ fn main() -> Result<(), slint::PlatformError> {
 
     let app = AppWindow::new()?;
     install_i18n(&app);
-    // Logo da janela (tÃ­tulo/taskbar) â mesma marca do egui.
+    // Logo da janela (título/taskbar) — mesma marca do egui.
     // Ícone da janela DESENHADO em código (resiliente — sem depender de arquivo).
     app.set_app_icon(make_app_icon());
     // Ações declaradas por skills instaladas (gui.json) → botões (Q.A., Pentest, …) na aba do projeto.
     app.set_skill_actions(ModelRc::from(Rc::new(VecModel::from(skill_action_rows()))));
-    // VersÃ£o do app (ConfiguraÃ§Ãµes) â ex.: "schematize v0.25.1".
+    // Versão do app (Configurações) — ex.: "schematize v0.25.1".
     app.set_app_version(format!("schematize v{}", upgrade::app_version()).into());
     app.set_rows(ModelRc::from(model.clone()));
     update_status(&app);
-    recompute_headers(&app); // esconde cabeÃ§alhos de pÃ¡gina sem itens
+    recompute_headers(&app); // esconde cabeçalhos de página sem itens
 
-    // PÃ¡gina inicial: Instaladas (0). Se NADA estiver instalado, abre no
-    // Marketplace (1) â senÃ£o o usuÃ¡rio cai numa lista vazia.
+    // Página inicial: Instaladas (0). Se NADA estiver instalado, abre no
+    // Marketplace (1) — senão o usuário cai numa lista vazia.
     if !model.iter().any(|r| !r.is_header && is_installed(&r)) {
         app.set_active_tab(1);
     }
-    // Recomputa a paginaÃ§Ã£o para a aba inicial efetiva (o handler `changed active-tab`
-    // ainda nÃ£o estÃ¡ ligado neste ponto â recomputa explicitamente).
+    // Recomputa a paginação para a aba inicial efetiva (o handler `changed active-tab`
+    // ainda não está ligado neste ponto — recomputa explicitamente).
     recompute_pagination(&app);
 
-    // Resolve o latest de todas as skills assim que a janela sobe (nÃ£o bloqueia).
+    // Resolve o latest de todas as skills assim que a janela sobe (não bloqueia).
     kick_resolve_all(&app.as_weak(), &row_items);
     // Busca as notas do marketplace (1 request, thread) e preenche os badges por slug.
     kick_market_ratings(app.as_weak());
 
-    // ---- aba Environments: modelo + Ã­ndices auxiliares p/ o modal ----
-    // Sonda a mÃ¡quina UMA vez (local, rÃ¡pido pra command -v). O refresh re-sonda.
+    // ---- aba Environments: modelo + índices auxiliares p/ o modal ----
+    // Sonda a máquina UMA vez (local, rápido pra command -v). O refresh re-sonda.
     let env_status = environments::status();
     let env_model = Rc::new(VecModel::from(build_env_rows_from(&env_status)));
     app.set_env_rows(ModelRc::from(env_model.clone()));
-    // lang â mÃ©todos disponÃ­veis (slugs), pra o modal montar os chips sem re-sondar.
+    // lang → métodos disponíveis (slugs), pra o modal montar os chips sem re-sondar.
     let env_methods: Rc<std::collections::HashMap<String, Vec<String>>> = Rc::new(
         env_status
             .iter()
@@ -2428,8 +2428,8 @@ fn main() -> Result<(), slint::PlatformError> {
             })
             .collect(),
     );
-    // conjunto das 7 linguagens que TÃM environment (pra decidir a oferta no modal).
-    // SÃ³ categoria "language" â ferramentas (claude/code/codex) nÃ£o entram na oferta.
+    // conjunto das 7 linguagens que TÊM environment (pra decidir a oferta no modal).
+    // Só categoria "language" — ferramentas (claude/code/codex) não entram na oferta.
     let env_langs: Rc<std::collections::HashSet<String>> = Rc::new(
         env_status
             .iter()
@@ -2437,17 +2437,17 @@ fn main() -> Result<(), slint::PlatformError> {
             .map(|le| le.lang.to_string())
             .collect(),
     );
-    // estado do modal de instalaÃ§Ã£o (lado Rust).
+    // estado do modal de instalação (lado Rust).
     let modal = Rc::new(RefCell::new(ModalState::default()));
 
-    // ---- relanÃ§ar o app (janela nova) â conserto do restart pÃ³s self-update ----
-    // O callback existe e estÃ¡ ligado ao helper CORRETO (spawn desacoplado antes
-    // de sair). Hoje o self-update NÃO estÃ¡ fiado nesta GUI Slint (mora no mÃ³dulo
-    // egui do lib, fora do alcance daqui), entÃ£o nada dispara `restart()` ainda;
-    // quando o self-update for portado pra cÃ¡, Ã© sÃ³ invocar `root.restart()`.
+    // ---- relançar o app (janela nova) — conserto do restart pós self-update ----
+    // O callback existe e está ligado ao helper CORRETO (spawn desacoplado antes
+    // de sair). Hoje o self-update NÃO está fiado nesta GUI Slint (mora no módulo
+    // egui do lib, fora do alcance daqui), então nada dispara `restart()` ainda;
+    // quando o self-update for portado pra cá, é só invocar `root.restart()`.
     app.on_restart(move || restart_app());
 
-    // ---- toggle de seleÃ§Ã£o de uma linha ----
+    // ---- toggle de seleção de uma linha ----
     {
         let model = model.clone();
         app.on_toggle(move |idx| {
@@ -2459,9 +2459,9 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- selecionar todas (da PÃGINA ativa) ----
-    // Instaladas (tab 0) â todas as instaladas; Marketplace (tab 1) â todas as
-    // nÃ£o-instaladas. NÃ£o toca em linhas da outra pÃ¡gina.
+    // ---- selecionar todas (da PÁGINA ativa) ----
+    // Instaladas (tab 0) → todas as instaladas; Marketplace (tab 1) → todas as
+    // não-instaladas. Não toca em linhas da outra página.
     {
         let weak = app.as_weak();
         let model = model.clone();
@@ -2481,14 +2481,14 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- selecionar pendentes (sÃ³ Instaladas): instaladas-DESATUALIZADAS ----
+    // ---- selecionar pendentes (só Instaladas): instaladas-DESATUALIZADAS ----
     {
         let model = model.clone();
         app.on_select_pending(move || {
             for i in 0..model.row_count() {
                 if let Some(mut r) = model.row_data(i) {
                     if !r.is_header {
-                        r.selected = is_outdated(&r); // nunca marca uma nÃ£o-instalada
+                        r.selected = is_outdated(&r); // nunca marca uma não-instalada
                         model.set_row_data(i, r);
                     }
                 }
@@ -2521,10 +2521,10 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- Marketplace: aÃ§Ã£o por-linha INSTALAR ----
-    // Skill de linguagem (ou skill com recommends) â abre o MODAL: oferece instalar
+    // ---- Marketplace: ação por-linha INSTALAR ----
+    // Skill de linguagem (ou skill com recommends) → abre o MODAL: oferece instalar
     // a recomendada (base) junto E, opcionalmente, o environment da linguagem (via
-    // terminal). Skill sem nada a oferecer â instala direto (um clique).
+    // terminal). Skill sem nada a oferecer → instala direto (um clique).
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -2537,20 +2537,20 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(Some(it)) = row_items.get(i) else {
                 return;
             };
-            // recomendada a oferecer: 1Âª recomendada que NÃO estÃ¡ instalada.
+            // recomendada a oferecer: 1ª recomendada que NÃO está instalada.
             let rec_slug = it
                 .recommends
                 .iter()
                 .find(|s| !slug_installed(&model, s.as_str()))
                 .cloned()
                 .unwrap_or_default();
-            // environment a oferecer: se o slug da skill Ã© uma das 7 linguagens.
+            // environment a oferecer: se o slug da skill é uma das 7 linguagens.
             let env_lang = if env_langs.contains(it.slug.as_str()) {
                 it.slug.clone()
             } else {
                 String::new()
             };
-            // Nada a oferecer â instala direto, sem modal.
+            // Nada a oferecer → instala direto, sem modal.
             if rec_slug.is_empty() && env_lang.is_empty() {
                 run_batch(weak.clone(), vec![(i, true, it.clone())]);
                 return;
@@ -2563,14 +2563,14 @@ fn main() -> Result<(), slint::PlatformError> {
             };
             app.set_mp_title(tf("gui.mp_install_title", &[("slug", &it.slug)]).into());
             app.set_mp_idx(i as i32);
-            // dependÃªncia opcional (base recomendada) â NUNCA marcada por padrÃ£o.
+            // dependência opcional (base recomendada) — NUNCA marcada por padrão.
             let rec_show = !rec_slug.is_empty();
             app.set_mp_rec_show(rec_show);
             app.set_mp_rec_check(false);
             if rec_show {
                 app.set_mp_rec_label(tf("gui.mp_with_recommended", &[("slug", &rec_slug)]).into());
             }
-            // environment opcional â NUNCA marcado por padrÃ£o.
+            // environment opcional — NUNCA marcado por padrão.
             let env_show = !env_lang.is_empty();
             app.set_mp_env_show(env_show);
             app.set_mp_env_check(false);
@@ -2591,7 +2591,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- Instaladas: aÃ§Ã£o por-linha ATUALIZAR ----
+    // ---- Instaladas: ação por-linha ATUALIZAR ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -2603,7 +2603,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- Instaladas: aÃ§Ã£o por-linha DESINSTALAR ----
+    // ---- Instaladas: ação por-linha DESINSTALAR ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -2615,7 +2615,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- Marketplace: INSTALAR selecionadas (sÃ³ as nÃ£o-instaladas) ----
+    // ---- Marketplace: INSTALAR selecionadas (só as não-instaladas) ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -2627,7 +2627,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- Instaladas: ATUALIZAR selecionadas (sÃ³ instaladas-desatualizadas) ----
+    // ---- Instaladas: ATUALIZAR selecionadas (só instaladas-desatualizadas) ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -2639,7 +2639,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- Instaladas: DESINSTALAR selecionadas (sÃ³ instaladas) ----
+    // ---- Instaladas: DESINSTALAR selecionadas (só instaladas) ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -2652,8 +2652,8 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ---- Instaladas: ATUALIZAR TUDO ----
-    // GARANTIA: sÃ³ instaladas-DESATUALIZADAS (is_outdated âº installed Some E
-    // latest > installed). JAMAIS instala uma skill nÃ£o instalada.
+    // GARANTIA: só instaladas-DESATUALIZADAS (is_outdated ⟺ installed Some E
+    // latest > installed). JAMAIS instala uma skill não instalada.
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -2665,7 +2665,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ---- rechecar versÃµes (re-resolve latest) ----
+    // ---- rechecar versões (re-resolve latest) ----
     {
         let weak = app.as_weak();
         let row_items = row_items.clone();
@@ -2677,7 +2677,7 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // ==================== aba Environments ====================
 
-    // escolher o mÃ©todo (chip) de uma linha de environment.
+    // escolher o método (chip) de uma linha de environment.
     {
         let env_model = env_model.clone();
         app.on_env_pick_method(move |idx, method| {
@@ -2688,13 +2688,13 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // instalar o environment da linha â abre TERMINAL com `schematize env install`.
+    // instalar o environment da linha → abre TERMINAL com `schematize env install`.
     {
         let env_model = env_model.clone();
         app.on_env_install(move |idx| {
             let i = idx as usize;
             if let Some(mut r) = env_model.row_data(i) {
-                // Linguagem exige mÃ©todo escolhido; ferramenta ("tool") nÃ£o tem seletor.
+                // Linguagem exige método escolhido; ferramenta ("tool") não tem seletor.
                 if r.category != "tool" && r.method_sel.is_empty() {
                     return;
                 }
@@ -2704,13 +2704,13 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // desinstalar o environment da linha â abre TERMINAL com `schematize env remove`.
+    // desinstalar o environment da linha → abre TERMINAL com `schematize env remove`.
     {
         let env_model = env_model.clone();
         app.on_env_remove(move |idx| {
             let i = idx as usize;
             if let Some(mut r) = env_model.row_data(i) {
-                // Linguagem exige mÃ©todo; ferramenta nÃ£o (o CLI ignora `--method`).
+                // Linguagem exige método; ferramenta não (o CLI ignora `--method`).
                 if r.category != "tool" && r.method_sel.is_empty() {
                     return;
                 }
@@ -2720,7 +2720,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // recarregar o status (re-sonda a mÃ¡quina). SÃ­ncrono (local/rÃ¡pido; evita !Send).
+    // recarregar o status (re-sonda a máquina). Síncrono (local/rápido; evita !Send).
     {
         let env_model = env_model.clone();
         app.on_env_refresh(move || {
@@ -2728,7 +2728,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ==================== modal de instalaÃ§Ã£o (Marketplace) ====================
+    // ==================== modal de instalação (Marketplace) ====================
 
     {
         let weak = app.as_weak();
@@ -2772,7 +2772,7 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_mp_confirm(move || {
             let Some(app) = weak.upgrade() else { return };
             let st = modal.borrow().clone();
-            // lote in-process: a skill + (recomendada SÃ se o usuÃ¡rio marcou).
+            // lote in-process: a skill + (recomendada SÓ se o usuário marcou).
             let mut ops: Vec<(usize, bool, Item)> = Vec::new();
             if let Some(Some(it)) = row_items.get(st.skill_idx) {
                 ops.push((st.skill_idx, true, it.clone()));
@@ -2784,7 +2784,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     }
                 }
             }
-            // environment opcional â terminal (sÃ³ se marcado + mÃ©todo escolhido).
+            // environment opcional → terminal (só se marcado + método escolhido).
             let do_env = app.get_mp_env_check() && !st.env_lang.is_empty();
             let env_method = app.get_mp_method_sel().to_string();
             app.set_mp_open(false);
@@ -2808,9 +2808,9 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // ==================== aba Gerenciar (criar + editar skills) ====================
     // Todas as chamadas ao `skilledit` (scaffold/list/read/write) rodam em thread e
-    // devolvem Ã  UI via `invoke_from_event_loop` (padrÃ£o threadâUI do Slint). O
+    // devolvem à UI via `invoke_from_event_loop` (padrão thread→UI do Slint). O
     // estado do form/editor mora em propriedades do app (nada de Rc !Send cruzando
-    // a fronteira da thread â os modelos sÃ£o REMONTADOS no event loop).
+    // a fronteira da thread — os modelos são REMONTADOS no event loop).
     app.set_mg_skills(strings_model(installed_skill_slugs()));
     app.set_mg_files(strings_model(Vec::new()));
 
@@ -2830,26 +2830,26 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // validar o slug a cada tecla (puro/rÃ¡pido â sem IO). Atualiza slug + erro inline.
+    // validar o slug a cada tecla (puro/rápido — sem IO). Atualiza slug + erro inline.
     {
         let weak = app.as_weak();
         app.on_mg_slug_edited(move |s| {
             if let Some(app) = weak.upgrade() {
                 let slug = s.to_string();
                 app.set_mg_slug(s);
-                // vazio â sem erro (sÃ³ desabilita o botÃ£o); invÃ¡lido â mostra o hint.
+                // vazio → sem erro (só desabilita o botão); inválido → mostra o hint.
                 let err = if slug.is_empty() || skilledit::validate_slug(&slug).is_ok() {
                     String::new()
                 } else {
-                    tor("gui.slug_invalid", "slug invÃ¡lido â use sÃ³ [a-z0-9-], comeÃ§ando por letra/dÃ­gito")
+                    tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito")
                 };
                 app.set_mg_slug_error(err.into());
             }
         });
     }
 
-    // criar a skill â skilledit::scaffold(slug, nome, desc). Sucesso mostra o caminho
-    // e re-sonda o dropdown; erro (ex.: jÃ¡ existe) mostra a mensagem.
+    // criar a skill → skilledit::scaffold(slug, nome, desc). Sucesso mostra o caminho
+    // e re-sonda o dropdown; erro (ex.: já existe) mostra a mensagem.
     {
         let weak = app.as_weak();
         app.on_mg_create(move || {
@@ -2860,14 +2860,14 @@ fn main() -> Result<(), slint::PlatformError> {
             // trava dupla: valida antes de spawnar (feedback imediato).
             if skilledit::validate_slug(&slug).is_err() {
                 app.set_mg_slug_error(
-                    tor("gui.slug_invalid", "slug invÃ¡lido â use sÃ³ [a-z0-9-], comeÃ§ando por letra/dÃ­gito").into(),
+                    tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito").into(),
                 );
                 return;
             }
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = skilledit::scaffold(&slug, &name, &desc);
-                // criou â jÃ¡ re-sonda a lista (passa a incluir a nova skill).
+                // criou → já re-sonda a lista (passa a incluir a nova skill).
                 let slugs = if res.is_ok() { Some(installed_skill_slugs()) } else { None };
                 let created = slug.clone();
                 let _ = slint::invoke_from_event_loop(move || {
@@ -2890,9 +2890,9 @@ fn main() -> Result<(), slint::PlatformError> {
                             }
                             Err(e) => {
                                 app.set_mg_create_error(true);
-                                // "jÃ¡ existe" ganha mensagem amigÃ¡vel; senÃ£o a msg do lib.
-                                let msg = if e.contains("jÃ¡ existe") {
-                                    tor("gui.skill_exists", "essa skill jÃ¡ existe")
+                                // "já existe" ganha mensagem amigável; senão a msg do lib.
+                                let msg = if e.contains("já existe") {
+                                    tor("gui.skill_exists", "essa skill já existe")
                                 } else {
                                     e
                                 };
@@ -2905,7 +2905,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // pÃ³s-criar: pula pro modo Editar jÃ¡ com a skill recÃ©m-criada carregada.
+    // pós-criar: pula pro modo Editar já com a skill recém-criada carregada.
     {
         let weak = app.as_weak();
         app.on_mg_edit_created(move || {
@@ -2919,20 +2919,20 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // escolher uma skill â lista os arquivos editÃ¡veis (skilledit::list_files).
+    // escolher uma skill → lista os arquivos editáveis (skilledit::list_files).
     {
         let weak = app.as_weak();
         app.on_mg_pick_skill(move |s| {
             let Some(app) = weak.upgrade() else { return };
             let slug = s.to_string();
             app.set_mg_sel_skill(s);
-            // troca de skill zera a seleÃ§Ã£o de arquivo/editor/feedback.
+            // troca de skill zera a seleção de arquivo/editor/feedback.
             app.set_mg_sel_file(SharedString::new());
             app.set_mg_content(SharedString::new());
             app.set_mg_save_result(SharedString::new());
             let weak = weak.clone();
             std::thread::spawn(move || {
-                // lista os arquivos + status de FORK (oficial? jÃ¡ forkada?) da skill escolhida.
+                // lista os arquivos + status de FORK (oficial? já forkada?) da skill escolhida.
                 let files = skilledit::list_files(&slug).unwrap_or_default();
                 let official = skills::is_official(&slug);
                 let forked = skills::load_state().skills.get(&slug).map(|e| e.forked).unwrap_or(false);
@@ -2947,7 +2947,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // escolher um arquivo â carrega o conteÃºdo no editor (skilledit::read_file).
+    // escolher um arquivo → carrega o conteúdo no editor (skilledit::read_file).
     {
         let weak = app.as_weak();
         app.on_mg_pick_file(move |f| {
@@ -2975,8 +2975,8 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // salvar o editor â grava LOCAL em ~/.claude/skills (skilledit::write_file).
-    // `write_file` jÃ¡ FORKA automaticamente uma skill oficial antes de gravar; apÃ³s
+    // salvar o editor → grava LOCAL em ~/.claude/skills (skilledit::write_file).
+    // `write_file` já FORKA automaticamente uma skill oficial antes de gravar; após
     // salvar, relemos o estado de fork e refletimos no banner + no badge [fork] da lista.
     {
         let weak = app.as_weak();
@@ -2991,7 +2991,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = skilledit::write_file(&slug, &rel, &content);
-                // pÃ³s-gravaÃ§Ã£o: a skill oficial pode ter virado fork agora.
+                // pós-gravação: a skill oficial pode ter virado fork agora.
                 let forked = res.is_ok()
                     && skills::load_state().skills.get(&slug).map(|e| e.forked).unwrap_or(false);
                 let slug2 = slug.clone();
@@ -3016,9 +3016,9 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ==================== aba Grafo ====================
-    // Estado (dono da fÃ­sica + transformaÃ§Ã£o), dois VecModel (nÃ³s/arestas) e o
-    // Timer da fÃ­sica. O grafo COMPARTILHA o projeto com a aba Overdev â carregado
-    // junto na seleÃ§Ã£o/restauraÃ§Ã£o de projeto (mais abaixo).
+    // Estado (dono da física + transformação), dois VecModel (nós/arestas) e o
+    // Timer da física. O grafo COMPARTILHA o projeto com a aba Overdev — carregado
+    // junto na seleção/restauração de projeto (mais abaixo).
     let graph_state = Rc::new(RefCell::new(GraphState { scale: 1.0, alpha: 1.0, ..Default::default() }));
     let graph_nodes = Rc::new(VecModel::<GraphNode>::from(Vec::new()));
     let graph_edges = Rc::new(VecModel::<GraphEdge>::from(Vec::new()));
@@ -3037,22 +3037,40 @@ fn main() -> Result<(), slint::PlatformError> {
     app.set_od_pinned(ModelRc::from(od_pin_model.clone()));
     app.set_od_items(ModelRc::from(od_items_model.clone()));
     refresh_proj_models(&od_proj_model, &od_dev_model, &od_pin_model);
-    // Projeto atual (lado Rust) â persiste entre execuÃ§Ãµes via recent_projects.
+    // Projeto atual (lado Rust) — persiste entre execuções via recent_projects.
     let od_current: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
-    // Fase 4: flag de parada do MONITOR (o botÃ£o Parar a levanta; o monitor a checa
-    // a cada fatia e encerra). `Arc` porque cruza pra a thread do monitor. NÃO mata o
-    // `claude` â ele roda no terminal externo (processo prÃ³prio); sÃ³ para o espelho.
+    // Fase 4: flag de parada do MONITOR (o botão Parar a levanta; o monitor a checa
+    // a cada fatia e encerra). `Arc` porque cruza pra a thread do monitor. NÃO mata o
+    // `claude` — ele roda no terminal externo (processo próprio); só para o espelho.
     let od_stop_flag = Arc::new(AtomicBool::new(false));
-    // HistÃ³rico do DB do overdev + commits (aditivos): estado completo no Rust +
-    // modelos com a PÃGINA atual (paginaÃ§Ã£o Rust-side).
+    // Histórico do DB do overdev + commits (aditivos): estado completo no Rust +
+    // modelos com a PÁGINA atual (paginação Rust-side).
     let od_snaps_all: Rc<RefCell<Vec<overdevdb::SnapshotMeta>>> = Rc::new(RefCell::new(Vec::new()));
     let od_snaps_model = Rc::new(VecModel::<SnapRow>::from(Vec::new()));
     let od_commits_all: Rc<RefCell<Vec<githist::Commit>>> = Rc::new(RefCell::new(Vec::new()));
     let od_commits_model = Rc::new(VecModel::<CommitRow>::from(Vec::new()));
     app.set_od_snaps(ModelRc::from(od_snaps_model.clone()));
     app.set_od_commits(ModelRc::from(od_commits_model.clone()));
-    // Restaura a Ãºltima escolha (mais recente), senÃ£o empty-state.
-    match config::recent_projects().into_iter().next() {
+    // `--project <path>` (ou 1º argumento posicional que seja um dir): abre DIRETO nesse projeto e na
+    // aba Overdev — é o multi-janela (cada projeto no seu processo). Senão, restaura o mais recente.
+    let arg_project: Option<PathBuf> = {
+        let mut it = std::env::args().skip(1);
+        let mut found: Option<String> = None;
+        while let Some(a) = it.next() {
+            if a == "--project" || a == "-p" {
+                found = it.next();
+                break;
+            } else if !a.starts_with('-') {
+                found = Some(a);
+                break;
+            }
+        }
+        found.map(PathBuf::from).filter(|p| p.is_dir())
+    };
+    let initial = arg_project
+        .clone()
+        .or_else(|| config::recent_projects().into_iter().next().map(PathBuf::from));
+    match initial {
         Some(p) => {
             let abs = std::fs::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(&p));
             *od_current.borrow_mut() = Some(abs.clone());
@@ -3060,6 +3078,9 @@ fn main() -> Result<(), slint::PlatformError> {
             refresh_od_history(&app, &od_snaps_all, &od_snaps_model, &od_commits_all, &od_commits_model, Some(&abs));
             // grafo compartilha o projeto restaurado.
             graph_load_and_kick(Some(&abs), &graph_timer, &app.as_weak(), &graph_state, &graph_nodes, &graph_edges);
+            if arg_project.is_some() {
+                app.set_screen(2); // veio de --project → abre na aba Overdev
+            }
         }
         None => load_overdev_into(&app, &od_items_model, None),
     }
@@ -3117,6 +3138,23 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_od_open_project_folder(move || {
             if let Some(p) = cur.borrow().as_ref() {
                 open_path_in_files(p);
+            }
+        });
+    }
+    // Abrir o projeto ATUAL em NOVA JANELA (processo próprio) — overdev de projetos diferentes em
+    // paralelo, cada um numa tela. Isolamento por CONSTRUÇÃO (processos separados, sem estado
+    // compartilhado): zero vazamento entre projetos. `--project <path>` faz a nova instância abrir
+    // já no projeto + aba Overdev.
+    {
+        let cur = od_current.clone();
+        app.on_od_new_window(move || {
+            let Some(p) = cur.borrow().clone() else { return };
+            if let Ok(exe) = std::env::current_exe() {
+                let mut cmd = std::process::Command::new(exe);
+                cmd.arg("--project").arg(&p);
+                cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+                cmd.process_group(0); // sessão de processos própria — sobrevive a esta janela
+                let _ = cmd.spawn();
             }
         });
     }
@@ -3269,7 +3307,7 @@ fn main() -> Result<(), slint::PlatformError> {
             });
         });
     }
-    // cadastrar um diretÃ³rio de desenvolvimento (picker nativo).
+    // cadastrar um diretório de desenvolvimento (picker nativo).
     {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
@@ -3282,7 +3320,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // remover um diretÃ³rio de desenvolvimento.
+    // remover um diretório de desenvolvimento.
     {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
@@ -3292,14 +3330,14 @@ fn main() -> Result<(), slint::PlatformError> {
             refresh_proj_models(&pm, &dm, &pnm);
         });
     }
-    // FIXAR uma pasta como projeto (picker nativo â config::pin_project). Uma pasta
+    // FIXAR uma pasta como projeto (picker nativo → config::pin_project). Uma pasta
     // fixada vira UM projeto no seletor mesmo sem marcador git (workspace/monorepo).
     {
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
         app.on_od_pin_folder(move || {
-            if let Some(dir) = rfd::FileDialog::new().set_title(tor("gui.pin_folder", "Fixar pastaâ¦")).pick_folder() {
+            if let Some(dir) = rfd::FileDialog::new().set_title(tor("gui.pin_folder", "Fixar pasta…")).pick_folder() {
                 let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
                 config::pin_project(&abs.to_string_lossy());
                 refresh_proj_models(&pm, &dm, &pnm);
@@ -3325,7 +3363,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- Fase 3: marcar item HUMANO aberto como feito (- [H ]â- [H x]) ----
+    // ---- Fase 3: marcar item HUMANO aberto como feito (- [H ]→- [H x]) ----
     // Edita o CHECKLIST.md do projeto e recarrega a view (contagem + itens).
     {
         let weak = app.as_weak();
@@ -3367,7 +3405,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     Ok(()) => {
                         app.set_od_editor_error(false);
                         app.set_od_editor_status(tor("gui.saved", "Salvo").into());
-                        // salvar o CHECKLIST.md muda o estado 2-nÃ­veis: recarrega.
+                        // salvar o CHECKLIST.md muda o estado 2-níveis: recarrega.
                         if target == "CHECKLIST.md" {
                             load_overdev_into(&app, &items, Some(&p));
                             app.set_od_editor_error(false);
@@ -3396,7 +3434,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- Fase 3: prompt de correÃ§Ã£o do overdev (add_note kind="correcao") ----
+    // ---- Fase 3: prompt de correção do overdev (add_note kind="correcao") ----
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
@@ -3410,9 +3448,9 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- Fase 4: "Executar overdev" â passo 1: GUARDRAIL (mostra o comando) ----
-    // NÃ£o dispara nada; sÃ³ mostra o comando que abrirÃ¡ no TERMINAL EXTERNO e abre o
-    // mini-modal de confirmaÃ§Ã£o. O disparo real (launch_in_terminal) Ã© no `od-run-confirm`.
+    // ---- Fase 4: "Executar overdev" — passo 1: GUARDRAIL (mostra o comando) ----
+    // Não dispara nada; só mostra o comando que abrirá no TERMINAL EXTERNO e abre o
+    // mini-modal de confirmação. O disparo real (launch_in_terminal) é no `od-run-confirm`.
     {
         let weak = app.as_weak();
         app.on_od_run_request(move || {
@@ -3420,7 +3458,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 app.set_od_agent_cmdline(
                     tor(
                         "gui.od_agent_cmdline",
-                        "claude --dangerously-skip-permissions \"<prompt do overdev>\"  (terminal externo, processo prÃ³prio)",
+                        "claude --dangerously-skip-permissions \"<prompt do overdev>\"  (terminal externo, processo próprio)",
                     )
                     .into(),
                 );
@@ -3428,7 +3466,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- Fase 4: guardrail â CANCELAR (fecha sem disparar) ----
+    // ---- Fase 4: guardrail — CANCELAR (fecha sem disparar) ----
     {
         let weak = app.as_weak();
         app.on_od_run_cancel(move || {
@@ -3437,10 +3475,10 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- Fase 4: guardrail â CONFIRMAR: abre o `claude` num TERMINAL EXTERNO ----
-    // Chama `agentrun::launch_in_terminal` numa thread (processo prÃ³prio, RAM dele,
-    // fora do app). Sucesso â mensagem "claude aberto no terminal <nome>â¦" + liga o
-    // MONITOR leve. Erro (claude/terminal ausente) â mostra a msg e nÃ£o monitora.
+    // ---- Fase 4: guardrail — CONFIRMAR: abre o `claude` num TERMINAL EXTERNO ----
+    // Chama `agentrun::launch_in_terminal` numa thread (processo próprio, RAM dele,
+    // fora do app). Sucesso → mensagem "claude aberto no terminal <nome>…" + liga o
+    // MONITOR leve. Erro (claude/terminal ausente) → mostra a msg e não monitora.
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
@@ -3449,7 +3487,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 if app.get_od_session_running() {
-                    return; // jÃ¡ monitorando â nÃ£o dispara outro
+                    return; // já monitorando — não dispara outro
                 }
                 app.set_od_confirm_open(false);
                 app.set_od_run_status(SharedString::new());
@@ -3477,7 +3515,7 @@ fn main() -> Result<(), slint::PlatformError> {
                                     term,
                                     tor(
                                         "gui.od_launched_post",
-                                        " â o overdev roda fora do app; acompanhe abaixo.",
+                                        " — o overdev roda fora do app; acompanhe abaixo.",
                                     ),
                                 );
                                 app.set_od_run_status(msg.into());
@@ -3497,7 +3535,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- Fase 4: "Parar" â levanta a flag; o MONITOR encerra (nÃ£o mata o claude) ----
+    // ---- Fase 4: "Parar" — levanta a flag; o MONITOR encerra (não mata o claude) ----
     {
         let weak = app.as_weak();
         let stop = od_stop_flag.clone();
@@ -3508,12 +3546,12 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // ---- Reload / Acompanhar: ANEXA o monitor a um overdev que jÃ¡ roda POR FORA ----
-    // (terminal/processo prÃ³prio). Sem depender de ter clicado "Executar overdev":
+    // ---- Reload / Acompanhar: ANEXA o monitor a um overdev que já roda POR FORA ----
+    // (terminal/processo próprio). Sem depender de ter clicado "Executar overdev":
     // (re)liga a `run_monitor` no projeto atual lendo o `.overdev/` do disco e passa
-    // a espelhar ao vivo. Sem `.overdev/` â avisa e nÃ£o liga. Se um monitor jÃ¡ estÃ¡
-    // vivo, sÃ³ reforÃ§a os tokens (o loop jÃ¡ reflete o resto). `attach=true` faz o
-    // monitor seguir um run jÃ¡ em curso (ou postar 1x e encerrar se jÃ¡ finalizou).
+    // a espelhar ao vivo. Sem `.overdev/` → avisa e não liga. Se um monitor já está
+    // vivo, só reforça os tokens (o loop já reflete o resto). `attach=true` faz o
+    // monitor seguir um run já em curso (ou postar 1x e encerrar se já finalizou).
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
@@ -3529,15 +3567,15 @@ fn main() -> Result<(), slint::PlatformError> {
                 app.set_od_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
                 return;
             }
-            // JÃ¡ monitorando: nÃ£o dispara outra thread (evita duplicata na mesma
-            // `stop`); sÃ³ reforÃ§a os tokens agora.
+            // Já monitorando: não dispara outra thread (evita duplicata na mesma
+            // `stop`); só reforça os tokens agora.
             if app.get_od_session_running() {
                 spawn_usage(weak.clone(), p.clone());
-                app.set_od_run_status(tor("gui.od_attached", "acompanhando o overdev deste projetoâ¦").into());
+                app.set_od_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
                 return;
             }
             // Zera o painel e liga o monitor anexado ao run externo.
-            app.set_od_run_status(tor("gui.od_attached", "acompanhando o overdev deste projetoâ¦").into());
+            app.set_od_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
             app.set_od_run_done(0);
             app.set_od_run_open(0);
             app.set_od_mon_human(0);
@@ -3551,7 +3589,7 @@ fn main() -> Result<(), slint::PlatformError> {
             run_monitor(weak.clone(), p, stop.clone(), true);
         });
     }
-    // ---- "Atualizar tokens": relÃª `agent_usage` (PESADO) sob demanda, em thread ----
+    // ---- "Atualizar tokens": relê `agent_usage` (PESADO) sob demanda, em thread ----
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
@@ -3567,12 +3605,12 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ==================== aba Grafo â interaÃ§Ã£o ====================
+    // ==================== aba Grafo — interação ====================
     // Ponteiro/roda chegam crus do Slint (coords relativas ao canvas, em px). O
-    // hit-test e a decisÃ£o pan-vs-arrasto acontecem AQUI (como no egui). Cada
+    // hit-test e a decisão pan-vs-arrasto acontecem AQUI (como no egui). Cada
     // handler sincroniza o modelo/props no fim.
 
-    // canvas mudou de tamanho â guarda; se havia fit pendente (carga), enquadra.
+    // canvas mudou de tamanho → guarda; se havia fit pendente (carga), enquadra.
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3591,7 +3629,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // mouse-down: hit-test â fixa o nÃ³ a arrastar (com offset de pega) ou nada.
+    // mouse-down: hit-test → fixa o nó a arrastar (com offset de pega) ou nada.
     {
         let gs = graph_state.clone();
         app.on_graph_press(move |mx, my| {
@@ -3608,7 +3646,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // arrasto: nÃ³ fixo â move o nÃ³ (reaquece a fÃ­sica); senÃ£o â pan do fundo.
+    // arrasto: nó fixo → move o nó (reaquece a física); senão → pan do fundo.
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3651,7 +3689,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // mouse-up: se nÃ£o houve arrasto, Ã© um CLIQUE â seleciona/deseleciona o nÃ³.
+    // mouse-up: se não houve arrasto, é um CLIQUE → seleciona/deseleciona o nó.
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3670,7 +3708,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // roda: zoom centrado no cursor (mesma matemÃ¡tica do egui).
+    // roda: zoom centrado no cursor (mesma matemática do egui).
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3690,7 +3728,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // botÃ£o "ajustar": enquadra tudo no canvas.
+    // botão "ajustar": enquadra tudo no canvas.
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3704,7 +3742,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // busca: realÃ§a/apaga nÃ³s por nome (recomputa flags e sincroniza).
+    // busca: realça/apaga nós por nome (recomputa flags e sincroniza).
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3719,7 +3757,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // clique em "abrir no editor" do nÃ³ selecionado â vscode://file/<abs>/â¦:<linha>.
+    // clique em "abrir no editor" do nó selecionado → vscode://file/<abs>/…:<linha>.
     {
         let gs = graph_state.clone();
         app.on_graph_open_editor(move || {
@@ -3732,7 +3770,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // exportar vault Obsidian do Ã­ndice (bÃ´nus â via panel::export_obsidian_at).
+    // exportar vault Obsidian do índice (bônus — via panel::export_obsidian_at).
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3755,7 +3793,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // abrir o painel HTML (com o mesmo grafo) no navegador (bÃ´nus).
+    // abrir o painel HTML (com o mesmo grafo) no navegador (bônus).
     {
         let gs = graph_state.clone();
         app.on_graph_open_browser(move || {
@@ -3765,10 +3803,10 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // "Reindexar" â chama a skill que organiza o grafo: dispara o Ã­ndice Â§39 (prompt NL) num
-    // TERMINAL EXTERNO (processo prÃ³prio do `claude`, fora do app), numa thread. SÃ³ dados Send
-    // cruzam (PathBuf + String). Sucesso â banner "Ã­ndice rodando no terminal <nome> â clique em
-    // Recarregar quando terminar."; erro â a msg da lib (claude/terminal ausente).
+    // "Reindexar" — chama a skill que organiza o grafo: dispara o índice §39 (prompt NL) num
+    // TERMINAL EXTERNO (processo próprio do `claude`, fora do app), numa thread. Só dados Send
+    // cruzam (PathBuf + String). Sucesso → banner "índice rodando no terminal <nome> — clique em
+    // Recarregar quando terminar."; erro → a msg da lib (claude/terminal ausente).
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3784,11 +3822,11 @@ fn main() -> Result<(), slint::PlatformError> {
                         let msg = match res {
                             Ok(term) => format!(
                                 "{}{}{}",
-                                tor("gui.g_reindex_pre", "Ã­ndice rodando no terminal "),
+                                tor("gui.g_reindex_pre", "índice rodando no terminal "),
                                 term,
                                 tor(
                                     "gui.g_reindex_post",
-                                    " â clique em Recarregar quando terminar.",
+                                    " — clique em Recarregar quando terminar.",
                                 ),
                             ),
                             Err(e) => e,
@@ -3799,7 +3837,7 @@ fn main() -> Result<(), slint::PlatformError> {
             });
         });
     }
-    // "Recarregar grafo" â re-roda load_graph + node_descriptions e atualiza a UI (apÃ³s o Ã­ndice
+    // "Recarregar grafo" — re-roda load_graph + node_descriptions e atualiza a UI (após o índice
     // terminar no terminal). Limpa o banner do reindex.
     {
         let weak = app.as_weak();
@@ -3860,7 +3898,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // "x" do bloco de info â deseleciona o nÃ³ (fecha o bloco) e ressincroniza.
+    // "x" do bloco de info → deseleciona o nó (fecha o bloco) e ressincroniza.
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
@@ -3877,7 +3915,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ==================== Database builder (tela 6) ====================
-    // Schema canÃ´nico compartilhado (Send+Sync â cruza pra a thread do Postgres e Ã©
+    // Schema canônico compartilhado (Send+Sync → cruza pra a thread do Postgres e é
     // lido pelos callbacks na UI thread). Grafo do schema em estado DEDICADO.
     let db_schema: Arc<Mutex<database::Schema>> = Arc::new(Mutex::new(database::Schema::default()));
     let db_graph_state = Rc::new(RefCell::new(GraphState { scale: 1.0, alpha: 1.0, ..Default::default() }));
@@ -3899,8 +3937,8 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // introspectar SQLite â LOCAL e rÃ¡pido (arquivo); roda sÃ­ncrono e mutaciona o
-    // schema direto (como env status / ssh). Erro claro se o arquivo nÃ£o abrir.
+    // introspectar SQLite — LOCAL e rápido (arquivo); roda síncrono e mutaciona o
+    // schema direto (como env status / ssh). Erro claro se o arquivo não abrir.
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -3923,8 +3961,8 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // introspectar Postgres â usa `psql` (subprocesso, pode bloquear) â THREAD. O
-    // Schema (Send) volta e Ã© gravado no lock DENTRO do event loop; a UI Ã© remontada.
+    // introspectar Postgres — usa `psql` (subprocesso, pode bloquear) → THREAD. O
+    // Schema (Send) volta e é gravado no lock DENTRO do event loop; a UI é remontada.
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -3962,7 +4000,7 @@ fn main() -> Result<(), slint::PlatformError> {
             });
         });
     }
-    // carregar schema.json (picker â serde). Erro claro se o JSON nÃ£o casar.
+    // carregar schema.json (picker → serde). Erro claro se o JSON não casar.
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -3987,7 +4025,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // salvar schema.json (picker â serde pretty).
+    // salvar schema.json (picker → serde pretty).
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -4031,7 +4069,7 @@ fn main() -> Result<(), slint::PlatformError> {
             {
                 let mut s = sh.lock().unwrap();
                 if s.tables.iter().any(|t| t.name == name) {
-                    app.set_db_error(tor("gui.db_table_exists", "jÃ¡ existe uma tabela com esse nome").into());
+                    app.set_db_error(tor("gui.db_table_exists", "já existe uma tabela com esse nome").into());
                     return;
                 }
                 s.tables.push(database::Table { name: name.clone(), ..Default::default() });
@@ -4042,7 +4080,7 @@ fn main() -> Result<(), slint::PlatformError> {
             db_rebuild(&app, &sh.lock().unwrap());
         });
     }
-    // adicionar uma coluna Ã  tabela alvo.
+    // adicionar uma coluna à tabela alvo.
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -4071,7 +4109,7 @@ fn main() -> Result<(), slint::PlatformError> {
             db_rebuild(&app, &sh.lock().unwrap());
         });
     }
-    // adicionar uma FK Ã  tabela alvo.
+    // adicionar uma FK à tabela alvo.
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -4100,7 +4138,7 @@ fn main() -> Result<(), slint::PlatformError> {
             db_rebuild(&app, &sh.lock().unwrap());
         });
     }
-    // gerar SQL (to_sql) â visor read-only.
+    // gerar SQL (to_sql) → visor read-only.
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -4112,7 +4150,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // gerar migration (to_migration) â visor read-only.
+    // gerar migration (to_migration) → visor read-only.
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -4124,7 +4162,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // salvar o conteÃºdo do visor num arquivo (picker nativo).
+    // salvar o conteúdo do visor num arquivo (picker nativo).
     {
         let weak = app.as_weak();
         app.on_db_gen_save(move || {
@@ -4136,7 +4174,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let _ = std::fs::write(&path, app.get_db_gen_content().to_string());
         });
     }
-    // (re)construir o grafo do schema atual (tabela=nÃ³, FK=aresta) e ligar a fÃ­sica.
+    // (re)construir o grafo do schema atual (tabela=nó, FK=aresta) e ligar a física.
     {
         let weak = app.as_weak();
         let sh = db_schema.clone();
@@ -4157,8 +4195,8 @@ fn main() -> Result<(), slint::PlatformError> {
             db_graph_kick(&gt, weak.clone(), gs.clone(), gn.clone(), ge.clone());
         });
     }
-    // gerar por descriÃ§Ã£o (IA): dispara a skill schematize-database num TERMINAL
-    // EXTERNO (processo prÃ³prio do claude, fora do app). Usa o projeto atual (od_current).
+    // gerar por descrição (IA): dispara a skill schematize-database num TERMINAL
+    // EXTERNO (processo próprio do claude, fora do app). Usa o projeto atual (od_current).
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
@@ -4184,7 +4222,7 @@ fn main() -> Result<(), slint::PlatformError> {
                                 "{}{}{}",
                                 tor("gui.db_ai_running_pre", "schematize-database rodando no terminal "),
                                 term,
-                                tor("gui.db_ai_running_post", " â carregue o schema.json quando terminar."),
+                                tor("gui.db_ai_running_post", " — carregue o schema.json quando terminar."),
                             ),
                             Err(e) => e,
                         };
@@ -4194,7 +4232,7 @@ fn main() -> Result<(), slint::PlatformError> {
             });
         });
     }
-    // ---- grafo do schema: interaÃ§Ã£o (pan/zoom/arrasto/clique) â estado dedicado ----
+    // ---- grafo do schema: interação (pan/zoom/arrasto/clique) — estado dedicado ----
     {
         let weak = app.as_weak();
         let gs = db_graph_state.clone();
@@ -4336,8 +4374,8 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ==================== PaginaÃ§Ã£o do Mercado ====================
-    // Recomputa os Ã­ndices de exibiÃ§Ã£o (disp) quando a sub-aba muda.
+    // ==================== Paginação do Mercado ====================
+    // Recomputa os índices de exibição (disp) quando a sub-aba muda.
     {
         let weak = app.as_weak();
         app.on_mkt_recompute(move || {
@@ -4364,8 +4402,8 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     // exportar uma chave p/ o Bitwarden (cofre destravado OU arquivo de import 600).
-    // Roda em THREAD (bw/subprocesso pode bloquear); sÃ³ o resultado (String, Send)
-    // volta pela event loop. A chave PRIVADA nunca chega Ã  UI (o lib a esconde).
+    // Roda em THREAD (bw/subprocesso pode bloquear); só o resultado (String, Send)
+    // volta pela event loop. A chave PRIVADA nunca chega à UI (o lib a esconde).
     {
         let weak = app.as_weak();
         let m = ssh_model.clone();
@@ -4375,7 +4413,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(mut r) = m.row_data(i) else { return };
             let name = r.name.to_string();
             // marca a linha como ocupada e limpa o banner anterior.
-            r.op_label = tor("gui.ssh_bw_exporting", "exportandoâ¦").into();
+            r.op_label = tor("gui.ssh_bw_exporting", "exportando…").into();
             r.op_error = false;
             m.set_row_data(i, r);
             app.set_ssh_bw_result(SharedString::new());
@@ -4384,7 +4422,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 let res = sshkeys::export_bitwarden(&name, None);
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak2.upgrade() {
-                        // solta o "ocupado" da linha (o modelo Ã© o mesmo VecModel).
+                        // solta o "ocupado" da linha (o modelo é o mesmo VecModel).
                         let rows = app.get_ssh_rows();
                         if let Some(mut r) = rows.row_data(i) {
                             r.op_label = SharedString::new();
@@ -4434,8 +4472,8 @@ fn main() -> Result<(), slint::PlatformError> {
             match sshkeys::generate(&name, kind, comment_opt, pass_opt, false) {
                 Ok(info) => {
                     app.set_ssh_gen_error(false);
-                    app.set_ssh_gen_status(format!("{} Â· {}", info.name, info.fingerprint).into());
-                    // PROVA da chave: bits Â· fingerprint Â· tipo (ssh-keygen -l). Confere a forÃ§a.
+                    app.set_ssh_gen_status(format!("{} · {}", info.name, info.fingerprint).into());
+                    // PROVA da chave: bits · fingerprint · tipo (ssh-keygen -l). Confere a força.
                     let proof = sshkeys::proof_line(&info.name).unwrap_or_default();
                     app.set_ssh_gen_proof(proof.into());
                     app.set_ssh_gen_name(SharedString::new());
@@ -4451,7 +4489,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // copiar a PÃBLICA (export_public + clipboard). NUNCA toca a privada.
+    // copiar a PÚBLICA (export_public + clipboard). NUNCA toca a privada.
     {
         let m = ssh_model.clone();
         app.on_ssh_copy(move |idx| {
@@ -4477,7 +4515,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // pedir remoÃ§Ã£o â abre o modal de confirmaÃ§Ã£o.
+    // pedir remoção → abre o modal de confirmação.
     {
         let weak = app.as_weak();
         let m = ssh_model.clone();
@@ -4491,7 +4529,7 @@ fn main() -> Result<(), slint::PlatformError> {
                         "{} '{}'? {}",
                         tor("gui.ssh_remove_confirm", "Remover a chave"),
                         name,
-                        tor("gui.ssh_remove_note", "Isto apaga o par (privada + pÃºblica).")
+                        tor("gui.ssh_remove_note", "Isto apaga o par (privada + pública).")
                     )
                     .into(),
                 );
@@ -4499,7 +4537,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // confirmar remoÃ§Ã£o (remove o par).
+    // confirmar remoção (remove o par).
     {
         let weak = app.as_weak();
         let m = ssh_model.clone();
@@ -4527,7 +4565,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ==================== Tela ConfiguraÃ§Ãµes ====================
+    // ==================== Tela Configurações ====================
     let cur_lang = i18n::current_code();
     let cfg_lang_model = Rc::new(VecModel::<LangItem>::from(build_lang_items(&cur_lang)));
     app.set_cfg_langs(ModelRc::from(cfg_lang_model.clone()));
@@ -4535,7 +4573,7 @@ fn main() -> Result<(), slint::PlatformError> {
     app.set_cfg_lang_name(i18n::name_of(&cur_lang).unwrap_or("").into());
     app.set_cfg_autostart_on(autostart::is_active());
     app.set_cfg_hooks_on(settings::overdev_enabled());
-    // trocar idioma AO VIVO: persiste + recarrega TODOS os rÃ³tulos estÃ¡ticos (L).
+    // trocar idioma AO VIVO: persiste + recarrega TODOS os rótulos estáticos (L).
     {
         let weak = app.as_weak();
         let lm = cfg_lang_model.clone();
@@ -4550,7 +4588,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // autostart do agente (systemd --user + XDG). exe = binÃ¡rio do CLI schematize.
+    // autostart do agente (systemd --user + XDG). exe = binário do CLI schematize.
     {
         let weak = app.as_weak();
         app.on_cfg_toggle_autostart(move || {
@@ -4570,7 +4608,7 @@ fn main() -> Result<(), slint::PlatformError> {
             app.set_cfg_hooks_on(if res.is_ok() { !on } else { settings::overdev_enabled() });
         });
     }
-    // atalho: reusa o modal de diretÃ³rios de dev / projetos fixados.
+    // atalho: reusa o modal de diretórios de dev / projetos fixados.
     {
         let weak = app.as_weak();
         app.on_cfg_manage_dirs(move || {
@@ -4579,7 +4617,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // DiagnÃ³stico: alterna o diagnÃ³stico de rede (online) â mais lento quando ligado.
+    // Diagnóstico: alterna o diagnóstico de rede (online) — mais lento quando ligado.
     {
         let weak = app.as_weak();
         app.on_cfg_debug_toggle_online(move || {
@@ -4588,9 +4626,9 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // DiagnÃ³stico: gera o relatÃ³rio de debug numa THREAD (nÃ£o trava a UI). SÃ³ dados
-    // Send cruzam a fronteira â o caminho volta como String via invoke_from_event_loop.
-    // Offline por default (rÃ¡pido); com o toggle marcado passa online=true (mais lento).
+    // Diagnóstico: gera o relatório de debug numa THREAD (não trava a UI). Só dados
+    // Send cruzam a fronteira — o caminho volta como String via invoke_from_event_loop.
+    // Offline por default (rápido); com o toggle marcado passa online=true (mais lento).
     {
         let weak = app.as_weak();
         app.on_cfg_debug_generate(move || {
@@ -4626,7 +4664,7 @@ fn main() -> Result<(), slint::PlatformError> {
             });
         });
     }
-    // DiagnÃ³stico: abre a PASTA do relatÃ³rio no gerenciador de arquivos (reusa o
+    // Diagnóstico: abre a PASTA do relatório no gerenciador de arquivos (reusa o
     // mesmo mecanismo do "Abrir pasta" da barra de projeto: open_path_in_files).
     {
         let weak = app.as_weak();
@@ -4642,8 +4680,8 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ==================== Overdev â histÃ³rico DB + commits ====================
-    // recarrega o histÃ³rico do projeto atual (chamado ao entrar na tela / reload).
+    // ==================== Overdev — histórico DB + commits ====================
+    // recarrega o histórico do projeto atual (chamado ao entrar na tela / reload).
     {
         let weak = app.as_weak();
         let cur = od_current.clone();
@@ -4658,7 +4696,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // paginaÃ§Ã£o do histÃ³rico do DB.
+    // paginação do histórico do DB.
     {
         let weak = app.as_weak();
         let all = od_snaps_all.clone();
@@ -4685,7 +4723,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // Ver: conteÃºdo do snapshot num visor read-only.
+    // Ver: conteúdo do snapshot num visor read-only.
     {
         let weak = app.as_weak();
         app.on_od_snap_view(move |id| {
@@ -4703,7 +4741,7 @@ fn main() -> Result<(), slint::PlatformError> {
             app.set_od_snap_view_open(true);
         });
     }
-    // Restaurar: pede confirmaÃ§Ã£o.
+    // Restaurar: pede confirmação.
     {
         let weak = app.as_weak();
         app.on_od_snap_restore_request(move |id| {
@@ -4730,7 +4768,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     ),
                     Err(e) => app.set_od_run_status(e.into()),
                 }
-                // recarrega overdev (checklist) + histÃ³rico refletindo o disco.
+                // recarrega overdev (checklist) + histórico refletindo o disco.
                 app.invoke_od_reload();
             }
         });
@@ -4743,7 +4781,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // paginaÃ§Ã£o dos commits.
+    // paginação dos commits.
     {
         let weak = app.as_weak();
         let all = od_commits_all.clone();
@@ -4771,10 +4809,10 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ==================== VersÃ£o do app + self-update ====================
-    // "Verificar atualizaÃ§Ã£o" â app_update_available() em thread; se hÃ¡ versÃ£o nova,
-    // acende o botÃ£o "Atualizar app" que roda selfupdate::run() em thread e, ao
-    // concluir, sugere reiniciar (o restart jÃ¡ existe: relanÃ§a a janela nova).
+    // ==================== Versão do app + self-update ====================
+    // "Verificar atualização" → app_update_available() em thread; se há versão nova,
+    // acende o botão "Atualizar app" que roda selfupdate::run() em thread e, ao
+    // concluir, sugere reiniciar (o restart já existe: relança a janela nova).
     {
         let weak = app.as_weak();
         app.on_app_check_update(move || {
@@ -4794,12 +4832,12 @@ fn main() -> Result<(), slint::PlatformError> {
                             Some((_cur, new)) => {
                                 app.set_app_has_update(true);
                                 app.set_app_update_status(
-                                    format!("{} v{new}", tor("gui.app_new_version", "Nova versÃ£o disponÃ­vel:")).into(),
+                                    format!("{} v{new}", tor("gui.app_new_version", "Nova versão disponível:")).into(),
                                 );
                             }
                             None => {
                                 app.set_app_has_update(false);
-                                app.set_app_update_status(tor("gui.app_up_to_date", "VocÃª estÃ¡ atualizado").into());
+                                app.set_app_update_status(tor("gui.app_up_to_date", "Você está atualizado").into());
                             }
                         }
                     }
@@ -4815,7 +4853,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 return;
             }
             app.set_app_updating(true);
-            app.set_app_update_status(tor("gui.app_updating", "Atualizandoâ¦").into());
+            app.set_app_update_status(tor("gui.app_updating", "Atualizando…").into());
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = selfupdate::run();
@@ -4886,14 +4924,14 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // ==================== Sininho de notificaÃ§Ãµes ====================
-    // Os modelos (Global/Pessoal) sÃ£o REMONTADOS no event loop a cada abertura (nÃ£o
-    // cruzam a fronteira da thread â padrÃ£o threadâUI do resto da GUI). A aÃ§Ã£o de
-    // cada item viaja pelo prÃ³prio callback (kind, action), sem estado Rust extra.
+    // ==================== Sininho de notificações ====================
+    // Os modelos (Global/Pessoal) são REMONTADOS no event loop a cada abertura (não
+    // cruzam a fronteira da thread — padrão thread→UI do resto da GUI). A ação de
+    // cada item viaja pelo próprio callback (kind, action), sem estado Rust extra.
     app.set_notif_global(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
     app.set_notif_personal(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
 
-    // recompute sÃ³ a contagem (badge) â barato de disparar, roda em thread.
+    // recompute só a contagem (badge) — barato de disparar, roda em thread.
     {
         let weak = app.as_weak();
         app.on_notif_refresh(move || {
@@ -4968,27 +5006,27 @@ fn main() -> Result<(), slint::PlatformError> {
             });
         });
     }
-    // executar a aÃ§Ã£o de uma notificaÃ§Ã£o â (kind, action) vÃªm do prÃ³prio item.
+    // executar a ação de uma notificação — (kind, action) vêm do próprio item.
     {
         let weak = app.as_weak();
         app.on_notif_action(move |kind, action| {
             let Some(app) = weak.upgrade() else { return };
             match kind.as_str() {
-                // nova versÃ£o do app â fecha o painel, vai pra ConfiguraÃ§Ãµes e dispara o update.
+                // nova versão do app → fecha o painel, vai pra Configurações e dispara o update.
                 "app_update" => {
                     app.set_notif_open(false);
                     app.set_screen(5);
                     app.set_app_has_update(true);
                     app.invoke_app_do_update();
                 }
-                // post do blog â abre a URL no navegador.
+                // post do blog → abre a URL no navegador.
                 "news" => {
                     let url = action.to_string();
                     if !url.is_empty() {
                         util::open_url(&url);
                     }
                 }
-                // skill desatualizada â leva pra aba Instaladas do Mercado.
+                // skill desatualizada → leva pra aba Instaladas do Mercado.
                 "skill_outdated" => {
                     app.set_notif_open(false);
                     app.set_screen(1);
@@ -5000,7 +5038,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
-    // contagem inicial + refresh periÃ³dico (a cada 90s) do badge, em thread.
+    // contagem inicial + refresh periódico (a cada 90s) do badge, em thread.
     app.invoke_notif_refresh();
     let notif_timer = Rc::new(slint::Timer::default());
     {
@@ -5013,8 +5051,8 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ==================== Comparar fork vs oficial ====================
-    // "Comparar com oficial" â compare_update(slug) em thread; abre o painel com
-    // baseânova, arquivos (status) e o diff. NÃO sobrescreve nada.
+    // "Comparar com oficial" → compare_update(slug) em thread; abre o painel com
+    // base→nova, arquivos (status) e o diff. NÃO sobrescreve nada.
     app.set_cmp_files(ModelRc::from(Rc::new(VecModel::<CmpFile>::from(Vec::new()))));
     {
         let weak = app.as_weak();
@@ -5050,9 +5088,9 @@ fn main() -> Result<(), slint::PlatformError> {
                         app.set_cmp_loading(false);
                         match out {
                             Ok((base, new, files, diff)) => {
-                                app.set_cmp_versions(format!("v{base} â v{new}").into());
+                                app.set_cmp_versions(format!("v{base} → v{new}").into());
                                 app.set_cmp_diff(if diff.trim().is_empty() {
-                                    tor("gui.compare_identical", "(sem diferenÃ§as de conteÃºdo)").into()
+                                    tor("gui.compare_identical", "(sem diferenças de conteúdo)").into()
                                 } else {
                                     diff.into()
                                 });
@@ -5080,15 +5118,15 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ==================== Conta (login via device flow) ====================
-    // Estado da sessÃ£o + fluxo de login OAuth device flow. `device_start` e o loop
-    // de `device_poll_once` sÃ£o REDE â rodam numa thread (nunca bloqueiam o event
-    // loop); a UI Ã© tocada sÃ³ via `invoke_from_event_loop`. O loop Ã© CANCELÃVEL: o
-    // flag corrente vive num `Rc<RefCell<Arc<AtomicBool>>>` (padrÃ£o do worker do
+    // Estado da sessão + fluxo de login OAuth device flow. `device_start` e o loop
+    // de `device_poll_once` são REDE — rodam numa thread (nunca bloqueiam o event
+    // loop); a UI é tocada só via `invoke_from_event_loop`. O loop é CANCELÁVEL: o
+    // flag corrente vive num `Rc<RefCell<Arc<AtomicBool>>>` (padrão do worker do
     // overdev). Cada login troca por um flag NOVO e levanta o antigo, encerrando
     // qualquer thread remanescente; Cancelar/Sair levantam o flag corrente.
-    // SÃ³ dados `Send` (String/PathBuf/Arc) cruzam a fronteira.
+    // Só dados `Send` (String/PathBuf/Arc) cruzam a fronteira.
     let acc_stop: Rc<RefCell<Arc<AtomicBool>>> = Rc::new(RefCell::new(Arc::new(AtomicBool::new(false))));
-    // Estado inicial: reflete a sessÃ£o persistida em disco.
+    // Estado inicial: reflete a sessão persistida em disco.
     app.set_acc_logged_in(account::is_logged_in());
     app.set_acc_sub(account::account_sub().unwrap_or_default().into());
 
@@ -5099,7 +5137,7 @@ fn main() -> Result<(), slint::PlatformError> {
         app.on_acc_login(move || {
             let Some(app) = weak.upgrade() else { return };
             if app.get_acc_polling() {
-                return; // jÃ¡ hÃ¡ um login em andamento
+                return; // já há um login em andamento
             }
             // levanta o flag antigo (encerra thread remanescente) e cria um novo.
             acc_stop.borrow().store(true, Ordering::SeqCst);
@@ -5121,7 +5159,7 @@ fn main() -> Result<(), slint::PlatformError> {
                         });
                     }
                     Ok(dl) => {
-                        // Mostra o cÃ³digo + a URL e abre o modal.
+                        // Mostra o código + a URL e abre o modal.
                         let user_code = dl.user_code.clone();
                         let verification_uri = dl.verification_uri.clone();
                         let verification_complete = dl.verification_uri_complete.clone();
@@ -5137,12 +5175,12 @@ fn main() -> Result<(), slint::PlatformError> {
                                 }
                             });
                         }
-                        // Loop de poll (respeita interval/expires_in; cancelÃ¡vel via `stop`).
+                        // Loop de poll (respeita interval/expires_in; cancelável via `stop`).
                         let start = Instant::now();
                         let mut interval = dl.interval.max(1);
                         loop {
                             if stop.load(Ordering::SeqCst) {
-                                return; // cancelado/substituÃ­do â a UI jÃ¡ foi tratada
+                                return; // cancelado/substituído — a UI já foi tratada
                             }
                             if start.elapsed().as_secs() >= dl.expires_in {
                                 let weak = weak.clone();
@@ -5151,13 +5189,13 @@ fn main() -> Result<(), slint::PlatformError> {
                                         app.set_acc_modal_open(false);
                                         app.set_acc_polling(false);
                                         app.set_acc_status(
-                                            tor("gui.acc_expired", "O cÃ³digo expirou. Tente novamente.").into(),
+                                            tor("gui.acc_expired", "O código expirou. Tente novamente.").into(),
                                         );
                                     }
                                 });
                                 return;
                             }
-                            // dorme `interval` em passos de 1s pra reagir rÃ¡pido ao cancelamento.
+                            // dorme `interval` em passos de 1s pra reagir rápido ao cancelamento.
                             let mut slept = 0u64;
                             while slept < interval {
                                 if stop.load(Ordering::SeqCst) {
@@ -5189,7 +5227,7 @@ fn main() -> Result<(), slint::PlatformError> {
                                             app.set_acc_modal_open(false);
                                             app.set_acc_polling(false);
                                             app.set_acc_status(
-                                                tor("gui.acc_expired", "O cÃ³digo expirou. Tente novamente.").into(),
+                                                tor("gui.acc_expired", "O código expirou. Tente novamente.").into(),
                                             );
                                         }
                                     });
@@ -5208,19 +5246,19 @@ fn main() -> Result<(), slint::PlatformError> {
                                                     app.set_acc_logged_in(true);
                                                     app.set_acc_sub(sub.into());
                                                     app.set_acc_status(SharedString::new());
-                                                    // recomputa o badge do sino (notificaÃ§Ãµes do
+                                                    // recomputa o badge do sino (notificações do
                                                     // servidor aparecem quando logado).
                                                     app.invoke_notif_refresh();
                                                 }
                                                 Some(e) => app.set_acc_status(
-                                                    format!("{} {e}", tor("gui.acc_save_error", "Falha ao salvar a sessÃ£o:")).into(),
+                                                    format!("{} {e}", tor("gui.acc_save_error", "Falha ao salvar a sessão:")).into(),
                                                 ),
                                             }
                                         }
                                     });
                                     return;
                                 }
-                                // erro de rede transitÃ³rio: mantÃ©m o poll (nÃ£o derruba o fluxo).
+                                // erro de rede transitório: mantém o poll (não derruba o fluxo).
                                 Err(_) => {}
                             }
                         }
@@ -5257,12 +5295,12 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
-    // sair (logout): encerra a sessÃ£o + atualiza a UI + recomputa o badge do sino.
+    // sair (logout): encerra a sessão + atualiza a UI + recomputa o badge do sino.
     {
         let weak = app.as_weak();
         let acc_stop = acc_stop.clone();
         app.on_acc_logout(move || {
-            // por seguranÃ§a, para qualquer poll em andamento.
+            // por segurança, para qualquer poll em andamento.
             acc_stop.borrow().store(true, Ordering::SeqCst);
             account::logout();
             if let Some(app) = weak.upgrade() {
@@ -5271,7 +5309,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 app.set_acc_polling(false);
                 app.set_acc_modal_open(false);
                 app.set_acc_status(SharedString::new());
-                // notificaÃ§Ãµes do servidor somem quando deslogado â recomputa o badge.
+                // notificações do servidor somem quando deslogado → recomputa o badge.
                 app.invoke_notif_refresh();
             }
         });
@@ -5284,7 +5322,7 @@ fn main() -> Result<(), slint::PlatformError> {
 mod tests {
     use super::*;
 
-    /// Cria um `.overdev/CHECKLIST.md` temporÃ¡rio e ÃNICO (testes rodam em paralelo).
+    /// Cria um `.overdev/CHECKLIST.md` temporário e ÚNICO (testes rodam em paralelo).
     fn scratch(checklist: &str) -> std::path::PathBuf {
         static SEQ: AtomicUsize = AtomicUsize::new(0);
         let uniq = SEQ.fetch_add(1, Ordering::SeqCst);
@@ -5297,13 +5335,13 @@ mod tests {
 
     const FIX: &str = "\
 # OVERDEV
-- [ ] item mÃ¡quina aberto A
-- [x] item mÃ¡quina feito B
+- [ ] item máquina aberto A
+- [x] item máquina feito B
 - [~] item on-hold C
 - [H ] item humano aberto D
 - [H x] item humano feito E
 - [H ] item humano aberto F
-nÃ£o Ã© item
+não é item
   - [ ] item indentado aberto G
 ";
 
@@ -5311,18 +5349,18 @@ nÃ£o Ã© item
     fn parse_2niveis_classifica_e_indexa_humanos() {
         let root = scratch(FIX);
         let its = parse_checklist_items(&root);
-        // 7 itens de checklist (a linha "nÃ£o Ã© item" Ã© ignorada).
+        // 7 itens de checklist (a linha "não é item" é ignorada).
         assert_eq!(its.len(), 7);
         let by_kind = |k: &str| its.iter().filter(|i| i.kind == k).count();
-        assert_eq!(by_kind("open"), 2, "mÃ¡quina abertos (inclui indentado)");
-        assert_eq!(by_kind("done"), 1, "mÃ¡quina feito");
+        assert_eq!(by_kind("open"), 2, "máquina abertos (inclui indentado)");
+        assert_eq!(by_kind("done"), 1, "máquina feito");
         assert_eq!(by_kind("hold"), 1, "on-hold");
         assert_eq!(by_kind("hopen"), 2, "humanos abertos");
         assert_eq!(by_kind("hdone"), 1, "humano feito");
-        // hindex numera sÃ³ os humanos abertos, 1-based, na ordem do arquivo.
+        // hindex numera só os humanos abertos, 1-based, na ordem do arquivo.
         let hopen: Vec<i32> = its.iter().filter(|i| i.kind == "hopen").map(|i| i.hindex).collect();
         assert_eq!(hopen, vec![1, 2]);
-        // itens de mÃ¡quina nÃ£o tÃªm origem-humano nem Ã­ndice.
+        // itens de máquina não têm origem-humano nem índice.
         let mo = its.iter().find(|i| i.kind == "open").unwrap();
         assert!(mo.machine && mo.hindex == -1);
         std::fs::remove_dir_all(&root).ok();
@@ -5331,15 +5369,15 @@ nÃ£o Ã© item
     #[test]
     fn marca_humano_por_indice_so_o_que_casa() {
         let root = scratch(FIX);
-        // fecha o 2Âº humano aberto (F) â vira - [H x]; D segue aberto.
+        // fecha o 2º humano aberto (F) → vira - [H x]; D segue aberto.
         mark_human_done_at(&root, 2).unwrap();
         let its = parse_checklist_items(&root);
         assert_eq!(its.iter().filter(|i| i.kind == "hopen").count(), 1, "sobra 1 humano aberto");
         assert!(its.iter().any(|i| i.kind == "hopen" && i.text.contains("aberto D")));
         assert!(its.iter().any(|i| i.kind == "hdone" && i.text.contains("aberto F")));
-        // nÃ£o toca itens de mÃ¡quina.
+        // não toca itens de máquina.
         assert_eq!(its.iter().filter(|i| i.kind == "open").count(), 2);
-        // Ã­ndice fora de faixa â erro, arquivo intacto.
+        // índice fora de faixa → erro, arquivo intacto.
         assert!(mark_human_done_at(&root, 9).is_err());
         std::fs::remove_dir_all(&root).ok();
     }

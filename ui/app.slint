@@ -1022,6 +1022,7 @@ component ProjectBar inherits Rectangle {
     callback open-vscode();
     callback reload();
     callback manage-dirs();
+    callback new-window();  // abre o projeto atual numa JANELA/processo próprio (overdev em paralelo)
     height: 58px;
     background: Theme.bg;
     HorizontalLayout {
@@ -1135,6 +1136,9 @@ component ProjectBar inherits Rectangle {
         VerticalLayout {
             alignment: center;
             Btn { label: L.dev-dirs; small: true; clicked => { root.manage-dirs(); } }
+            // Abre o projeto atual em OUTRA janela (processo próprio) — pra rodar overdevs de
+            // projetos diferentes em paralelo, cada um isolado (zero vazamento de estado).
+            Btn { label: "↗ Nova janela"; small: true; enabled: root.current != ""; clicked => { root.new-window(); } }
         }
         Rectangle {}
     }
@@ -1539,6 +1543,7 @@ export component AppWindow inherits Window {
     callback od-open-project-folder();  // abre a pasta do projeto atual no gerenciador de arquivos
     callback od-open-vscode();          // abre o projeto atual no VSCode (code <root> / vscode://)
     callback od-reload();               // re-sonda dev_dirs + recarrega o projeto
+    callback od-new-window();           // abre o projeto atual em nova janela (overdev em paralelo)
     callback od-gen-from-archive();     // GERA afazeres pro overdev do histórico recuperável do archive
     // ---- Split multiagent + governador de concorrência ----
     in-out property <int> od-agent-cap: 0;        // teto seguro de claudes na máquina
@@ -2901,6 +2906,7 @@ export component AppWindow inherits Window {
                 open-vscode => { root.od-open-vscode(); }
                 reload => { root.od-reload(); }
                 manage-dirs => { root.dev-modal-open = true; }
+                new-window => { root.od-new-window(); }
             }
             Rectangle { height: 1px; background: Theme.border; }
             // ---- linha de ferramentas do grafo (busca + nº nós + ações) ----
@@ -3056,6 +3062,7 @@ export component AppWindow inherits Window {
                 open-vscode => { root.od-open-vscode(); }
                 reload => { root.od-reload(); }
                 manage-dirs => { root.dev-modal-open = true; }
+                new-window => { root.od-new-window(); }
             }
             Rectangle { height: 1px; background: Theme.border; }
 
