@@ -191,6 +191,8 @@ fn install_i18n(app: &AppWindow) {
     // Chaves novas com fallback pt-BR embutido via `tor` atÃ© entrarem no lib.
     l.set_g_reindex(tor("gui.g_reindex", "Reindexar").into());
     l.set_g_reload(tor("gui.g_reload", "Recarregar").into());
+    l.set_g_drill(tor("gui.g_drill", "Grafo do serviço").into());
+    l.set_g_global(tor("gui.g_global", "← Grafo global").into());
     l.set_g_node_nodesc(tor("gui.g_node_nodesc", "(sem descriÃ§Ã£o no Ã­ndice â rode Reindexar)").into());
     // Home + navegaÃ§Ã£o (Fase 1) â chaves NOVAS, com fallback embutido via `tor`
     // atÃ© serem adicionadas ao lib. Ver lista no relatÃ³rio de entrega.
@@ -299,6 +301,8 @@ fn install_i18n(app: &AppWindow) {
     l.set_app_updating(tor("gui.app_updating", "Atualizandoâ¦").into());
     l.set_app_restart_hint(tor("gui.app_restart_hint", "AtualizaÃ§Ã£o concluÃ­da â reinicie o app.").into());
     l.set_app_restart(tor("gui.app_restart", "Reiniciar").into());
+    l.set_updater_missing_msg(tor("gui.updater_missing", "O gestor de atualizações (schematize-updater) não está instalado — ele cuida de instalar/atualizar o app.").into());
+    l.set_updater_install_btn(tor("gui.updater_install", "Instalar gestor de atualizações").into());
     // Sininho de notificaÃ§Ãµes.
     l.set_notif_title(tor("gui.notif_title", "NotificaÃ§Ãµes").into());
     l.set_notif_empty(tor("gui.notif_empty", "Sem notificaÃ§Ãµes").into());
@@ -1721,6 +1725,9 @@ struct GraphState {
     nodes: Vec<GNode>,
     edges: Vec<(usize, usize)>,
     project: Option<PathBuf>,
+    // Drill-down: `Some(servico)` = vendo o grafo DETALHADO daquele microserviço
+    // (`.schematize/grafos/<servico>.md`); `None` = a visão GLOBAL da aplicação.
+    service: Option<String>,
     // DescriÃ§Ã£o por nÃ³ (nome -> "O quÃª"), vinda do Ã­ndice/MAPA (Â§39). Carregada
     // junto do grafo; consultada ao selecionar um nÃ³ pra mostrar no bloco lateral.
     descs: HashMap<String, String>,
@@ -1888,6 +1895,9 @@ fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edg
     app.set_g_oy(st.oy);
     app.set_g_has_graph(!st.nodes.is_empty());
     app.set_g_node_count(st.nodes.len() as i32);
+    // Drill-down: `service` Some = vendo o grafo detalhado daquele microserviço.
+    app.set_g_in_service(st.service.is_some());
+    app.set_g_service_name(st.service.clone().unwrap_or_default().into());
     match st.sel {
         Some(i) => {
             app.set_g_has_sel(true);
@@ -1934,6 +1944,7 @@ fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
     st.ox = 0.0;
     st.oy = 0.0;
     st.alpha = 1.0;
+    st.service = None; // visão GLOBAL (drill-down sai)
     st.project = proj.map(|p| p.to_path_buf());
     let Some(p) = proj else {
         return;
@@ -1969,6 +1980,62 @@ fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
     }
     st.fit_pending = true;
     st.refresh_flags();
+}
+
+/// Drill-down: carrega o grafo DETALHADO de UM microserviço (`.schematize/grafos/<servico>.md`)
+/// no estado. Devolve `true` se achou/carregou (nós > 0); `false` se não há grafo detalhado desse
+/// serviço — nesse caso o chamador mantém a visão atual e avisa (não zera a tela à toa).
+fn load_service_into(st: &mut GraphState, proj: Option<&Path>, servico: &str) -> bool {
+    let Some(p) = proj else {
+        return false;
+    };
+    let (nodes, edges) = panel::load_service_graph(p, servico);
+    if nodes.is_empty() {
+        return false;
+    }
+    st.nodes.clear();
+    st.edges.clear();
+    st.descs.clear();
+    st.sel = None;
+    st.search.clear();
+    st.drag_node = None;
+    st.moved = false;
+    st.scale = 1.0;
+    st.ox = 0.0;
+    st.oy = 0.0;
+    st.alpha = 1.0;
+    st.service = Some(servico.to_string());
+    st.project = Some(p.to_path_buf());
+    st.descs = panel::node_descriptions(p);
+    let mut id_to_idx: HashMap<String, usize> = HashMap::new();
+    for (i, n) in nodes.iter().enumerate() {
+        id_to_idx.insert(n.id.clone(), i);
+        let a = i as f32 * 2.399_963;
+        let r = 40.0 + 9.0 * (i as f32).sqrt();
+        st.nodes.push(GNode {
+            id: n.id.clone(),
+            loc: n.loc.clone(),
+            label: trunc_label(&n.id),
+            x: a.cos() * r,
+            y: a.sin() * r,
+            vx: 0.0,
+            vy: 0.0,
+            deg: 0.0,
+            selected: false,
+            hot: false,
+            dim: false,
+        });
+    }
+    for e in &edges {
+        if let (Some(&a), Some(&b)) = (id_to_idx.get(&e.from), id_to_idx.get(&e.to)) {
+            st.edges.push((a, b));
+            st.nodes[a].deg += 1.0;
+            st.nodes[b].deg += 1.0;
+        }
+    }
+    st.fit_pending = true;
+    st.refresh_flags();
+    true
 }
 
 /// (Re)liga o Timer da fÃ­sica se estiver parado. O tick roda um passo, sincroniza,
@@ -3579,6 +3646,51 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         });
     }
+    // Drill-down: abre o grafo DETALHADO do microserviço do nó selecionado
+    // (`.schematize/grafos/<servico>.md`). Sem grafo detalhado desse serviço → avisa e mantém a visão.
+    {
+        let weak = app.as_weak();
+        let gt = graph_timer.clone();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_drill(move || {
+            let (proj, servico) = {
+                let st = gs.borrow();
+                let servico = st.sel.map(|i| st.nodes[i].id.clone());
+                (st.project.clone(), servico)
+            };
+            let Some(servico) = servico else { return };
+            let carregou = load_service_into(&mut gs.borrow_mut(), proj.as_deref(), &servico);
+            if let Some(app) = weak.upgrade() {
+                if carregou {
+                    graph_sync(&app, &gs.borrow(), &gn, &ge);
+                    graph_kick(&gt, weak.clone(), gs.clone(), gn.clone(), ge.clone());
+                    app.set_g_reindex_status(SharedString::new());
+                } else {
+                    app.set_g_reindex_status(
+                        tor("gui.g_no_service_graph", "sem grafo detalhado para este serviço (rode Reindexar).")
+                            .into(),
+                    );
+                }
+            }
+        });
+    }
+    // Volta da visão por-serviço para o GRAFO GLOBAL da aplicação.
+    {
+        let weak = app.as_weak();
+        let gt = graph_timer.clone();
+        let gs = graph_state.clone();
+        let gn = graph_nodes.clone();
+        let ge = graph_edges.clone();
+        app.on_graph_global(move || {
+            let proj = gs.borrow().project.clone();
+            graph_load_and_kick(proj.as_deref(), &gt, &weak, &gs, &gn, &ge);
+            if let Some(app) = weak.upgrade() {
+                app.set_g_reindex_status(SharedString::new());
+            }
+        });
+    }
     // "x" do bloco de info â deseleciona o nÃ³ (fecha o bloco) e ressincroniza.
     {
         let weak = app.as_weak();
@@ -4556,6 +4668,41 @@ fn main() -> Result<(), slint::PlatformError> {
             });
         });
     }
+
+    // Gestor de atualizações (schematize-updater): checa na ABERTURA se está instalado; se faltar,
+    // a UI mostra o prompt "instalar". Cobre instalação limpa E update — sem o updater, o update
+    // central não roda. O botão baixa o binário do updater (ensure_updater) numa thread.
+    {
+        let weak = app.as_weak();
+        app.on_install_updater(move || {
+            let Some(app) = weak.upgrade() else { return };
+            if app.get_updater_installing() {
+                return;
+            }
+            app.set_updater_installing(true);
+            app.set_updater_status(SharedString::new());
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let res = selfupdate::ensure_updater();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        app.set_updater_installing(false);
+                        match res {
+                            Ok(_p) => {
+                                app.set_updater_missing(false);
+                                app.set_updater_status(
+                                    tor("gui.updater_installed", "Gestor de atualizações instalado.").into(),
+                                );
+                            }
+                            Err(e) => app.set_updater_status(tf("err.prefix", &[("e", &e)]).into()),
+                        }
+                    }
+                });
+            });
+        });
+    }
+    // Estado inicial do prompt: o updater está presente?
+    app.set_updater_missing(selfupdate::updater_bin().is_none());
 
     // ==================== Sininho de notificaÃ§Ãµes ====================
     // Os modelos (Global/Pessoal) sÃ£o REMONTADOS no event loop a cada abertura (nÃ£o

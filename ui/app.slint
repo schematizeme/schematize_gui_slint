@@ -301,6 +301,8 @@ export global L {
     in-out property <string> g-no-loc;             // "sem arquivo:linha no índice"
     in-out property <string> g-reindex;            // "Reindexar" (dispara o índice §39 num terminal)
     in-out property <string> g-reload;             // "Recarregar" (re-roda load_graph + descrições)
+    in-out property <string> g-drill;              // "Grafo do serviço" (drill-down no nó selecionado)
+    in-out property <string> g-global;             // "← Grafo global" (volta da visão por-serviço)
     in-out property <string> g-node-nodesc;        // "(sem descrição no índice — rode Reindexar)"
     // ---- Home + navegação (Fase 1 do redesenho) ----
     in-out property <string> home;                   // breadcrumb de volta ("Início")
@@ -398,6 +400,8 @@ export global L {
     in-out property <string> app-updating;            // "Atualizando…"
     in-out property <string> app-restart-hint;        // "Atualização concluída — reinicie o app."
     in-out property <string> app-restart;             // "Reiniciar"
+    in-out property <string> updater-missing-msg;     // "O gestor de atualizações não está instalado."
+    in-out property <string> updater-install-btn;     // "Instalar gestor de atualizações"
 
     // ---- sininho de notificações ----
     in-out property <string> notif-title;             // "Notificações"
@@ -481,18 +485,21 @@ export global L {
 export global Theme {
     in-out property <bool> dark: true;
 
-    out property <color> bg:        dark ? #14161c : #f4f6fb;
+    // Light REBALANCEADO pra contraste (o dark já estava ótimo, intacto): fundo um pouco mais fundo
+    // pra as superfícies brancas destacarem, bordas visíveis, texto-dim bem mais escuro (era #6b7280,
+    // borderline), acento mais forte.
+    out property <color> bg:        dark ? #14161c : #e8ecf4;
     out property <color> surface:   dark ? #1b1e27 : #ffffff;
-    out property <color> surface-2: dark ? #222634 : #eef1f8;
-    out property <color> stripe:    dark ? #1e222d : #f8fafd;
-    out property <color> border:    dark ? #2b3040 : #dfe4ee;
-    out property <color> text:      dark ? #e6e9f2 : #1a1e2b;
-    out property <color> text-dim:  dark ? #8a90a2 : #6b7280;
+    out property <color> surface-2: dark ? #222634 : #dce3f0;
+    out property <color> stripe:    dark ? #1e222d : #eef2f9;
+    out property <color> border:    dark ? #2b3040 : #bfc9dc;
+    out property <color> text:      dark ? #e6e9f2 : #12151d;
+    out property <color> text-dim:  dark ? #8a90a2 : #475062;
     out property <color> accent:    #5b8cff;
-    out property <color> accent-soft: dark ? #2a3a66 : #dfe8ff;
+    out property <color> accent-soft: dark ? #2a3a66 : #cedcff;
     out property <color> good:      #3ecf8e;
     out property <color> warn:      #e6b23a;
-    out property <color> header-fg: dark ? #9db4ff : #3a5bd0;
+    out property <color> header-fg: dark ? #9db4ff : #2b48bd;
 }
 
 // Selo verificado: check pequeno (círculo de acento + ✓) + tooltip no hover.
@@ -1545,6 +1552,10 @@ export component AppWindow inherits Window {
     in property <string> app-version;                  // "schematize v0.25.1" (montado no Rust)
     in-out property <bool> app-checking: false;        // checagem de update em andamento
     in-out property <string> app-update-status;        // linha de resultado ("atualizado" / erro)
+    in-out property <bool> updater-missing: false;     // o schematize-updater NÃO está instalado
+    in-out property <bool> updater-installing: false;  // instalação do updater em andamento
+    in-out property <string> updater-status;           // resultado da instalação do updater
+    callback install-updater();                        // baixa+instala o schematize-updater
     in-out property <bool> app-has-update: false;      // há versão nova?
     in-out property <bool> app-updating: false;        // self-update em andamento
     in-out property <bool> app-update-done: false;     // update concluído → sugerir reiniciar
@@ -1608,6 +1619,8 @@ export component AppWindow inherits Window {
     in-out property <string> g-sel-id;
     in-out property <string> g-sel-loc;      // "" = nó sem arquivo:linha
     in-out property <string> g-sel-desc;     // descrição do nó (do índice/MAPA); "" = sem descrição
+    in-out property <bool> g-in-service: false;  // true = vendo o grafo detalhado de UM microserviço
+    in-out property <string> g-service-name;     // nome do serviço em drill-down (título da visão)
     in-out property <string> g-reindex-status; // banner: "índice rodando no terminal <nome>…" / erro
     // Ponteiro/roda → Rust (coords relativas ao canvas, em px). O Rust faz o
     // hit-test (mundo), decide pan-vs-arrasto-de-nó e escreve a transformação.
@@ -1624,6 +1637,8 @@ export component AppWindow inherits Window {
     callback graph-reindex();                 // dispara o índice §39 num terminal externo (thread)
     callback graph-reload();                  // re-roda load_graph + node_descriptions e atualiza a UI
     callback graph-clear-sel();               // fecha o bloco de info do nó (deseleciona)
+    callback graph-drill();                   // drill-down: abre o grafo detalhado do serviço selecionado
+    callback graph-global();                  // volta da visão por-serviço para o grafo global
 
     // ==================== Database builder (tela 6) ====================
     // Sub-seção ativa: 0 = Conectar, 1 = Schema, 2 = Gerar, 3 = Grafo.
@@ -2208,6 +2223,41 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
+                        // Gestor de atualizações ausente → pede pra instalar (na abertura o app seta
+                        // updater-missing). Cobre instalação limpa E update: sem ele, o update central falha.
+                        if root.updater-missing: Rectangle {
+                            background: Theme.surface-2;
+                            border-radius: 8px;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            VerticalLayout {
+                                padding: 10px;
+                                spacing: 8px;
+                                Text {
+                                    text: L.updater-missing-msg;
+                                    font-size: 12.5px;
+                                    font-weight: 600;
+                                    color: Theme.text;
+                                    wrap: word-wrap;
+                                }
+                                if root.updater-status != "": Text {
+                                    text: root.updater-status;
+                                    font-size: 12px;
+                                    color: Theme.text-dim;
+                                    wrap: word-wrap;
+                                }
+                                HorizontalLayout {
+                                    alignment: start;
+                                    Btn {
+                                        label: root.updater-installing ? L.app-updating : L.updater-install-btn;
+                                        primary: true;
+                                        small: true;
+                                        enabled: !root.updater-installing;
+                                        clicked => { root.install-updater(); }
+                                    }
+                                }
+                            }
+                        }
                         // resultado da checagem (atualizado / erro / nova versão).
                         if root.app-update-status != "": Text {
                             text: root.app-update-status;
@@ -2263,6 +2313,11 @@ export component AppWindow inherits Window {
                             }
                             lgdd := TouchArea { mouse-cursor: pointer; clicked => { lgpop.show(); } }
                             lgpop := PopupWindow {
+                                // Sem isto, a política padrão `close-on-click` fecha o popup no PRESS e
+                                // o Flickable do ScrollView engole o gesto — o `clicked` (release) do
+                                // item nunca dispara e o idioma não troca. `close-on-click-outside`
+                                // só fecha ao clicar FORA, deixando o clique no item chegar ao callback.
+                                close-policy: close-on-click-outside;
                                 x: 0;
                                 y: parent.height + 4px;
                                 width: 260px;
@@ -2584,6 +2639,7 @@ export component AppWindow inherits Window {
                             }
                             tsel := TouchArea { mouse-cursor: pointer; clicked => { tselpop.show(); } }
                             tselpop := PopupWindow {
+                                close-policy: close-on-click-outside; // vide lgpop: ScrollView+close-on-click engole o clique
                                 x: 0; y: parent.height + 4px; width: 220px;
                                 Rectangle {
                                     background: Theme.surface; border-width: 1px; border-color: Theme.border; border-radius: 10px;
@@ -2832,6 +2888,16 @@ export component AppWindow inherits Window {
                         alignment: center;
                         // re-roda load_graph + node_descriptions e atualiza a UI (após reindexar).
                         Btn { label: L.g-reload; small: true; enabled: root.od-has-project; clicked => { root.graph-reload(); } }
+                    }
+                    // Drill-down: abre o grafo detalhado do microserviço selecionado (só na visão global,
+                    // com um nó selecionado). Na visão por-serviço, vira o botão de VOLTAR ao global.
+                    if !root.g-in-service: VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.g-drill; small: true; enabled: root.g-has-sel; clicked => { root.graph-drill(); } }
+                    }
+                    if root.g-in-service: VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.g-global; small: true; enabled: true; clicked => { root.graph-global(); } }
                     }
                     VerticalLayout {
                         alignment: center;
@@ -3787,6 +3853,7 @@ export component AppWindow inherits Window {
                             }
                             skdd := TouchArea { mouse-cursor: pointer; clicked => { skpop.show(); } }
                             skpop := PopupWindow {
+                                close-policy: close-on-click-outside; // vide lgpop: ScrollView+close-on-click engole o clique
                                 x: 0;
                                 y: parent.height + 4px;
                                 width: 268px;
