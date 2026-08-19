@@ -1403,6 +1403,20 @@ fn refresh_proj_models(
 
 /// Carrega o estado do overdev do `proj` (ou limpa se None) nas propriedades do app.
 /// Espelha o overdev_view do egui: objetivo, mode, progresso, checklist e seÃ§Ãµes.
+/// Recomputa o orçamento do governador de concorrência e joga nos props da GUI (linha "máquina:
+/// teto/livre/load/rodando" + clampa o K do split ao teto). Persiste ~/.schematize/agents.json.
+fn apply_agent_budget(app: &AppWindow) {
+    let b = schematize::agents::budget();
+    let _ = schematize::agents::persist(&b);
+    app.set_od_agent_cap(b.total_cap as i32);
+    app.set_od_agent_avail(b.available as i32);
+    app.set_od_agent_running(b.snap.running_claudes as i32);
+    app.set_od_agent_load(format!("{:.2}", b.snap.load1).into());
+    let cap = (b.total_cap as i32).max(2);
+    let k = app.get_od_split_k().clamp(2, cap);
+    app.set_od_split_k(k);
+}
+
 fn load_overdev_into(app: &AppWindow, items: &VecModel<OverItem>, proj: Option<&Path>) {
     let Some(p) = proj else {
         app.set_od_has_project(false);
@@ -1415,6 +1429,7 @@ fn load_overdev_into(app: &AppWindow, items: &VecModel<OverItem>, proj: Option<&
         return;
     };
     app.set_od_has_project(true);
+    apply_agent_budget(app); // linha do governador (teto/livre/load) na aba Overdev
     app.set_od_current(basename_of(p).into());
     let ov = panel::load_overdev(p);
     // Checklist 2-nÃ­veis parseado direto (o panel::load_overdev do lib ignora os
@@ -3108,6 +3123,72 @@ fn main() -> Result<(), slint::PlatformError> {
                 load_overdev_into(&app, &items, p.as_deref());
                 graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
                 app.invoke_od_refresh_history();
+            }
+        });
+    }
+    // Governador de concorrência: "Rechecar" recomputa o teto (CPU/RAM/load − claudes-da-máquina).
+    {
+        let weak = app.as_weak();
+        app.on_od_refresh_agents(move || {
+            if let Some(app) = weak.upgrade() {
+                apply_agent_budget(&app);
+            }
+        });
+    }
+    // Split multiagent: divide o checklist em K parts (checklist/part-NN.md) respeitando o teto do
+    // governador; com dispatch, lança K claudes (um por fatia), cada um limitado a subagents_each.
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.on_od_split(move |k, dispatch| {
+            let Some(app) = weak.upgrade() else { return };
+            let Some(project) = cur.borrow().clone() else {
+                app.set_od_split_status("Selecione um projeto primeiro.".into());
+                return;
+            };
+            let k = (k.max(2)) as usize;
+            let b = schematize::agents::budget();
+            if k > b.total_cap {
+                app.set_od_split_status(
+                    format!("{k} claudes passa do teto seguro ({}). Reduza o K.", b.total_cap).into(),
+                );
+                return;
+            }
+            match schematize::overdev::split(&project, k) {
+                Ok(res) => {
+                    let plan = b.split_plan(k);
+                    let mut msg = format!(
+                        "✓ {} itens em {} parte(s) (checklist/part-*.md) · {} subagents por claude.",
+                        res.moved,
+                        res.parts.len(),
+                        plan.subagents_each
+                    );
+                    if dispatch {
+                        if b.available < k {
+                            msg.push_str(&format!(" NÃO lancei: só {} slot(s) livre(s) agora.", b.available));
+                        } else {
+                            let mut ok = 0;
+                            for f in &res.parts {
+                                let rel = f.strip_prefix(&project).unwrap_or(f);
+                                let prompt = format!(
+                                    "Rode o overdev deste projeto cuidando APENAS de `{}` (sua fatia do split). \
+                                     Feche TODOS os itens `- [ ]` dele com prova. Você pode usar até {} subagents \
+                                     em paralelo — NÃO ultrapasse (há outros claudes nas outras fatias). Não toque \
+                                     nos outros part-*.md.",
+                                    rel.display(),
+                                    plan.subagents_each
+                                );
+                                if schematize::agentrun::launch_prompt_in_terminal(&project, &prompt).is_ok() {
+                                    ok += 1;
+                                }
+                            }
+                            msg.push_str(&format!(" Lancei {ok}/{} claude(s).", res.parts.len()));
+                        }
+                    }
+                    app.set_od_split_status(msg.into());
+                    apply_agent_budget(&app); // atualiza o "rodando/livre" após lançar
+                }
+                Err(e) => app.set_od_split_status(format!("split falhou: {e}").into()),
             }
         });
     }

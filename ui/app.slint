@@ -1530,6 +1530,15 @@ export component AppWindow inherits Window {
     callback od-open-vscode();          // abre o projeto atual no VSCode (code <root> / vscode://)
     callback od-reload();               // re-sonda dev_dirs + recarrega o projeto
     callback od-gen-from-archive();     // GERA afazeres pro overdev do histórico recuperável do archive
+    // ---- Split multiagent + governador de concorrência ----
+    in-out property <int> od-agent-cap: 0;        // teto seguro de claudes na máquina
+    in-out property <int> od-agent-avail: 0;      // disponível p/ lançar (teto − rodando)
+    in-out property <int> od-agent-running: 0;    // claudes rodando na máquina agora
+    in-out property <string> od-agent-load: "—";  // load average 1min (formatado)
+    in-out property <int> od-split-k: 2;          // K do split (claudes principais)
+    in-out property <string> od-split-status: ""; // feedback do último split
+    callback od-split(int, bool);       // divide o checklist em K parts; bool = também lançar (dispatch)
+    callback od-refresh-agents();       // recomputa o orçamento do governador
     callback od-add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
     callback od-remove-dev-dir(string); // remove um diretório de desenvolvimento
     callback od-pin-folder();           // fixa uma pasta como projeto (picker nativo → pin_project)
@@ -3208,6 +3217,50 @@ export component AppWindow inherits Window {
                                     color: Theme.text-dim;
                                     vertical-alignment: center;
                                 }
+                            }
+                        }
+                        // ---- Split multiagent + governador de concorrência (não travar o PC) ----
+                        Rectangle { height: 1px; background: Theme.border; }
+                        VerticalLayout {
+                            spacing: 8px;
+                            HorizontalLayout {
+                                spacing: 10px;
+                                Text {
+                                    text: "Multiagents (split)";
+                                    font-size: 13px; font-weight: 700; color: Theme.text;
+                                    vertical-alignment: center;
+                                }
+                                Rectangle {}
+                                Text {
+                                    text: "máquina: teto \{root.od-agent-cap} · livre \{root.od-agent-avail} · load \{root.od-agent-load} · \{root.od-agent-running} rodando";
+                                    font-size: 11.5px; color: Theme.text-dim;
+                                    vertical-alignment: center;
+                                }
+                                Btn { label: L.g-reload; small: true; clicked => { root.od-refresh-agents(); } }
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text { text: "dividir em:"; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                                Btn { label: "−"; small: true; enabled: root.od-split-k > 2; clicked => { root.od-split-k = max(2, root.od-split-k - 1); } }
+                                Text { text: "\{root.od-split-k}"; font-size: 15px; font-weight: 700; color: Theme.text; vertical-alignment: center; }
+                                Btn { label: "+"; small: true; enabled: root.od-split-k < root.od-agent-cap; clicked => { root.od-split-k = min(root.od-agent-cap, root.od-split-k + 1); } }
+                                Btn {
+                                    label: "Dividir";
+                                    small: true;
+                                    enabled: root.od-has-overdev && !root.od-session-running;
+                                    clicked => { root.od-split(root.od-split-k, false); }
+                                }
+                                Btn {
+                                    label: "Dividir + lançar";
+                                    primary: true;
+                                    small: true;
+                                    enabled: root.od-has-overdev && !root.od-session-running && root.od-agent-avail >= root.od-split-k;
+                                    clicked => { root.od-split(root.od-split-k, true); }
+                                }
+                            }
+                            if root.od-split-status != "": Text {
+                                text: root.od-split-status;
+                                font-size: 12px; color: Theme.text-dim; wrap: word-wrap;
                             }
                         }
                         // rótulo: o claude é um processo próprio num terminal externo.
