@@ -158,6 +158,7 @@ fn install_i18n(app: &AppWindow) {
     l.set_od_notes_title(tor("gui.od_notes", "Notas e correÃ§Ãµes").into());
     // aba Overdev â Fase 4 (terminal externo + monitor leve). Chaves NOVAS via `tor`.
     l.set_od_run(tor("gui.od_run", "Executar overdev").into());
+    l.set_od_gen_archive(tor("gui.od_gen_archive", "Gerar afazeres do archive").into());
     l.set_od_stop(tor("gui.od_stop", "Parar").into());
     l.set_od_running(tor("gui.od_running", "monitorandoâ¦").into());
     l.set_od_mon_active(tor("gui.od_mon_active", "rodando").into());
@@ -3098,6 +3099,41 @@ fn main() -> Result<(), slint::PlatformError> {
                 graph_load_and_kick(p.as_deref(), &gt, &weak, &gs, &gn, &ge);
                 app.invoke_od_refresh_history();
             }
+        });
+    }
+    // "Gerar afazeres do archive" — dispara a skill schematize-archive (/archive-todos) num terminal
+    // externo: varre o <projeto>_archive/ + git e deriva o .schematize/overdev/CHECKLIST.md do que
+    // ficou aberto/prometido-e-não-provado. O archive é criticidade 0 (a skill cria se faltar).
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.on_od_gen_from_archive(move || {
+            let root = cur.borrow().clone();
+            let Some(root) = root else {
+                if let Some(app) = weak.upgrade() {
+                    app.set_od_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
+                }
+                return;
+            };
+            if let Some(app) = weak.upgrade() {
+                app.set_od_run_status(
+                    tor("gui.od_gen_running", "Gerando afazeres do archive num terminal externo…").into(),
+                );
+            }
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let res = agentrun::launch_prompt_in_terminal(&root, &agentrun::archive_todos_prompt());
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(app) = weak.upgrade() {
+                        match res {
+                            Ok(term) => app.set_od_run_status(
+                                format!("{} {}", tor("gui.od_gen_ok", "gerando no terminal"), term).into(),
+                            ),
+                            Err(e) => app.set_od_run_status(e.into()),
+                        }
+                    }
+                });
+            });
         });
     }
     // cadastrar um diretÃ³rio de desenvolvimento (picker nativo).

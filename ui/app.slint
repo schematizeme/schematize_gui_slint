@@ -279,6 +279,7 @@ export global L {
     in-out property <string> od-notes-title;       // título "Notas e correções"
     // ---- aba Overdev — Fase 4 (terminal externo + monitor leve) ----
     in-out property <string> od-run;               // botão "Executar overdev"
+    in-out property <string> od-gen-archive;       // botão "Gerar afazeres do archive"
     in-out property <string> od-stop;              // botão "Parar"
     in-out property <string> od-running;           // pill de estado (monitor ligado)
     in-out property <string> od-mon-active;        // pill quando o run está "active"
@@ -1527,6 +1528,7 @@ export component AppWindow inherits Window {
     callback od-open-project-folder();  // abre a pasta do projeto atual no gerenciador de arquivos
     callback od-open-vscode();          // abre o projeto atual no VSCode (code <root> / vscode://)
     callback od-reload();               // re-sonda dev_dirs + recarrega o projeto
+    callback od-gen-from-archive();     // GERA afazeres pro overdev do histórico recuperável do archive
     callback od-add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
     callback od-remove-dev-dir(string); // remove um diretório de desenvolvimento
     callback od-pin-folder();           // fixa uma pasta como projeto (picker nativo → pin_project)
@@ -3050,12 +3052,13 @@ export component AppWindow inherits Window {
                     }
                 }
             }
-            // Empty-state: projeto sem run de overdev.
+            // Empty-state: projeto sem run de overdev — oferece GERAR afazeres do archive recuperável.
             if root.od-has-project && !root.od-has-overdev: VerticalLayout {
                 alignment: center;
+                spacing: 14px;
+                padding: 24px;
                 HorizontalLayout {
                     alignment: center;
-                    padding: 24px;
                     Text {
                         text: L.no-overdev;
                         font-size: 13px;
@@ -3063,6 +3066,20 @@ export component AppWindow inherits Window {
                         wrap: word-wrap;
                         horizontal-alignment: center;
                     }
+                }
+                HorizontalLayout {
+                    alignment: center;
+                    Btn {
+                        label: L.od-gen-archive;
+                        primary: true;
+                        small: true;
+                        enabled: root.od-has-project;
+                        clicked => { root.od-gen-from-archive(); }
+                    }
+                }
+                if root.od-run-status != "": HorizontalLayout {
+                    alignment: center;
+                    Text { text: root.od-run-status; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; horizontal-alignment: center; }
                 }
             }
             // Estado do overdev: objetivo + progresso + checklist + seções.
