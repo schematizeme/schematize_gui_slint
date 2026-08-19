@@ -1014,6 +1014,58 @@ component ReloadIcon inherits Rectangle {
 //   Projeto: [dropdown] · [Abrir pasta] · [Abrir no VSCode] · [⟳] · [Diretórios de dev]
 // Recebe o modelo/projeto atual e emite callbacks; a gestão de dev_dirs mora num
 // MODAL (fora daqui) — esta barra só ABRE o modal via `manage-dirs`.
+// Botão-ÍCONE compacto: glifo VETORIAL (Path) + tooltip no hover. Mesma linguagem do ReloadIcon —
+// sem emoji (regra da casa), ocupa 34px em vez de um botão de texto largo.
+component IconBtn inherits Rectangle {
+    in property <string> commands;   // path SVG do glifo (viewbox 24x24)
+    in property <string> tip;        // tooltip
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: ib.has-hover && root.enabled ? Theme.surface-2 : Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    opacity: root.enabled ? 1.0 : 0.45;
+    animate background { duration: 120ms; }
+    Path {
+        width: 18px;
+        height: 18px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        commands: root.commands;
+        fill: transparent;
+        stroke: ib.has-hover && root.enabled ? Theme.text : Theme.text-dim;
+        stroke-width: 2px;
+    }
+    ib := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+    if ib.has-hover && root.tip != "": Rectangle {
+        y: parent.height + 4px;
+        x: (parent.width - self.width) / 2;
+        height: 22px;
+        width: tipt.preferred-width + 16px;
+        border-radius: 6px;
+        background: Theme.surface-2;
+        border-width: 1px;
+        border-color: Theme.border;
+        tipt := Text {
+            text: root.tip;
+            color: Theme.text;
+            font-size: 11px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
 component ProjectBar inherits Rectangle {
     in property <[ProjItem]> projects;
     in property <string> current;
@@ -1119,26 +1171,40 @@ component ProjectBar inherits Rectangle {
                 }
             }
         }
-        Text { text: "·"; color: Theme.text-dim; vertical-alignment: center; }
         VerticalLayout {
             alignment: center;
-            Btn { label: L.open-folder; small: true; enabled: root.current != ""; clicked => { root.open-folder(); } }
-        }
-        VerticalLayout {
-            alignment: center;
-            Btn { label: L.open-vscode; small: true; enabled: root.current != ""; clicked => { root.open-vscode(); } }
-        }
-        VerticalLayout {
-            alignment: center;
-            ReloadIcon { clicked => { root.reload(); } }
-        }
-        Text { text: "·"; color: Theme.text-dim; vertical-alignment: center; }
-        VerticalLayout {
-            alignment: center;
-            Btn { label: L.dev-dirs; small: true; clicked => { root.manage-dirs(); } }
-            // Abre o projeto atual em OUTRA janela (processo próprio) — pra rodar overdevs de
-            // projetos diferentes em paralelo, cada um isolado (zero vazamento de estado).
-            Btn { label: "↗ Nova janela"; small: true; enabled: root.current != ""; clicked => { root.new-window(); } }
+            HorizontalLayout {
+                spacing: 6px;
+                // Abrir pasta (folder)
+                IconBtn {
+                    commands: "M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z";
+                    tip: L.open-folder;
+                    enabled: root.current != "";
+                    clicked => { root.open-folder(); }
+                }
+                // Abrir no VSCode (chevrons de código)
+                IconBtn {
+                    commands: "M9 8l-4 4 4 4 M15 8l4 4-4 4";
+                    tip: L.open-vscode;
+                    enabled: root.current != "";
+                    clicked => { root.open-vscode(); }
+                }
+                // Recarregar (já é ícone)
+                ReloadIcon { clicked => { root.reload(); } }
+                // Diretórios de desenvolvimento (folder +)
+                IconBtn {
+                    commands: "M3 7a1 1 0 0 1 1-1h4l2 2h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z M12 11v5 M9.5 13.5h5";
+                    tip: L.dev-dirs;
+                    clicked => { root.manage-dirs(); }
+                }
+                // Abrir em nova janela (overdev paralelo — processo isolado)
+                IconBtn {
+                    commands: "M13 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7 M14 4h6v6 M20 4l-8 8";
+                    tip: "Nova janela (overdev paralelo)";
+                    enabled: root.current != "";
+                    clicked => { root.new-window(); }
+                }
+            }
         }
         Rectangle {}
     }
@@ -1764,17 +1830,13 @@ export component AppWindow inherits Window {
                     VerticalLayout {
                         alignment: center;
                         logobox := VerticalLayout {
+                            alignment: center;
                             Text {
                                 text: "schematize";
-                                font-size: 24px;
+                                font-size: 22px;
                                 font-weight: 800;
                                 color: logota.has-hover ? Theme.header-fg : Theme.text;
                                 animate color { duration: 120ms; }
-                            }
-                            Text {
-                                text: L.subtitle;
-                                font-size: 12.5px;
-                                color: Theme.text-dim;
                             }
                         }
                     }
@@ -1793,14 +1855,9 @@ export component AppWindow inherits Window {
                             padding-left: 10px;
                             padding-right: 12px;
                             spacing: 6px;
-                            Text { text: "‹"; font-size: 16px; color: Theme.text-dim; vertical-alignment: center; }
+                            Text { text: "←"; font-size: 15px; color: Theme.header-fg; vertical-alignment: center; }
                             Text {
-                                text: root.screen == 1 ? L.home-market
-                                    : root.screen == 2 ? L.tab-overdev
-                                    : root.screen == 3 ? L.tab-graph
-                                    : root.screen == 4 ? L.home-ssh
-                                    : root.screen == 5 ? L.home-settings
-                                    : root.screen == 6 ? L.home-database : "";
+                                text: "Voltar";
                                 font-size: 14px;
                                 font-weight: 700;
                                 color: Theme.header-fg;
@@ -3085,7 +3142,7 @@ export component AppWindow inherits Window {
             // Empty-state: projeto sem run de overdev — oferece GERAR afazeres do archive recuperável.
             // Ações declaradas por skills instaladas (Q.A., Pentest, …) — aparecem quando a skill
             // tem gui.json. Visível sempre que há um projeto (com ou sem overdev).
-            if root.od-has-project && root.skill-actions.length > 0: VerticalLayout {
+            if root.od-has-project && !root.od-has-overdev && root.skill-actions.length > 0: VerticalLayout {
                 padding-left: 20px;
                 padding-right: 20px;
                 padding-top: 14px;
@@ -3261,48 +3318,54 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
-                        // ---- Split multiagent + governador de concorrência (não travar o PC) ----
+                        // ---- 3 colunas: Ações de skills · Multiagents · Sistema ----
                         Rectangle { height: 1px; background: Theme.border; }
-                        VerticalLayout {
-                            spacing: 8px;
-                            HorizontalLayout {
-                                spacing: 10px;
-                                Text {
-                                    text: "Multiagents (split)";
-                                    font-size: 13px; font-weight: 700; color: Theme.text;
-                                    vertical-alignment: center;
-                                }
-                                Rectangle {}
-                                Text {
-                                    text: "máquina: teto \{root.od-agent-cap} · livre \{root.od-agent-avail} · load \{root.od-agent-load} · \{root.od-agent-running} rodando";
-                                    font-size: 11.5px; color: Theme.text-dim;
-                                    vertical-alignment: center;
-                                }
-                                Btn { label: L.g-reload; small: true; clicked => { root.od-refresh-agents(); } }
-                            }
-                            HorizontalLayout {
+                        HorizontalLayout {
+                            spacing: 16px;
+                            // COL 1 — Ações de skills (Q.A., Pentest, … via gui.json)
+                            VerticalLayout {
+                                horizontal-stretch: 1;
                                 spacing: 8px;
-                                Text { text: "dividir em:"; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
-                                Btn { label: "−"; small: true; enabled: root.od-split-k > 2; clicked => { root.od-split-k = max(2, root.od-split-k - 1); } }
-                                Text { text: "\{root.od-split-k}"; font-size: 15px; font-weight: 700; color: Theme.text; vertical-alignment: center; }
-                                Btn { label: "+"; small: true; enabled: root.od-split-k < root.od-agent-cap; clicked => { root.od-split-k = min(root.od-agent-cap, root.od-split-k + 1); } }
-                                Btn {
-                                    label: "Dividir";
-                                    small: true;
-                                    enabled: root.od-has-overdev && !root.od-session-running;
-                                    clicked => { root.od-split(root.od-split-k, false); }
-                                }
-                                Btn {
-                                    label: "Dividir + lançar";
-                                    primary: true;
-                                    small: true;
-                                    enabled: root.od-has-overdev && !root.od-session-running && root.od-agent-avail >= root.od-split-k;
-                                    clicked => { root.od-split(root.od-split-k, true); }
+                                Text { text: "Ações de skills"; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    for a in root.skill-actions: Btn {
+                                        label: a.label;
+                                        small: true;
+                                        enabled: !a.needs-project || root.od-has-project;
+                                        clicked => { root.run-skill-action(a.command); }
+                                    }
+                                    Rectangle {}
                                 }
                             }
-                            if root.od-split-status != "": Text {
-                                text: root.od-split-status;
-                                font-size: 12px; color: Theme.text-dim; wrap: word-wrap;
+                            // COL 2 — Multiagents (split)
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 8px;
+                                Text { text: "Multiagents (split)"; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    Text { text: "dividir em"; font-size: 12px; color: Theme.text-dim; vertical-alignment: center; }
+                                    Btn { label: "−"; small: true; enabled: root.od-split-k > 2; clicked => { root.od-split-k = max(2, root.od-split-k - 1); } }
+                                    Text { text: "\{root.od-split-k}"; font-size: 15px; font-weight: 700; color: Theme.text; vertical-alignment: center; }
+                                    Btn { label: "+"; small: true; enabled: root.od-split-k < root.od-agent-cap; clicked => { root.od-split-k = min(root.od-agent-cap, root.od-split-k + 1); } }
+                                    Btn { label: "Dividir"; small: true; enabled: root.od-has-overdev && !root.od-session-running; clicked => { root.od-split(root.od-split-k, false); } }
+                                    Btn { label: "Dividir + lançar"; primary: true; small: true; enabled: root.od-has-overdev && !root.od-session-running && root.od-agent-avail >= root.od-split-k; clicked => { root.od-split(root.od-split-k, true); } }
+                                    Rectangle {}
+                                }
+                                if root.od-split-status != "": Text { text: root.od-split-status; font-size: 11px; color: Theme.text-dim; wrap: word-wrap; }
+                            }
+                            // COL 3 — Sistema (governador de concorrência)
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 6px;
+                                Text { text: "Sistema"; font-size: 12px; font-weight: 700; color: Theme.text-dim; }
+                                Text { text: "teto \{root.od-agent-cap} · livre \{root.od-agent-avail}"; font-size: 12px; font-weight: 600; color: Theme.text; }
+                                Text { text: "load \{root.od-agent-load} · \{root.od-agent-running} rodando"; font-size: 11.5px; color: Theme.text-dim; }
+                                HorizontalLayout {
+                                    Btn { label: L.g-reload; small: true; clicked => { root.od-refresh-agents(); } }
+                                    Rectangle {}
+                                }
                             }
                         }
                         // rótulo: o claude é um processo próprio num terminal externo.
