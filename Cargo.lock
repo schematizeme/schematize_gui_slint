@@ -4381,6 +4381,7 @@ name = "schematize-gui-slint"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "i-slint-backend-winit",
  "rfd",
  "schematize",
  "serde_json",

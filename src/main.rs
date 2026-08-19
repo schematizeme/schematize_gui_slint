@@ -1417,6 +1417,28 @@ fn skill_action_rows() -> Vec<SkillAction> {
         .collect()
 }
 
+/// Seta o app_id (Wayland) / WM_CLASS (X11) da janela = "schematize-gui" ANTES de criá-la, instalando
+/// um backend winit com `with_window_attributes_hook`. No Wayland (KDE/GNOME) o compositor IGNORA o
+/// ícone-buffer da janela e casa pelo app_id ao `schematize-gui.desktop` pra achar o ícone — sem isto
+/// o dock mostra um fallback genérico ("W"). Linux só; macOS/Windows pegam o ícone do bundle/.exe.
+#[cfg(target_os = "linux")]
+fn set_window_app_id() {
+    use i_slint_backend_winit::winit::platform::wayland::WindowAttributesExtWayland;
+    use i_slint_backend_winit::winit::platform::x11::WindowAttributesExtX11;
+    let built = i_slint_backend_winit::Backend::builder()
+        .with_window_attributes_hook(|attrs| {
+            // `general` = app_id (Wayland) / res_class (X11). Bate com schematize-gui.desktop.
+            let attrs = WindowAttributesExtWayland::with_name(attrs, "schematize-gui", "schematize-gui");
+            WindowAttributesExtX11::with_name(attrs, "schematize-gui", "schematize-gui")
+        })
+        .build();
+    if let Ok(backend) = built {
+        let _ = slint::platform::set_platform(Box::new(backend));
+    }
+}
+#[cfg(not(target_os = "linux"))]
+fn set_window_app_id() {}
+
 /// Ícone da janela desenhado em código (`schematize::appicon::rgba`) — resiliente: não depende de
 /// arquivo (não some nem quebra o build), e sai nítido em qualquer tamanho (antialiasing no lib).
 fn make_app_icon() -> slint::Image {
@@ -2377,6 +2399,7 @@ fn refresh_od_history(
 
 fn main() -> Result<(), slint::PlatformError> {
     detect_display_env();
+    set_window_app_id();
 
     let items = registry::catalog();
     eprintln!("[catalog] {} skills (via schematize::registry::catalog)", items.len());

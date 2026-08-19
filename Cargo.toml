@@ -22,6 +22,10 @@ slint = { version = "1.17", default-features = false, features = [
     "renderer-femtovg",
     "accessibility",
 ] }
+# Backend winit DIRETO (mesma versão do slint) só pra SETAR o app_id/WM_CLASS da janela =
+# "schematize-gui" via `with_window_attributes_hook` — no Wayland (KDE/GNOME) o compositor casa a
+# janela ao schematize-gui.desktop por app_id pra achar o ícone; sem isso o dock mostra um "W".
+i-slint-backend-winit = { version = "1.17", default-features = false, features = ["renderer-femtovg"] }
 # Reusa a LÓGICA do crate irmão (catálogo + install/remove/versões + i18n) SEM
 # a GUI egui: default-features=false NÃO ativa a feature `gui` (eframe/rfd ficam
 # de fora). Nada de reimplementar registry/skills/i18n aqui.
