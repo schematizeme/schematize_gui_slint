@@ -4364,8 +4364,8 @@ dependencies = [
 
 [[package]]
 name = "schematize"
-version = "0.38.2"
-source = "git+https://github.com/schematizeme/schematize-cli?branch=main#a3ff74808339c26078e7ac9457575bef689a4725"
+version = "0.39.1"
+source = "git+https://github.com/schematizeme/schematize-cli?branch=main#9eba72fe9a0826de54fd16c68e5701b7abe2cf7c"
 dependencies = [
  "clap",
  "notify-rust",
@@ -4378,7 +4378,7 @@ dependencies = [
 
 [[package]]
 name = "schematize-gui-slint"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "i-slint-backend-winit",
