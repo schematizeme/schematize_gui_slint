@@ -29,6 +29,12 @@ i-slint-backend-winit = { version = "1.17", default-features = false, features =
 # Reusa a LÓGICA do crate irmão (catálogo + install/remove/versões + i18n) SEM
 # a GUI egui: default-features=false NÃO ativa a feature `gui` (eframe/rfd ficam
 # de fora). Nada de reimplementar registry/skills/i18n aqui.
+# `default-features = false` deixa a GUI egui (feature `gui`: eframe/rfd) de fora —
+# a única GUI é esta. Mas isso também derruba o default `sqlite-embutido` do lib, e
+# sem ele o link procura a libsqlite3 do sistema. As duas features abaixo espelham
+# as do lib: `sqlite-embutido` (default aqui também) compila o SQLite no binário;
+# `sqlite-do-sistema` linka a da distro, e é o que o install.sh escolhe quando o
+# `libsqlite3-dev` está presente.
 schematize = { git = "https://github.com/schematizeme/schematize-cli", branch = "main", default-features = false }
 # Seletor de pasta NATIVO do sistema (aba Overdev: "Abrir pasta…" / dev_dirs).
 # Mesmo backend do egui: xdg-portal + wayland (funciona em Wayland/X11 via portal,
@@ -47,6 +53,11 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # está no grafo de deps (transitivo via `schematize`) — declarar não puxa crate novo.
 serde_json = "1"
 
+[features]
+default = ["sqlite-embutido"]
+sqlite-embutido = ["schematize/sqlite-embutido"]
+sqlite-do-sistema = ["schematize/sqlite-do-sistema"]
+
 [build-dependencies]
 slint-build = "1.17"
 
@@ -64,6 +75,11 @@ strip = true
 #   3               0,42 s              0,40 s             34,9 MB
 #
 # ~6x mais rápido por ~11 MB. Pra um app que o usuário abre o dia inteiro, o
-# tempo dele vale mais que o download. O CLI (processo curto, I/O) segue em `z`.
+# tempo dele vale mais que o download. Os repos irmãos usam o MESMO perfil (ver
+# abaixo) — é o que faz o target compartilhado do install.sh valer alguma coisa.
 opt-level = 3
-lto = true
+# `thin` em vez de `fat`: religa mais rápido a cada mudança, com o mesmo binário na
+# prática. E tem de bater com o perfil dos repos irmãos (CLI e updater-GUI) — o
+# install.sh compila os três num `CARGO_TARGET_DIR` único, e cargo só reaproveita
+# artefato quando o perfil é IDÊNTICO (226 deps são as mesmas nos três).
+lto = "thin"

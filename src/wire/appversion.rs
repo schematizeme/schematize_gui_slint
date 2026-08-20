@@ -6,6 +6,7 @@
 //! a lógica de verdade mora nos módulos irmãos.
 
 use crate::prelude::*;
+use schematize::updaterboot;
 use crate::wire::Ctx;
 
 /// Liga os callbacks deste recorte da UI.
@@ -110,7 +111,33 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
         });
     }
     // Estado inicial do prompt: o updater está presente?
-    app.global::<App>().set_updater_missing(selfupdate::updater_bin().is_none());
+    app.global::<App>().set_updater_missing(!updaterboot::present());
+    // ...e se FALTAR, instala SOZINHO em segundo plano. O botão continua ali (pra
+    // retentar na mão), mas ninguém deveria precisar dele: quem instalou o app não
+    // tem de saber que existe um gestor de atualizações separado — se ele não está
+    // na máquina, o update degrada pro fluxo interno e vira "cliquei e não
+    // aconteceu nada". Presente = só um stat (sem rede); ausente = uma tentativa,
+    // limitada por carimbo em disco (ver `updaterboot`), pra máquina offline não
+    // bater no GitHub a cada abertura.
+    if !updaterboot::present() {
+        let weak = app.as_weak();
+        std::thread::spawn(move || {
+            let outcome = updaterboot::ensure_now();
+            let _ = slint::invoke_from_event_loop(move || {
+                let Some(app) = weak.upgrade() else { return };
+                match outcome {
+                    updaterboot::Outcome::Instalado(_) | updaterboot::Outcome::JaTinha => {
+                        app.global::<App>().set_updater_missing(false);
+                        app.global::<App>().set_updater_status(
+                            tor("gui.updater_installed", "Gestor de atualizações instalado.").into(),
+                        );
+                    }
+                    // Adiado/Falhou: mantém o prompt visível pra tentativa manual.
+                    _ => app.global::<App>().set_updater_missing(true),
+                }
+            });
+        });
+    }
     // Startup: checa update do app em background pra a bolinha de update do header (versão) acender
     // sozinha, sem o usuário precisar clicar "Verificar atualização".
     {
