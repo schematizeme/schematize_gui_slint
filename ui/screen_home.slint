@@ -28,7 +28,9 @@ export component HomeScreen inherits VerticalLayout {
                 font-weight: 800;
                 color: Theme.text;
             }
-            // linha 1 — destinos ativos
+            // Grade 3x3, agrupada por INTENÇÃO — não por ordem de implementação:
+            // linha 1 = o trabalho no projeto · linha 2 = a máquina · linha 3 = o resto.
+            // linha 1 — o trabalho
             HorizontalLayout {
                 spacing: 18px;
                 HomeCard {
@@ -38,16 +40,6 @@ export component HomeScreen inherits VerticalLayout {
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M3 6h9 M3 12h9 M3 18h6 M15 6l2.2 2.2 4.3-4.3 M15 15l2.2 2.2 4.3-4.3";
-                        fill: transparent; stroke: Theme.accent; stroke-width: 2px;
-                    }
-                }
-                HomeCard {
-                    title: L.home-market;
-                    desc: L.home-market-desc;
-                    clicked => { root.screen = 1; }
-                    Path {
-                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
-                        commands: "M5 8h14l-1.3 12H6.3z M9 8a3 3 0 0 1 6 0";
                         fill: transparent; stroke: Theme.accent; stroke-width: 2px;
                     }
                 }
@@ -62,6 +54,56 @@ export component HomeScreen inherits VerticalLayout {
                     }
                 }
                 HomeCard {
+                    title: L.home-market;
+                    desc: L.home-market-desc;
+                    clicked => { root.screen = 1; }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M5 8h14l-1.3 12H6.3z M9 8a3 3 0 0 1 6 0";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 2px;
+                    }
+                }
+            }
+            // linha 2 — a máquina (o que sai daqui e o que ocupa espaço aqui)
+            HorizontalLayout {
+                spacing: 18px;
+                HomeCard {
+                    title: L.home-git;
+                    desc: L.home-git-desc;
+                    clicked => { root.screen = 8; }
+                    // ramo de git: dois nós na linha principal + um ramo que volta a ela.
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M7 4.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M7 19a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M15 8.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M9 6.5v10.5 M17 10.5v1.5a3 3 0 0 1-3 3h-5";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
+                    }
+                }
+                HomeCard {
+                    title: L.home-disk;
+                    desc: L.home-disk-desc;
+                    clicked => { root.screen = 7; }
+                    // disco: corpo, prato e trilhas.
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M3 6.5h18v11H3z M6 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0-3.2 0 M13 10h5 M13 14h5";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
+                    }
+                }
+                HomeCard {
+                    title: L.home-environments;
+                    desc: L.home-environments-desc;
+                    clicked => { root.screen = 1; root.active-tab = 2; Cfg.refresh(); }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M12 3l8 4.6v8.8L12 21l-8-4.6V7.6z M4.2 7.8L12 12l7.8-4.2 M12 12v9";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
+                    }
+                }
+            }
+            // linha 3 — o resto
+            HorizontalLayout {
+                spacing: 18px;
+                HomeCard {
                     title: L.home-database;
                     desc: L.home-database-desc;
                     clicked => { root.screen = 6; }
@@ -70,20 +112,6 @@ export component HomeScreen inherits VerticalLayout {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M4 6a8 3 0 1 0 16 0a8 3 0 1 0-16 0 M4 6v12a8 3 0 0 0 16 0V6 M4 12a8 3 0 0 0 16 0";
                         fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
-                    }
-                }
-            }
-            // linha 2 — futuros (placeholders "em breve")
-            HorizontalLayout {
-                spacing: 18px;
-                HomeCard {
-                    title: L.home-environments;
-                    desc: L.home-environments-desc;
-                    clicked => { root.screen = 1; root.active-tab = 2; Cfg.refresh(); }
-                    Path {
-                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
-                        commands: "M12 3l8 4.6v8.8L12 21l-8-4.6V7.6z M4.2 7.8L12 12l7.8-4.2 M12 12v9";
-                        fill: transparent; stroke: Theme.text-dim; stroke-width: 1.8px;
                     }
                 }
                 HomeCard {

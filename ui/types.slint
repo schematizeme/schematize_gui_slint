@@ -216,3 +216,79 @@ export struct DbTableRow {
 }
 
 // Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.
+
+// ---- Disco (tela 7) ---------------------------------------------------------
+// Um TOTAL agregado — serve às duas visões de cima da tela (por disco e por tipo).
+// Duas visões, um struct só: ambas são "um rótulo, um tamanho, e uma nota do que
+// custa refazer". `note` é o texto já montado no Rust (traduzido/legível).
+export struct DiscoTotal {
+    label: string,     // ponto de montagem ("/") ou rótulo do tipo ("target (Rust)")
+    size: string,      // tamanho já legível ("115,3 GB")
+    note: string,      // "compila de novo" / "baixa de novo" / caminho do disco
+    frac: float,       // 0..1 — fração do maior total, pra a barra proporcional
+}
+
+// Uma coisa apagável (espelha `disco::Achado`). `idx` é a posição na lista COMPLETA
+// do lado Rust — a UI só recebe a página visível, então o índice do repeater não
+// serve como argumento de ação.
+export struct DiscoRow {
+    idx: int,
+    path: string,
+    kind: string,      // rótulo do tipo ("target (Rust)")
+    size: string,      // legível
+    days: string,      // "49 dias parado"
+    mount: string,     // disco em que mora
+    refaz: string,     // como se refaz, em uma linha
+    net: bool,         // refazer custa REDE (baixar) — senão é CPU (compilar)
+    op-label: string,  // feedback transitório da linha ("apagando…" / erro)
+    op-error: bool,
+}
+
+// Uma categoria do `docker system df` + a poda correspondente, se houver.
+// `destructive` marca a poda de VOLUMES (volume é dado, não build).
+export struct DockerRow {
+    label: string,
+    size: string,        // ocupado, legível
+    reclaim: string,     // recuperável, legível
+    prune: string,       // rótulo da poda (arg da ação); vazio = linha só informativa
+    destructive: bool,
+    op-label: string,
+    op-error: bool,
+}
+
+// ---- Git (tela 8) -----------------------------------------------------------
+// Uma conta cadastrada (espelha `gitcontas::contas::Conta`). SEM SEGREDO: só o
+// NOME do arquivo de chave, nunca o conteúdo. `alias-ok` diz se o bloco do
+// ~/.ssh/config já existe — é o que faz o push sair pela identidade certa.
+export struct GitAccountRow {
+    rotulo: string,
+    usuario: string,
+    email: string,
+    servico: string,
+    auth: string,        // "ssh:<arquivo>" | "gh"
+    is-ssh: bool,
+    alias-ok: bool,
+    op-label: string,
+    op-error: bool,
+}
+
+// O estado local de um repositório (espelha `gitcontas::repos::EstadoLocal`).
+// `unpushed` é a informação central: commit que só existe NESTA máquina.
+export struct GitProjRow {
+    idx: int,
+    nome: string,
+    raiz: string,
+    conta: string,       // rótulo da conta em uso, ou "? <e-mail>" se nenhuma casa
+    known-account: bool, // a identidade do repo casa com alguma conta cadastrada?
+    remoto: string,
+    unpushed: int,
+    sujo: bool,
+}
+
+// Um repositório no serviço (espelha `gitcontas::repos::Remoto`).
+export struct GitRepoRow {
+    caminho: string,
+    privado: bool,
+    descricao: string,
+    atualizado: string,
+}

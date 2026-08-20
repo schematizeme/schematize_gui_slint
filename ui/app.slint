@@ -15,7 +15,7 @@ import { L } from "i18n.slint";
 import {
     GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
     LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
-    DbTableRow,
+    DbTableRow, DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow,
 } from "types.slint";
 import {
     VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
@@ -31,6 +31,8 @@ import { OverdevScreen } from "screen_overdev.slint";
 import { EnvsScreen } from "screen_envs.slint";
 import { SshScreen } from "screen_ssh.slint";
 import { SkillsScreen } from "screen_skills.slint";
+import { DiscoScreen } from "screen_disco.slint";
+import { GitScreen } from "screen_git.slint";
 import { InstallModal } from "modal_install.slint";
 import { DevDirsModal } from "modal_devdirs.slint";
 import { RunConfirmModal } from "modal_runconfirm.slint";
@@ -41,6 +43,8 @@ import { NotifModal } from "modal_notif.slint";
 import { AccountModal } from "modal_account.slint";
 import { CompareModal } from "modal_compare.slint";
 import { DbGenModal } from "modal_dbgen.slint";
+import { DiscoConfirmModal } from "modal_discoconfirm.slint";
+import { GitConfirmModal } from "modal_gitconfirm.slint";
 
 // Reexporta os globais que o RUST acessa (`app.global::<L>()`): só o que sai do
 // arquivo de entrada aparece na API gerada.
@@ -48,8 +52,8 @@ export { L } from "i18n.slint";
 export { Theme } from "theme.slint";
 // Estado de tela por área (globals). Reexportado porque o Rust acessa via
 // `app.global::<Od>()` — só o que sai do arquivo de entrada vira API gerada.
-import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
-export { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App } from "state.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
+export { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
 
 export component AppWindow inherits Window {
     title: L.window-title;
@@ -148,6 +152,10 @@ export component AppWindow inherits Window {
         // índice e simular a 60 fps num projeto grande travava o app inteiro quando
         // isso acontecia junto com a escolha do projeto na aba Overdev.
         if (root.screen == 3) { G.enter(); }
+        // Git: o resumo é barato o bastante pra abrir já preenchido (walk + git por
+        // repo, em thread). Disco NÃO: medir GB de árvore é caro e não pode disparar
+        // sozinho — a tela abre pedindo "Varrer".
+        if (root.screen == 8) { Gh.refresh(); }
     }
 
     VerticalLayout {
@@ -317,6 +325,19 @@ export component AppWindow inherits Window {
         // (4) grafo do schema (tabela=nó, FK=aresta) no MESMO GraphCanvas.
         if root.screen == 6: DatabaseScreen {  }
 
+        // ---- TELA DISCO (7) — o lixo recriável da máquina ------------------
+        // Inventário agrupado POR DISCO (a pergunta real é "o que está enchendo
+        // ESTE disco"), por tipo, e os maiores achados — cada um dizendo há quanto
+        // tempo está parado e como se refaz. Apagar exige confirmação e só passa
+        // dentro dos diretórios de dev cadastrados (a trava mora no lib).
+        if root.screen == 7: DiscoScreen {  }
+
+        // ---- TELA GIT (8) — contas, o que falta enviar, repositórios -------
+        // Contas cadastradas (sem segredo: só o NOME da chave), qual identidade
+        // vale em cada repo, quantos commits só existem NESTA máquina, e os
+        // repositórios do serviço via `gh`.
+        if root.screen == 8: GitScreen {  }
+
         // ---- barra de sub-abas do MERCADO (só na tela Mercado) --------
         if root.screen == 1: Rectangle {
             height: 50px;
@@ -430,4 +451,10 @@ export component AppWindow inherits Window {
     // ---- VISOR read-only do SQL/migration gerado (Database builder) -----
     // Mostra o resultado de to_sql/to_migration num TextEdit mono + botão de salvar.
     if Db.gen-open: DbGenModal { }
+
+    // ---- CONFIRMAÇÃO de apagar (Disco / poda do Docker) -----------------
+    if Dsk.confirm-open: DiscoConfirmModal { }
+
+    // ---- CONFIRMAÇÃO de aplicar uma conta a um repositório --------------
+    if Gh.confirm-open: GitConfirmModal { }
 }

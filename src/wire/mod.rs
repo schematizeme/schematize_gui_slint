@@ -15,7 +15,9 @@ use crate::prelude::*;
 pub(crate) mod account;
 pub(crate) mod appversion;
 pub(crate) mod database;
+pub(crate) mod disco;
 pub(crate) mod envs;
+pub(crate) mod git;
 pub(crate) mod graph;
 pub(crate) mod manage;
 pub(crate) mod odhistory;
@@ -50,4 +52,26 @@ pub(crate) struct Ctx {
     pub(crate) od_snaps_model: Rc<VecModel<SnapRow>>,
     pub(crate) od_commits_all: Rc<RefCell<Vec<githist::Commit>>>,
     pub(crate) od_commits_model: Rc<VecModel<CommitRow>>,
+}
+
+/// Troca TODAS as linhas de um modelo da UI, recuperando o `VecModel` concreto
+/// por trás do `ModelRc` do global.
+///
+/// Existe por causa de uma restrição real: `Rc` não é `Send`, então um resultado
+/// que volta de uma thread por `invoke_from_event_loop` NÃO pode trazer o modelo
+/// consigo. Em vez de duplicar o estado em `Arc`, pegamos o modelo de volta do
+/// global — já na thread da UI, que é a única que pode tocá-lo.
+pub(crate) fn set_rows<T: Clone + 'static>(m: &ModelRc<T>, v: Vec<T>) {
+    if let Some(vm) = m.as_any().downcast_ref::<VecModel<T>>() {
+        vm.set_vec(v);
+    }
+}
+
+/// Trava um `Mutex` de estado da UI ignorando envenenamento.
+///
+/// O que guardamos aqui são listas simples (achados, projetos): se uma thread
+/// entrou em pânico segurando a trava, o `Vec` continua íntegro — não há
+/// invariante pra proteger. Propagar o pânico só derrubaria a janela inteira.
+pub(crate) fn trava<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|p| p.into_inner())
 }

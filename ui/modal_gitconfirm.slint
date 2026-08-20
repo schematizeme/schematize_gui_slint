@@ -1,0 +1,42 @@
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { Btn } from "widgets.slint";
+import { Gh } from "state.slint";
+
+// Confirmação de APLICAR uma conta a um repositório.
+//
+// Não é destrutivo, mas MUDA a identidade com que os próximos commits saem e pode
+// reapontar a URL do remoto — as duas coisas que, erradas, viram commit público
+// com o autor errado. O texto lista exatamente o que vai mudar (montado no Rust).
+export component GitConfirmModal inherits Rectangle {
+    background: #000000.transparentize(0.45);
+    TouchArea { clicked => { Gh.confirm-no(); } }
+    Rectangle {
+        width: Math.min(root.width - 64px, 520px);
+        height: card.preferred-height;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-radius: 14px;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.border;
+        TouchArea {}
+        card := VerticalLayout {
+            padding: 22px;
+            spacing: 16px;
+            Text {
+                text: Gh.confirm-msg;
+                font-size: 13.5px;
+                font-weight: 600;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: end;
+                Btn { label: L.mp-cancel; clicked => { Gh.confirm-no(); } }
+                Btn { label: L.git-apply; primary: true; clicked => { Gh.confirm-yes(); } }
+            }
+        }
+    }
+}

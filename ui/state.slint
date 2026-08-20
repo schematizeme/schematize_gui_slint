@@ -1,6 +1,7 @@
 import {
     SkillRow, EnvRow, LangItem, ProjItem, OverItem, SnapRow, CommitRow, SshRow,
     GraphNode, GraphEdge, DbTableRow, NotifItem, CmpFile, SkillAction,
+    DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow,
 } from "types.slint";
 
 // Estado de TELA da GUI, agrupado por área — um `global` por recorte.
@@ -398,4 +399,80 @@ export global App {
     in-out property <bool> update-done: false;     // update concluído → sugerir reiniciar
     callback check-update();                        // app_update_available() em thread
     callback do-update();                           // selfupdate::run() em thread
+}
+
+// DISCO — inventário do lixo recriável e a limpeza.
+//
+// Duas travas de projeto ficam visíveis aqui: (1) a UI NUNCA recebe a lista
+// inteira — `rows` é só a página (o Rust é dono do `Vec<Achado>` completo), pelo
+// mesmo motivo do checklist do overdev: repeater do Slint não é virtualizado;
+// (2) toda remoção passa por confirmação, e a poda de VOLUMES do Docker é a
+// única marcada `confirm-destructive` — volume é dado, não build.
+export global Dsk {
+    in-out property <[DiscoTotal]> mounts;     // por DISCO (a pergunta é "o que enche ESTE disco")
+    in-out property <[DiscoTotal]> kinds;      // por TIPO (quem é o culpado)
+    in-out property <[DiscoRow]> rows;         // PÁGINA atual dos maiores achados
+    in-out property <[DockerRow]> docker;      // categorias do docker + podas
+    in-out property <bool> docker-available: false;
+    in-out property <bool> scanning: false;    // varredura em thread
+    in-out property <bool> scanned: false;     // já varreu uma vez? (empty-state honesto)
+    in-out property <string> status;           // linha de resumo ("total recuperável: X")
+    in-out property <string> banner;           // resultado da última ação ("liberado X")
+    in-out property <bool> banner-error: false;
+    in-out property <int> min-days: 0;         // filtro: só o que está parado há N dias
+    in-out property <int> page: 0;
+    in-out property <int> total: 0;            // achados após o filtro (paginação)
+    in-out property <int> per-page: 40;
+    in-out property <bool> confirm-open: false;
+    in-out property <string> confirm-msg;
+    in-out property <bool> confirm-destructive: false;  // poda de volumes (dado, não build)
+    callback scan();                    // varre (thread) — nada acontece sem isto
+    callback set-min-days(int);          // troca o filtro e re-pagina
+    callback page-prev();
+    callback page-next();
+    callback open-folder(int);           // abre o pai do achado no gerenciador de arquivos
+    callback remove-request(int);        // pede confirmação de remoção do achado idx
+    callback docker-prune-request(string); // pede confirmação da poda (rótulo)
+    callback confirm-yes();
+    callback confirm-no();
+}
+
+// GIT — contas, o que ainda não saiu da máquina, e os repositórios do serviço.
+export global Gh {
+    in-out property <int> section: 0;            // 0 = Projetos · 1 = Contas · 2 = Repositórios
+    in-out property <[GitAccountRow]> accounts;
+    in-out property <[GitProjRow]> projects;
+    in-out property <[GitRepoRow]> repos;
+    in-out property <[CommitRow]> commits;       // histórico do projeto selecionado
+    in-out property <string> commits-of;         // nome do projeto cujos commits estão à vista
+    in-out property <bool> loading-projects: false;
+    in-out property <bool> loading-repos: false;
+    in-out property <bool> scanned: false;
+    in-out property <int> at-risk: 0;            // projetos com commit só nesta máquina
+    in-out property <string> status;
+    in-out property <bool> status-error: false;
+    // cadastro de conta (form)
+    in-out property <string> new-rotulo;
+    in-out property <string> new-usuario;
+    in-out property <string> new-email;
+    in-out property <string> new-servico: "github.com";
+    in-out property <string> new-chave;          // NOME do arquivo em ~/.ssh (vazio = conta `gh`)
+    in-out property <string> form-status;
+    in-out property <bool> form-error: false;
+    // aplicar conta a um projeto
+    in-out property <string> sel-account;        // rótulo escolhido nos chips
+    in-out property <int> sel-project: -1;       // projeto selecionado (idx na lista completa)
+    in-out property <bool> confirm-open: false;
+    in-out property <string> confirm-msg;
+    callback refresh();                  // re-scaneia projetos (thread)
+    callback add-account();
+    callback remove-account(int);
+    callback write-alias(int);           // escreve o bloco no ~/.ssh/config
+    callback pick-account(string);
+    callback pick-project(int);          // seleciona e carrega os commits
+    callback apply-request();            // pede confirmação de aplicar sel-account em sel-project
+    callback confirm-yes();
+    callback confirm-no();
+    callback list-repos(string);         // `gh repo list` da conta (thread)
+    callback open-project(int);          // abre a pasta do projeto
 }

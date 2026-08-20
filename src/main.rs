@@ -27,8 +27,10 @@ mod prelude;
 mod checklist;      // paginação PURA do checklist (o que segura o custo de render)
 mod checklistview;  // ligação do checklist fatiado com as propriedades da UI
 mod dbbuilder;      // Database builder: linhas de schema + grafo do schema
+mod discorows;      // linhas/paginação da tela Disco (o Rust é dono da lista inteira)
 mod envrows;        // linhas de Environments/SSH/idiomas + ações em terminal
 mod fmt;            // formatação de valores pra UI (puro)
+mod gitrows;        // linhas da tela Git (contas, estado dos repos, commits)
 mod graphstate;     // estado + passo da física do grafo
 mod graphview;      // ponte do grafo com a UI (modelos, carga preguiçosa, timer)
 mod i18nbind;       // catálogo i18n -> propriedades do `global L`
@@ -234,6 +236,8 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::odhistory::wire(&app, &cx);
     wire::graph::wire(&app, &cx);
     wire::database::wire(&app, &cx);
+    wire::disco::wire(&app, &cx);
+    wire::git::wire(&app, &cx);
     wire::ssh::wire(&app, &cx);
     wire::settings::wire(&app, &cx);
     wire::appversion::wire(&app, &cx);

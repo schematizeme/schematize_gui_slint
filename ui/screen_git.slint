@@ -1,0 +1,390 @@
+import { ScrollView, LineEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { GitAccountRow, GitProjRow, GitRepoRow, CommitRow } from "types.slint";
+import { Btn, Chip } from "widgets.slint";
+import { Gh } from "state.slint";
+
+// Selo do que ainda NÃO saiu da máquina. É a informação central da tela: git não
+// guarda "histórico de push", mas guarda o que falta enviar — e commit que só
+// existe aqui some com a máquina. Por isso vira número em destaque, não nota de rodapé.
+component UnpushedBadge inherits Rectangle {
+    in property <int> count;
+    width: 76px;
+    height: 26px;
+    border-radius: 13px;
+    background: root.count > 0 ? Theme.warn.transparentize(0.85) : transparent;
+    border-width: root.count > 0 ? 1px : 0px;
+    border-color: Theme.warn.transparentize(0.5);
+    Text {
+        text: root.count > 0 ? "↑ \{root.count}" : "—";
+        font-size: 12px;
+        font-weight: 700;
+        color: root.count > 0 ? Theme.warn : Theme.text-dim;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// Tela GIT (8) — contas, o que falta enviar, e os repositórios do serviço.
+export component GitScreen inherits VerticalLayout {
+    // ---- seletor de seção + ação ------------------------------------------
+    Rectangle {
+        height: 62px;
+        background: Theme.bg;
+        HorizontalLayout {
+            padding-left: 24px;
+            padding-right: 24px;
+            spacing: 8px;
+            VerticalLayout {
+                alignment: center;
+                Chip { label: L.git-projects; selected: Gh.section == 0; clicked => { Gh.section = 0; } }
+            }
+            VerticalLayout {
+                alignment: center;
+                Chip { label: L.git-accounts; selected: Gh.section == 1; clicked => { Gh.section = 1; } }
+            }
+            VerticalLayout {
+                alignment: center;
+                Chip { label: L.git-repos; selected: Gh.section == 2; clicked => { Gh.section = 2; } }
+            }
+            Rectangle {}
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: Gh.loading-projects ? L.git-scanning : Gh.status;
+                    font-size: 12.5px;
+                    font-weight: 600;
+                    color: Gh.status-error ? Theme.warn : Theme.text-dim;
+                }
+            }
+            if Gh.section == 0: VerticalLayout {
+                alignment: center;
+                Btn {
+                    label: L.git-rescan;
+                    primary: true;
+                    small: true;
+                    enabled: !Gh.loading-projects;
+                    clicked => { Gh.refresh(); }
+                }
+            }
+        }
+    }
+    Rectangle { height: 1px; background: Theme.border; }
+
+    // ================= PROJETOS =================
+    if Gh.section == 0: ScrollView {
+        VerticalLayout {
+            padding-left: 24px;
+            padding-right: 24px;
+            padding-top: 16px;
+            padding-bottom: 24px;
+            spacing: 14px;
+
+            if !Gh.scanned && !Gh.loading-projects: Text {
+                text: L.git-intro;
+                font-size: 13px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+            if Gh.at-risk > 0: Rectangle {
+                height: 38px;
+                border-radius: 9px;
+                background: Theme.warn.transparentize(0.88);
+                HorizontalLayout {
+                    padding-left: 14px;
+                    padding-right: 14px;
+                    Text {
+                        text: "\{Gh.at-risk} \{L.git-at-risk}";
+                        font-size: 12.5px;
+                        font-weight: 700;
+                        color: Theme.warn;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            for p[pi] in Gh.projects: Rectangle {
+                height: 58px;
+                border-radius: 9px;
+                background: Gh.sel-project == p.idx
+                    ? Theme.accent-soft
+                    : (Math.mod(pi, 2) == 0 ? Theme.stripe : transparent);
+                border-width: Gh.sel-project == p.idx ? 1px : 0px;
+                border-color: Theme.accent;
+                // A área de clique da LINHA vem ANTES do conteúdo: em Slint a ordem de
+                // declaração é a ordem de empilhamento, e uma TouchArea declarada
+                // depois cobriria o botão "Abrir" — que deixaria de funcionar.
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { Gh.pick-project(p.idx); }
+                }
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 12px;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+                        Text { text: p.nome; font-size: 13px; font-weight: 700; color: Theme.text; }
+                        Text {
+                            text: p.remoto != "" ? p.remoto : L.git-no-remote;
+                            font-size: 11px;
+                            color: Theme.text-dim;
+                            overflow: elide;
+                        }
+                    }
+                    Rectangle {}
+                    // identidade em uso — em warn quando não casa com conta cadastrada:
+                    // é exatamente o caso em que o commit sai com o autor errado.
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: p.conta;
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: p.known-account ? Theme.text-dim : Theme.warn;
+                        }
+                    }
+                    if p.sujo: VerticalLayout {
+                        alignment: center;
+                        Text { text: L.git-dirty; font-size: 11.5px; font-weight: 600; color: Theme.warn; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        UnpushedBadge { count: p.unpushed; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.git-open; small: true; clicked => { Gh.open-project(p.idx); } }
+                    }
+                }
+            }
+
+            // ---- projeto selecionado: trocar a conta + ver os commits ------
+            if Gh.sel-project >= 0: VerticalLayout {
+                spacing: 12px;
+                Rectangle { height: 1px; background: Theme.border; }
+                Text {
+                    text: L.git-use-account;
+                    font-size: 12px;
+                    font-weight: 800;
+                    color: Theme.text-dim;
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    for a in Gh.accounts: Chip {
+                        label: a.rotulo;
+                        selected: Gh.sel-account == a.rotulo;
+                        clicked => { Gh.pick-account(a.rotulo); }
+                    }
+                    Btn {
+                        label: L.git-apply;
+                        small: true;
+                        primary: true;
+                        enabled: Gh.sel-account != "";
+                        clicked => { Gh.apply-request(); }
+                    }
+                }
+                if Gh.accounts.length == 0: Text {
+                    text: L.git-no-accounts;
+                    font-size: 12px;
+                    color: Theme.text-dim;
+                }
+
+                if Gh.commits.length > 0: Text {
+                    text: "\{L.git-history} — \{Gh.commits-of}";
+                    font-size: 12px;
+                    font-weight: 800;
+                    color: Theme.text-dim;
+                }
+                // ✓ já enviado · ↑ só nesta máquina — o marcador é a leitura toda.
+                for c[ci] in Gh.commits: Rectangle {
+                    height: 34px;
+                    background: Math.mod(ci, 2) == 0 ? Theme.stripe : transparent;
+                    border-radius: 7px;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 10px;
+                        Text {
+                            text: c.pushed ? "✓" : "↑";
+                            font-size: 12.5px;
+                            font-weight: 800;
+                            color: c.pushed ? Theme.good : Theme.warn;
+                            vertical-alignment: center;
+                            width: 14px;
+                        }
+                        Text {
+                            text: c.short;
+                            font-size: 11.5px;
+                            font-family: "monospace";
+                            color: Theme.text-dim;
+                            vertical-alignment: center;
+                            width: 66px;
+                        }
+                        Text {
+                            text: c.date;
+                            font-size: 11.5px;
+                            color: Theme.text-dim;
+                            vertical-alignment: center;
+                            width: 96px;
+                        }
+                        Text {
+                            text: c.subject;
+                            font-size: 12px;
+                            color: Theme.text;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        Rectangle {}
+                    }
+                }
+            }
+        }
+    }
+
+    // ================= CONTAS =================
+    if Gh.section == 1: ScrollView {
+        VerticalLayout {
+            padding-left: 24px;
+            padding-right: 24px;
+            padding-top: 16px;
+            padding-bottom: 24px;
+            spacing: 14px;
+
+            Text { text: L.git-accounts-intro; font-size: 12.5px; color: Theme.text-dim; wrap: word-wrap; }
+
+            for a[ai] in Gh.accounts: Rectangle {
+                height: 58px;
+                border-radius: 9px;
+                background: Math.mod(ai, 2) == 0 ? Theme.stripe : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 12px;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+                        Text { text: a.rotulo; font-size: 13px; font-weight: 700; color: Theme.text; }
+                        Text {
+                            text: a.op-label != "" ? a.op-label : "\{a.usuario} <\{a.email}> · \{a.servico} · \{a.auth}";
+                            font-size: 11.5px;
+                            color: a.op-error ? Theme.warn : Theme.text-dim;
+                            overflow: elide;
+                        }
+                    }
+                    Rectangle {}
+                    // Sem o alias no ~/.ssh/config o push sai pela chave errada (ou falha).
+                    // Então o estado do alias é ação, não enfeite.
+                    if a.is-ssh && !a.alias-ok: VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.git-write-alias; small: true; clicked => { Gh.write-alias(ai); } }
+                    }
+                    if a.is-ssh && a.alias-ok: VerticalLayout {
+                        alignment: center;
+                        Text { text: L.git-alias-ok; font-size: 11.5px; font-weight: 600; color: Theme.good; }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Btn { label: L.git-remove; small: true; danger: true; clicked => { Gh.remove-account(ai); } }
+                    }
+                }
+            }
+
+            Rectangle { height: 1px; background: Theme.border; }
+            Text { text: L.git-add-account; font-size: 12px; font-weight: 800; color: Theme.text-dim; }
+            HorizontalLayout {
+                spacing: 10px;
+                LineEdit { placeholder-text: L.git-f-label; text <=> Gh.new-rotulo; width: 150px; }
+                LineEdit { placeholder-text: L.git-f-user; text <=> Gh.new-usuario; width: 170px; }
+                LineEdit { placeholder-text: L.git-f-email; text <=> Gh.new-email; }
+            }
+            HorizontalLayout {
+                spacing: 10px;
+                LineEdit { placeholder-text: L.git-f-service; text <=> Gh.new-servico; width: 170px; }
+                LineEdit { placeholder-text: L.git-f-key; text <=> Gh.new-chave; width: 230px; }
+                Btn { label: L.git-save; primary: true; clicked => { Gh.add-account(); } }
+                Rectangle {}
+            }
+            // O cadastro guarda o NOME do arquivo de chave, nunca o conteúdo — dito
+            // na tela porque é a diferença entre um gestor de contas e um cofre.
+            Text { text: L.git-no-secrets; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+            if Gh.form-status != "": Text {
+                text: Gh.form-status;
+                font-size: 12px;
+                font-weight: 600;
+                color: Gh.form-error ? Theme.warn : Theme.good;
+                wrap: word-wrap;
+            }
+        }
+    }
+
+    // ================= REPOSITÓRIOS =================
+    if Gh.section == 2: ScrollView {
+        VerticalLayout {
+            padding-left: 24px;
+            padding-right: 24px;
+            padding-top: 16px;
+            padding-bottom: 24px;
+            spacing: 14px;
+
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                for a in Gh.accounts: Chip {
+                    label: a.rotulo;
+                    selected: Gh.sel-account == a.rotulo;
+                    enabled: !Gh.loading-repos;
+                    clicked => { Gh.pick-account(a.rotulo); Gh.list-repos(a.rotulo); }
+                }
+            }
+            if Gh.accounts.length == 0: Text {
+                text: L.git-no-accounts;
+                font-size: 12.5px;
+                color: Theme.text-dim;
+            }
+            if Gh.loading-repos: Text { text: L.git-loading-repos; font-size: 12.5px; color: Theme.text-dim; }
+
+            for r[ri] in Gh.repos: Rectangle {
+                height: 50px;
+                border-radius: 9px;
+                background: Math.mod(ri, 2) == 0 ? Theme.stripe : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 12px;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+                        Text { text: r.caminho; font-size: 12.5px; font-weight: 700; color: Theme.text; }
+                        Text { text: r.descricao; font-size: 11px; color: Theme.text-dim; overflow: elide; }
+                    }
+                    Rectangle {}
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: r.privado ? L.git-private : L.git-public;
+                            font-size: 11.5px;
+                            font-weight: 600;
+                            color: r.privado ? Theme.warn : Theme.text-dim;
+                            width: 70px;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: r.atualizado;
+                            font-size: 11.5px;
+                            color: Theme.text-dim;
+                            width: 88px;
+                            horizontal-alignment: right;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
