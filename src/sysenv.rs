@@ -75,18 +75,33 @@ pub(crate) fn open_in_vscode(root: &Path) {
     util::open_url(&format!("vscode://file/{root_s}"));
 }
 
-/// Localiza o binário `schematize` (CLI) pra montar o comando do terminal:
-/// primeiro um irmão do executável atual; senão o do PATH.
+/// Nomes do binário do CLI, do mais novo pro anterior.
+///
+/// O app virou **Overflow**, mas `schematize` não foi aposentado — segue instalado
+/// em máquina que não atualizou, e vai virar outro produto. A GUI tem de achar
+/// qualquer um dos dois, ou o botão que abre o terminal não faz nada.
+pub(crate) const CLI_BINS: [&str; 2] = ["overflow", "schematize"];
+
+/// Localiza o binário do CLI pra montar o comando do terminal: primeiro um irmão do
+/// executável atual (instalação da casa põe os dois lado a lado), senão o do PATH.
 pub(crate) fn schematize_bin() -> String {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let cand = dir.join("schematize");
-            if cand.is_file() {
-                return cand.to_string_lossy().into_owned();
+            for nome in CLI_BINS {
+                let cand = dir.join(nome);
+                if cand.is_file() {
+                    return cand.to_string_lossy().into_owned();
+                }
             }
         }
     }
-    "schematize".into()
+    // Nada ao lado: escolhe pelo PATH, novo primeiro. Sem nada, devolve o nome novo —
+    // o erro que o usuário vê passa a ser "overflow: not found", que é acionável.
+    CLI_BINS
+        .iter()
+        .find(|n| which_bin(n))
+        .unwrap_or(&CLI_BINS[0])
+        .to_string()
 }
 
 /// Um binário existe no PATH?
@@ -130,19 +145,40 @@ pub(crate) fn launch_terminal(inner: &str) -> bool {
     false
 }
 
-/// Seta o app_id (Wayland) / WM_CLASS (X11) da janela = "schematize-gui" ANTES de criá-la, instalando
+/// Seta o app_id (Wayland) / WM_CLASS (X11) da janela ANTES de criá-la, instalando
 /// um backend winit com `with_window_attributes_hook`. No Wayland (KDE/GNOME) o compositor IGNORA o
-/// ícone-buffer da janela e casa pelo app_id ao `schematize-gui.desktop` pra achar o ícone — sem isto
+/// ícone-buffer da janela e casa pelo app_id ao `<nome>.desktop` pra achar o ícone — sem isto
 /// o dock mostra um fallback genérico ("W"). Linux só; macOS/Windows pegam o ícone do bundle/.exe.
+/// Qual app_id anunciar, dado o nome do executável em uso. PURA e testada.
+///
+/// Vale um teste porque a falha é silenciosa e chata: app_id que não casa com nenhum
+/// `.desktop` não quebra nada — só faz o dock mostrar um ícone genérico, e ninguém
+/// liga o sintoma à causa. Já aconteceu neste app.
+pub(crate) fn app_id_de(exe: Option<&str>) -> &'static str {
+    match exe {
+        Some("schematize-gui") => "schematize-gui",
+        _ => "overflow-gui",
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub(crate) fn set_window_app_id() {
     use i_slint_backend_winit::winit::platform::wayland::WindowAttributesExtWayland;
     use i_slint_backend_winit::winit::platform::x11::WindowAttributesExtX11;
+    // O app_id sai do NOME DO PRÓPRIO EXECUTÁVEL, não de uma constante.
+    //
+    // São dois binários (`overflow-gui` e `schematize-gui`) e dois `.desktop`. O
+    // ambiente casa a janela ao lançador PELO app_id pra achar o ícone — se o binário
+    // antigo anunciasse o app_id novo, o `.desktop` antigo deixaria de casar e o dock
+    // voltaria ao ícone genérico. Cada nome anuncia o seu, e os dois ficam certos.
+    let id: &'static str = app_id_de(
+        std::env::current_exe().ok().as_deref().and_then(|p| p.file_name()).and_then(|s| s.to_str()),
+    );
     let built = i_slint_backend_winit::Backend::builder()
-        .with_window_attributes_hook(|attrs| {
-            // `general` = app_id (Wayland) / res_class (X11). Bate com schematize-gui.desktop.
-            let attrs = WindowAttributesExtWayland::with_name(attrs, "schematize-gui", "schematize-gui");
-            WindowAttributesExtX11::with_name(attrs, "schematize-gui", "schematize-gui")
+        .with_window_attributes_hook(move |attrs| {
+            // `general` = app_id (Wayland) / res_class (X11). Bate com <id>.desktop.
+            let attrs = WindowAttributesExtWayland::with_name(attrs, id, id);
+            WindowAttributesExtX11::with_name(attrs, id, id)
         })
         .build();
     if let Ok(backend) = built {
@@ -159,4 +195,21 @@ pub(crate) fn make_app_icon() -> slint::Image {
     let (rgba, w, h) = schematize::appicon::rgba(256);
     let buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(&rgba, w, h);
     slint::Image::from_rgba8(buf)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Cada binário anuncia o SEU app_id: é o que mantém os dois `.desktop` casando
+    /// com seus ícones durante a coexistência dos nomes.
+    #[test]
+    fn app_id_acompanha_o_nome_do_binario() {
+        assert_eq!(app_id_de(Some("schematize-gui")), "schematize-gui");
+        assert_eq!(app_id_de(Some("overflow-gui")), "overflow-gui");
+        // Qualquer outra coisa (renomeado à mão, rodado do target/) cai no nome novo —
+        // nunca no antigo, pra não ressuscitar a identidade velha por acidente.
+        assert_eq!(app_id_de(Some("schematize-gui-old")), "overflow-gui");
+        assert_eq!(app_id_de(None), "overflow-gui");
+    }
 }

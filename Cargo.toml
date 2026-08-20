@@ -1,10 +1,18 @@
 [package]
 name = "schematize-gui-slint"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "schematize em Slint (migração incremental) — aba Skills como GESTOR funcional (dados/ações reais via o crate `schematize`). A GUI egui segue shippando até o Slint chegar a paridade."
 license = "MIT"
 publish = false
+
+# Dois binários da MESMA fonte — ver a nota equivalente no Cargo.toml do CLI.
+# O app virou Overflow; `schematize-gui` segue funcionando pra não quebrar o
+# lançador de quem já tinha. Cada um anuncia o SEU app_id (ver `sysenv.rs`), então
+# cada `.desktop` continua casando com o seu ícone.
+[[bin]]
+name = "overflow-gui"
+path = "src/main.rs"
 
 [[bin]]
 name = "schematize-gui"

@@ -78,8 +78,8 @@ fn main() -> Result<(), slint::PlatformError> {
     app.set_app_icon(make_app_icon());
     // Ações declaradas por skills instaladas (gui.json) → botões (Q.A., Pentest, …) na aba do projeto.
     app.global::<Od>().set_skill_actions(ModelRc::from(Rc::new(VecModel::from(skill_action_rows()))));
-    // Versão do app (Configurações) — ex.: "schematize v0.25.1".
-    app.global::<App>().set_version(format!("schematize v{}", upgrade::app_version()).into());
+    // Versão do app (Configurações) — ex.: "Overflow v0.45.0".
+    app.global::<App>().set_version(format!("Overflow v{}", upgrade::app_version()).into());
     app.global::<Sk>().set_rows(ModelRc::from(model.clone()));
     update_status(&app);
     recompute_headers(&app); // esconde cabeçalhos de página sem itens
