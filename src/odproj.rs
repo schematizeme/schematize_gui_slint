@@ -78,6 +78,14 @@ pub(crate) fn overdev_file_path(root: &Path, target: &str) -> PathBuf {
 /// Parseia o CHECKLIST 2-níveis de `<root>` em `OverItem`s (kind + origem + índice).
 /// Casa `- [H ...]` ANTES de `- [ ]`/`- [x]` (senão o humano cai no ramo de máquina).
 /// `hindex` numera 1-based só os HUMANOS ABERTOS (- [H ]) — é o arg de `od-mark-human`.
+/// Tira o comentário de vínculo (`<!-- ovf:q:… -->`) do texto que vai pra tela.
+///
+/// O marcador é a cola entre a pergunta e o item que ela trava, e por isso mora no
+/// arquivo — mas mostrá-lo seria vazar detalhe de implementação na cara do usuário.
+fn limpa(s: &str) -> slint::SharedString {
+    s.split("<!--").next().unwrap_or(s).trim().into()
+}
+
 pub(crate) fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
     // Multi-arquivo: CHECKLIST.md E/OU a pasta checklist/*.md (granularidade / split multiagent) —
     // mesmo resolvedor do lib, pra a GUI contar certo depois de um split.
@@ -86,12 +94,34 @@ pub(crate) fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
     let mut hopen = 0i32; // contador de humanos abertos (1-based)
     for line in cl.lines() {
         let t = line.trim_start();
+        // Subtask = linha INDENTADA. É como o `park` vincula a pergunta ao item de
+        // máquina que ela trava (ver `overdev::resposta`), e é o que a UI usa pra
+        // mostrar a dependência em vez de uma lista plana onde tudo parece igual.
+        let sub = line.len() > t.len();
+        // Linha-filha de resposta/recusa: não é item, mas é o conteúdo da decisão —
+        // esconder deixaria o "respondido" sem dizer o que foi respondido.
+        if sub && (t.starts_with("- resposta:") || t.starts_with("- recusado:")) {
+            out.push(OverItem {
+                kind: "nota".into(),
+                text: limpa(t.trim_start_matches("- ")),
+                machine: false,
+                hindex: -1,
+                sub: true,
+            });
+            continue;
+        }
         let (kind, machine, hidx, rest): (&str, bool, i32, &str) =
             if let Some(r) = t.strip_prefix("- [H ]") {
                 hopen += 1;
                 ("hopen", false, hopen, r)
             } else if let Some(r) = t.strip_prefix("- [H x]").or_else(|| t.strip_prefix("- [H X]")) {
                 ("hdone", false, -1, r)
+            } else if let Some(r) = t.strip_prefix("- [H r]").or_else(|| t.strip_prefix("- [H R]")) {
+                ("hresp", false, -1, r)
+            } else if let Some(r) = t.strip_prefix("- [H -]") {
+                ("hrec", false, -1, r)
+            } else if let Some(r) = t.strip_prefix("- [-]") {
+                ("cancel", true, -1, r)
             } else if let Some(r) = t.strip_prefix("- [ ]") {
                 ("open", true, -1, r)
             } else if let Some(r) = t.strip_prefix("- [x]").or_else(|| t.strip_prefix("- [X]")) {
@@ -103,9 +133,10 @@ pub(crate) fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
             };
         out.push(OverItem {
             kind: kind.into(),
-            text: rest.trim().into(),
+            text: limpa(rest),
             machine,
             hindex: hidx,
+            sub,
         });
     }
     out

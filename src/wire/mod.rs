@@ -14,6 +14,7 @@ use crate::prelude::*;
 
 pub(crate) mod account;
 pub(crate) mod appversion;
+pub(crate) mod caixa;
 pub(crate) mod database;
 pub(crate) mod disco;
 pub(crate) mod envs;

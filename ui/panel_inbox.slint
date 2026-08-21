@@ -1,0 +1,143 @@
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { Btn } from "widgets.slint";
+import { Od } from "state.slint";
+
+// Painel da tela do projeto: SKILLS desatualizadas + CAIXA DE ENTRADA.
+//
+// Os dois respondem à mesma pergunta — "o que este projeto precisa e ainda não
+// entrou?" —, um vindo das skills que evoluíram depois de moldá-lo, outro do que
+// você quer acrescentar agora. Ficam juntos e fora do `screen_overdev.slint`, que
+// já estava no teto de 750 linhas da casa.
+export component InboxPanel inherits VerticalLayout {
+    spacing: 12px;
+    // ---- SKILLS deste projeto: aviso quando a skill evoluiu depois ----
+    // Skill instalada e skill APLICADA aqui são coisas diferentes, e a
+    // segunda é a que define os preceitos do projeto. Sem este aviso, a
+    // divergência só aparece como dois projetos da casa com padrões
+    // diferentes — e ninguém liga o sintoma à causa.
+    if Od.skills-outdated > 0: Rectangle {
+        height: skcard.preferred-height;
+        border-radius: 10px;
+        background: Theme.warn.transparentize(0.9);
+        border-width: 1px;
+        border-color: Theme.warn.transparentize(0.6);
+        skcard := HorizontalLayout {
+            padding: 12px;
+            spacing: 12px;
+            VerticalLayout {
+                alignment: center;
+                spacing: 3px;
+                horizontal-stretch: 1;
+                Text {
+                    text: "\{Od.skills-outdated} \{L.od-skills-outdated}";
+                    font-size: 12.5px;
+                    font-weight: 700;
+                    color: Theme.warn;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: Od.skills-summary;
+                    font-size: 11.5px;
+                    color: Theme.text-dim;
+                    wrap: word-wrap;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                Btn {
+                    label: L.od-skills-rerun;
+                    small: true;
+                    primary: true;
+                    clicked => { Od.skills-rerun(); }
+                }
+            }
+        }
+    }
+
+    // ---- CAIXA DE ENTRADA: acrescentar sem interromper ninguém ----
+    Rectangle { height: 1px; background: Theme.border; }
+    VerticalLayout {
+        spacing: 8px;
+        Text { text: L.od-caixa-title; font-size: 14px; font-weight: 800; color: Theme.text; }
+        Text { text: L.od-caixa-hint; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+        HorizontalLayout {
+            spacing: 8px;
+            Rectangle {
+                height: 34px;
+                horizontal-stretch: 1;
+                border-radius: 8px;
+                border-width: 1px;
+                border-color: Theme.border;
+                background: Theme.bg;
+                cxin := TextInput {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    height: parent.height;
+                    text <=> Od.caixa-text;
+                    font-size: 13px;
+                    color: Theme.text;
+                    vertical-alignment: center;
+                    single-line: true;
+                    accepted => { Od.caixa-add(); }
+                }
+                if Od.caixa-text == "": Text {
+                    x: 10px;
+                    text: L.od-caixa-placeholder;
+                    font-size: 13px;
+                    color: Theme.text-dim;
+                    vertical-alignment: center;
+                    height: parent.height;
+                }
+            }
+            Btn {
+                label: L.od-caixa-add;
+                small: true;
+                primary: true;
+                enabled: Od.caixa-text != "";
+                clicked => { Od.caixa-add(); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            if Od.caixa-pending > 0: VerticalLayout {
+                alignment: center;
+                Text {
+                    text: "\{Od.caixa-pending} \{L.od-caixa-pending}";
+                    font-size: 11.5px;
+                    font-weight: 600;
+                    color: Theme.warn;
+                }
+            }
+            if Od.caixa-pending > 0: Btn {
+                label: L.od-caixa-agent;
+                small: true;
+                clicked => { Od.caixa-agent(); }
+            }
+            if Od.caixa-ready > 0: VerticalLayout {
+                alignment: center;
+                Text {
+                    text: "\{Od.caixa-ready} \{L.od-caixa-ready}";
+                    font-size: 11.5px;
+                    font-weight: 600;
+                    color: Theme.good;
+                }
+            }
+            if Od.caixa-ready > 0: Btn {
+                label: L.od-caixa-merge;
+                small: true;
+                primary: true;
+                clicked => { Od.caixa-merge(); }
+            }
+        }
+        if Od.caixa-status != "": Text {
+            text: Od.caixa-status;
+            font-size: 12px;
+            font-weight: 600;
+            color: Od.caixa-error ? Theme.warn : Theme.good;
+            wrap: word-wrap;
+        }
+    }
+    Rectangle { height: 1px; background: Theme.border; }
+}

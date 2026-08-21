@@ -419,4 +419,39 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_git_private(tor("gui.git_private", "privado").into());
     l.set_git_public(tor("gui.git_public", "público").into());
     l.set_git_loading_repos(tor("gui.git_loading_repos", "consultando o gh…").into());
+
+    // ---- Resolver item humano · caixa de entrada · skills do projeto ----
+    l.set_od_answer(tor("gui.od_answer", "Responder").into());
+    l.set_od_refuse(tor("gui.od_refuse", "Recusar").into());
+    l.set_od_answer_title(tor("gui.od_answer_title", "Responder").into());
+    l.set_od_refuse_title(tor("gui.od_refuse_title", "Recusar").into());
+    l.set_od_answer_hint(tor(
+        "gui.od_answer_hint",
+        "Sua resposta LIBERA o item de máquina que estava travado por isto. Você não precisa ter feito nada — decidir já basta.",
+    ).into());
+    l.set_od_refuse_hint(tor(
+        "gui.od_refuse_hint",
+        "Recusar CANCELA o item de máquina vinculado — o agente não vai retomá-lo. Diga por quê: fica registrado nas decisões do projeto.",
+    ).into());
+    l.set_od_caixa_title(tor("gui.od_caixa_title", "Acrescentar ao projeto").into());
+    l.set_od_caixa_hint(tor(
+        "gui.od_caixa_hint",
+        "Escreva o que mais precisa ser feito. Isto NÃO toca o checklist agora — nenhum agente é interrompido. Um agente organiza depois, e só então entra.",
+    ).into());
+    l.set_od_caixa_placeholder(tor("gui.od_caixa_placeholder", "ex.: precisa exportar em CSV e mandar por e-mail…").into());
+    l.set_od_caixa_add(tor("gui.od_caixa_add", "Capturar").into());
+    l.set_od_caixa_agent(tor("gui.od_caixa_agent", "Organizar com agente").into());
+    l.set_od_caixa_merge(tor("gui.od_caixa_merge", "Fundir no checklist").into());
+    l.set_od_caixa_pending(tor("gui.od_caixa_pending", "a organizar").into());
+    l.set_od_caixa_ready(tor("gui.od_caixa_ready", "a fundir").into());
+    l.set_od_skills_title(tor("gui.od_skills_title", "Skills deste projeto").into());
+    l.set_od_skills_outdated(tor("gui.od_skills_outdated", "evoluíram desde que moldaram este projeto").into());
+    l.set_od_skills_rerun(tor("gui.od_skills_rerun", "Rerodar skills").into());
+    // ---- Portal (Home) ----
+    l.set_home_academy(tor("gui.home_academy", "Academy").into());
+    l.set_home_academy_desc(tor("gui.home_academy_desc", "Cursos estruturados de como usar IA.").into());
+    l.set_home_research(tor("gui.home_research", "Research").into());
+    l.set_home_research_desc(tor("gui.home_research_desc", "Artigos densos, para disseminar conhecimento.").into());
+    l.set_home_blog(tor("gui.home_blog", "Blog").into());
+    l.set_home_blog_desc(tor("gui.home_blog_desc", "Opinião, notícias e novidades.").into());
 }

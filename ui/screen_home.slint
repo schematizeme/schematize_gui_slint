@@ -28,9 +28,13 @@ export component HomeScreen inherits VerticalLayout {
                 font-weight: 800;
                 color: Theme.text;
             }
-            // Grade 3x3, agrupada por INTENÇÃO — não por ordem de implementação:
-            // linha 1 = o trabalho no projeto · linha 2 = a máquina · linha 3 = o resto.
-            // linha 1 — o trabalho
+            // Grade 3x4 — TODAS as linhas com o mesmo número de cards.
+            //
+            // Linhas com contagens diferentes davam cards de larguras diferentes entre
+            // si; junto com a largura vinda do texto (corrigida no `HomeCard`), era o
+            // que deixava a tela torta. Agrupado por intenção: o trabalho no projeto,
+            // a máquina, e o conhecimento.
+            // linha 1 — o trabalho no projeto
             HorizontalLayout {
                 spacing: 18px;
                 HomeCard {
@@ -54,6 +58,16 @@ export component HomeScreen inherits VerticalLayout {
                     }
                 }
                 HomeCard {
+                    title: L.home-database;
+                    desc: L.home-database-desc;
+                    clicked => { root.screen = 6; }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M4 6a8 3 0 1 0 16 0a8 3 0 1 0-16 0 M4 6v12a8 3 0 0 0 16 0V6 M4 12a8 3 0 0 0 16 0";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
+                    }
+                }
+                HomeCard {
                     title: L.home-market;
                     desc: L.home-market-desc;
                     clicked => { root.screen = 1; }
@@ -64,14 +78,13 @@ export component HomeScreen inherits VerticalLayout {
                     }
                 }
             }
-            // linha 2 — a máquina (o que sai daqui e o que ocupa espaço aqui)
+            // linha 2 — a máquina
             HorizontalLayout {
                 spacing: 18px;
                 HomeCard {
                     title: L.home-git;
                     desc: L.home-git-desc;
                     clicked => { root.screen = 8; }
-                    // ramo de git: dois nós na linha principal + um ramo que volta a ela.
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M7 4.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M7 19a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M15 8.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M9 6.5v10.5 M17 10.5v1.5a3 3 0 0 1-3 3h-5";
@@ -82,7 +95,6 @@ export component HomeScreen inherits VerticalLayout {
                     title: L.home-disk;
                     desc: L.home-disk-desc;
                     clicked => { root.screen = 7; }
-                    // disco: corpo, prato e trilhas.
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M3 6.5h18v11H3z M6 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0-3.2 0 M13 10h5 M13 14h5";
@@ -99,21 +111,6 @@ export component HomeScreen inherits VerticalLayout {
                         fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
                     }
                 }
-            }
-            // linha 3 — o resto
-            HorizontalLayout {
-                spacing: 18px;
-                HomeCard {
-                    title: L.home-database;
-                    desc: L.home-database-desc;
-                    clicked => { root.screen = 6; }
-                    // cilindro de banco de dados (SVG inline — nunca emoji).
-                    Path {
-                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
-                        commands: "M4 6a8 3 0 1 0 16 0a8 3 0 1 0-16 0 M4 6v12a8 3 0 0 0 16 0V6 M4 12a8 3 0 0 0 16 0";
-                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
-                    }
-                }
                 HomeCard {
                     title: L.home-ssh;
                     desc: L.home-ssh-desc;
@@ -121,6 +118,40 @@ export component HomeScreen inherits VerticalLayout {
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M3 5h18v14H3z M7 10l3 2.5-3 2.5 M13 15.5h5";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
+                    }
+                }
+            }
+            // linha 3 — conhecimento (abre no NAVEGADOR do usuário, nada embutido) + config
+            HorizontalLayout {
+                spacing: 18px;
+                HomeCard {
+                    title: L.home-academy;
+                    desc: L.home-academy-desc;
+                    clicked => { App.open-portal("academy"); }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M12 4 22 9l-10 5L2 9z M6 11.5V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
+                    }
+                }
+                HomeCard {
+                    title: L.home-research;
+                    desc: L.home-research-desc;
+                    clicked => { App.open-portal("research"); }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M5 3h11l3 3v15H5z M8.5 8h7 M8.5 12h7 M8.5 16h4 M16 3v3h3";
+                        fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
+                    }
+                }
+                HomeCard {
+                    title: L.home-blog;
+                    desc: L.home-blog-desc;
+                    clicked => { App.open-portal("blog"); }
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M4 4h13v16H4z M7 8h7 M7 12h7 M7 16h4 M17 8h3v9a3 3 0 0 1-3 3";
                         fill: transparent; stroke: Theme.accent; stroke-width: 1.8px;
                     }
                 }

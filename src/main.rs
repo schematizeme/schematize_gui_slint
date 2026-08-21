@@ -236,6 +236,7 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::odhistory::wire(&app, &cx);
     wire::graph::wire(&app, &cx);
     wire::database::wire(&app, &cx);
+    wire::caixa::wire(&app, &cx);
     wire::disco::wire(&app, &cx);
     wire::git::wire(&app, &cx);
     wire::ssh::wire(&app, &cx);
@@ -312,10 +313,12 @@ não é item
 
     #[test]
     fn editor_path_nunca_escapa_do_overdev() {
-        // Sem `.overdev` nem `.schematize/overdev` no disco, o resolvedor "ler ambos" devolve o novo
-        // default `.schematize/overdev`. O que o teste garante é a sanitização a basename (anti-traversal).
+        // Sem dir nenhum no disco, o resolvedor "ler ambos" devolve o default CANÔNICO
+        // (`.overflow/overdev` — o app virou Overflow). O que o teste garante é a
+        // sanitização a basename (anti-traversal); o nome do dir é do `paths`, e mudá-lo
+        // aqui junto é o sinal de que a ordem de resolução mudou de propósito.
         let root = std::path::Path::new("/proj");
-        let od = root.join(".schematize").join("overdev");
+        let od = root.join(".overflow").join("overdev");
         assert_eq!(overdev_file_path(root, "PLAN.md"), od.join("PLAN.md"));
         assert_eq!(overdev_file_path(root, "CHECKLIST.md"), od.join("CHECKLIST.md"));
         // tentativa de path traversal é reduzida ao basename.

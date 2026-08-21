@@ -110,10 +110,16 @@ export struct ProjItem {
 // `hindex` = posição 1-based do item entre os HUMANOS ABERTOS (arg de od-mark-human);
 // -1 para itens não-marcáveis.
 export struct OverItem {
-    kind: string,     // "done" | "open" | "hold" | "hopen" | "hdone"
+    // "done" | "open" | "hold" | "cancel"           (máquina)
+    // "hopen" | "hdone" | "hresp" | "hrec"          (humano)
+    // "nota"                                        (o texto da resposta/recusa)
+    kind: string,
     text: string,
     machine: bool,    // true = item de MÁQUINA (agente) · false = item HUMANO
     hindex: int,      // hopen: 1-based entre humanos abertos · senão -1
+    // Linha INDENTADA = subtask. É assim que uma pergunta parkeada aparece presa ao
+    // item de máquina que ela trava, em vez de solta numa lista plana.
+    sub: bool,
 }
 
 // Uma ação declarada por uma skill instalada (gui.json) — vira botão na aba do projeto.

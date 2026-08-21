@@ -64,6 +64,9 @@ export global Cfg {
     in-out property <[LangItem]> langs;
     in-out property <string> lang-code;   // código do idioma atual
     in-out property <string> lang-name;   // nome nativo do idioma atual
+    /// Modal do seletor de idioma. Era um `PopupWindow` e estava quebrado — ver a
+    /// explicação em `modal_lang.slint`.
+    in-out property <bool> lang-open: false;
     in-out property <bool> autostart-on: false;
     in-out property <bool> hooks-on: false;
     callback set-lang(string);       // troca o idioma (persiste + recarrega L)
@@ -220,6 +223,35 @@ export global Od {
     callback stop();                 // "Parar" → session.kill() + encerra a thread
     callback attach();               // "Reload / Acompanhar" → anexa o monitor a um overdev externo
     callback refresh-tokens();       // "Atualizar tokens" → relê agent_usage sob demanda
+    // ---- RESOLVER item humano: responder (libera a máquina) ou recusar (cancela) ----
+    // Um item humano tem três destinos reais, não dois: fiz, decidi, não cabe. Os dois
+    // últimos precisam de TEXTO — a decisão é o conteúdo, não o clique.
+    in-out property <bool> resolve-open: false;
+    in-out property <int> resolve-index: -1;      // índice entre os humanos ABERTOS
+    in-out property <string> resolve-item;         // texto do item (cabeçalho do modal)
+    in-out property <bool> resolve-answer: true;   // true = responder · false = recusar
+    in-out property <string> resolve-text;         // a resposta/motivo digitado
+    in-out property <string> resolve-status;
+    in-out property <bool> resolve-error: false;
+    callback resolve-request(int, string, bool);
+    callback resolve-confirm();
+    callback resolve-cancel();
+
+    // ---- CAIXA DE ENTRADA: injetar demanda com o agente rodando ----
+    in-out property <string> caixa-text;
+    in-out property <int> caixa-pending: 0;   // capturadas, a organizar
+    in-out property <int> caixa-ready: 0;     // organizadas, a fundir
+    in-out property <string> caixa-status;
+    in-out property <bool> caixa-error: false;
+    callback caixa-add();     // captura (instantâneo, não toca o checklist)
+    callback caixa-agent();   // abre o agente organizador num terminal
+    callback caixa-merge();   // funde no checklist (sob trava)
+
+    // ---- SKILLS aplicadas neste projeto ----
+    in-out property <int> skills-outdated: 0;
+    in-out property <string> skills-summary;  // "engineering v0.15.0 → v0.20.1, …"
+    callback skills-rerun();
+
 }
 
 // Aba GRAFO — nós/arestas, transformação de tela, seleção, busca e drill-down.
@@ -386,6 +418,10 @@ export global Acc {
 
 // VERSÃO DO APP e self-update (rodapé das Configurações).
 export global App {
+    /// Abre um destino do portal (academy | research | blog) no NAVEGADOR PADRÃO.
+    /// Nada embutido: conteúdo de site é do navegador da pessoa — com as sessões,
+    /// extensões e histórico dela. Uma webview dentro do app seria um navegador pior.
+    callback open-portal(string);
     callback restart();                 // relança o app (janela nova) — usado pós self-update
     in-out property <string> version;                  // "schematize v0.25.1" (montado no Rust)
     in-out property <bool> checking: false;        // checagem de update em andamento

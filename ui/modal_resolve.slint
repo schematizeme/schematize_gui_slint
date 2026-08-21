@@ -1,0 +1,86 @@
+import { TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { Btn } from "widgets.slint";
+import { Od } from "state.slint";
+
+// RESOLVER um item humano: responder (libera a máquina) ou recusar (cancela).
+//
+// Precisa de modal e não de um clique só porque o conteúdo É o texto: uma resposta
+// vazia liberaria o item de máquina sem nenhum critério registrado, e uma recusa sem
+// motivo não ajuda ninguém a entender depois por que aquilo saiu do projeto.
+//
+// O aviso do meio é deliberado: as duas ações mexem no item de MÁQUINA vinculado, e
+// isso não é óbvio a partir do botão. Dizer o efeito antes é mais barato que desfazer.
+export component ResolveModal inherits Rectangle {
+    background: #000000.transparentize(0.45);
+    TouchArea { clicked => { Od.resolve-cancel(); } }
+    Rectangle {
+        width: Math.min(root.width - 64px, 560px);
+        height: card.preferred-height;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-radius: 14px;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Od.resolve-answer ? Theme.border : Theme.warn.transparentize(0.4);
+        TouchArea {}
+        card := VerticalLayout {
+            padding: 22px;
+            spacing: 14px;
+            Text {
+                text: Od.resolve-answer ? L.od-answer-title : L.od-refuse-title;
+                font-size: 16px;
+                font-weight: 800;
+                color: Od.resolve-answer ? Theme.text : Theme.warn;
+            }
+            Text {
+                text: Od.resolve-item;
+                font-size: 13px;
+                font-weight: 600;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+            Text {
+                text: Od.resolve-answer ? L.od-answer-hint : L.od-refuse-hint;
+                font-size: 12px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+            Rectangle {
+                height: 120px;
+                border-radius: 8px;
+                border-width: 1px;
+                border-color: Theme.border;
+                background: Theme.bg;
+                TextEdit {
+                    width: parent.width - 4px;
+                    height: parent.height - 4px;
+                    x: 2px;
+                    y: 2px;
+                    text <=> Od.resolve-text;
+                    wrap: word-wrap;
+                }
+            }
+            if Od.resolve-status != "": Text {
+                text: Od.resolve-status;
+                font-size: 12px;
+                font-weight: 600;
+                color: Od.resolve-error ? Theme.warn : Theme.good;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: end;
+                Btn { label: L.mp-cancel; clicked => { Od.resolve-cancel(); } }
+                Btn {
+                    label: Od.resolve-answer ? L.od-answer : L.od-refuse;
+                    primary: true;
+                    danger: !Od.resolve-answer;
+                    enabled: Od.resolve-text != "";
+                    clicked => { Od.resolve-confirm(); }
+                }
+            }
+        }
+    }
+}

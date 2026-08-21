@@ -188,53 +188,7 @@ export component SettingsScreen inherits VerticalLayout {
                                 Rectangle {}
                                 Text { text: "▾"; color: Theme.text-dim; font-size: 12px; vertical-alignment: center; }
                             }
-                            lgdd := TouchArea { mouse-cursor: pointer; clicked => { lgpop.show(); } }
-                            lgpop := PopupWindow {
-                                // Sem isto, a política padrão `close-on-click` fecha o popup no PRESS e
-                                // o Flickable do ScrollView engole o gesto — o `clicked` (release) do
-                                // item nunca dispara e o idioma não troca. `close-on-click-outside`
-                                // só fecha ao clicar FORA, deixando o clique no item chegar ao callback.
-                                close-policy: close-on-click-outside;
-                                x: 0;
-                                y: parent.height + 4px;
-                                width: 260px;
-                                Rectangle {
-                                    background: Theme.surface;
-                                    border-width: 1px;
-                                    border-color: Theme.border;
-                                    border-radius: 10px;
-                                    ScrollView {
-                                        height: 280px;
-                                        VerticalLayout {
-                                            padding: 6px;
-                                            spacing: 1px;
-                                            for lg[lgi] in Cfg.langs: Rectangle {
-                                                height: 30px;
-                                                border-radius: 6px;
-                                                background: lg.current
-                                                    ? Theme.accent-soft
-                                                    : (lgita.has-hover ? Theme.surface-2 : transparent);
-                                                HorizontalLayout {
-                                                    padding-left: 8px;
-                                                    padding-right: 8px;
-                                                    Text {
-                                                        text: lg.name;
-                                                        font-size: 13px;
-                                                        font-weight: lg.current ? 700 : 500;
-                                                        color: lg.current ? Theme.header-fg : Theme.text;
-                                                        vertical-alignment: center;
-                                                        overflow: elide;
-                                                    }
-                                                }
-                                                lgita := TouchArea {
-                                                    mouse-cursor: pointer;
-                                                    clicked => { Cfg.set-lang(lg.code); }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            lgdd := TouchArea { mouse-cursor: pointer; clicked => { Cfg.lang-open = true; } }
                         }
                     }
                     Rectangle { height: 1px; background: Theme.border; }

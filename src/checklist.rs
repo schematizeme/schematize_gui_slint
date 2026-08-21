@@ -36,7 +36,12 @@ pub const FILTER_HUMAN: i32 = 4;
 pub fn matches(kind: &str, filter: i32) -> bool {
     match filter {
         FILTER_OPEN => kind == "open",
-        FILTER_DONE => kind == "done" || kind == "hdone",
+        // "Feitos" inclui respondido: a pendência humana acabou. NÃO inclui recusado —
+        // recusado é resolvido e não feito, e misturar mentiria no contador da tela.
+        FILTER_DONE => kind == "done" || kind == "hdone" || kind == "hresp",
+        // On-hold é o que está TRAVADO esperando decisão. A nota da resposta viaja
+        // junto do item pai em qualquer filtro, senão "respondido" apareceria sem
+        // dizer o que foi respondido.
         FILTER_HOLD => kind == "hold",
         FILTER_HUMAN => kind == "hopen",
         _ => true,
@@ -102,8 +107,25 @@ mod tests {
                 text: format!("item {i}").into(),
                 machine: i % 5 < 3,
                 hindex: -1,
+                sub: false,
             })
             .collect()
+    }
+
+    /// Respondido conta como feito; recusado NÃO entra em nenhum filtro de trabalho —
+    /// é resolvido sem ter sido feito, e somá-lo em "feitos" inflaria o progresso.
+    #[test]
+    fn respondido_conta_como_feito_recusado_nao() {
+        assert!(matches("hresp", FILTER_DONE));
+        assert!(matches("hdone", FILTER_DONE));
+        assert!(!matches("hrec", FILTER_DONE));
+        assert!(!matches("cancel", FILTER_DONE));
+        assert!(!matches("hrec", FILTER_OPEN));
+        assert!(!matches("cancel", FILTER_OPEN));
+        assert!(!matches("hrec", FILTER_HUMAN), "recusado não é pendência humana");
+        // Mas aparecem no "tudo" — sumir com eles esconderia o que foi decidido.
+        assert!(matches("hrec", FILTER_ALL));
+        assert!(matches("cancel", FILTER_ALL));
     }
 
     #[test]

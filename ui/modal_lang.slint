@@ -1,0 +1,81 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { LangItem } from "types.slint";
+import { Btn } from "widgets.slint";
+import { Cfg } from "state.slint";
+
+// SELETOR DE IDIOMA — modal, não `PopupWindow`.
+//
+// O popup anterior estava quebrado e o motivo era estrutural: ele declarava `width`
+// mas nenhuma altura, e seu filho direto era um `Rectangle`. Rectangle não é layout,
+// então não propagava o tamanho do conteúdo — o popup abria com geometria indefinida,
+// que na tela vira aquele retângulo transparente sem nada. Somava-se a isso viver
+// dentro do ScrollView das Configurações, onde o Flickable disputa o gesto com os
+// itens (já havia um `close-policy` remendando esse segundo sintoma).
+//
+// A correção não é ajustar a altura do popup: é usar o mesmo overlay que os outros
+// dez modais deste app usam e que funcionam. Um mecanismo a menos pra dar errado.
+export component LangModal inherits Rectangle {
+    background: #000000.transparentize(0.45);
+    TouchArea { clicked => { Cfg.lang-open = false; } }
+    Rectangle {
+        width: Math.min(root.width - 64px, 380px);
+        height: Math.min(root.height - 96px, 460px);
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-radius: 14px;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.border;
+        TouchArea {}
+        VerticalLayout {
+            padding: 18px;
+            spacing: 12px;
+            Text { text: L.cfg-language; font-size: 16px; font-weight: 800; color: Theme.text; }
+            ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    padding: 2px;
+                    spacing: 2px;
+                    for lg in Cfg.langs: Rectangle {
+                        height: 36px;
+                        border-radius: 8px;
+                        background: lg.current
+                            ? Theme.accent-soft
+                            : (lgta.has-hover ? Theme.surface-2 : transparent);
+                        HorizontalLayout {
+                            padding-left: 12px;
+                            padding-right: 12px;
+                            spacing: 8px;
+                            Text {
+                                text: lg.name;
+                                font-size: 13.5px;
+                                font-weight: lg.current ? 700 : 500;
+                                color: lg.current ? Theme.header-fg : Theme.text;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                            if lg.current: Text {
+                                text: "✓";
+                                font-size: 13px;
+                                font-weight: 800;
+                                color: Theme.header-fg;
+                                vertical-alignment: center;
+                            }
+                        }
+                        lgta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { Cfg.set-lang(lg.code); Cfg.lang-open = false; }
+                        }
+                    }
+                }
+            }
+            HorizontalLayout {
+                alignment: end;
+                Btn { label: L.mp-cancel; clicked => { Cfg.lang-open = false; } }
+            }
+        }
+    }
+}

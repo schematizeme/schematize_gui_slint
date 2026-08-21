@@ -12,9 +12,16 @@ pub(crate) fn load_overdev_into(app: &AppWindow, cl: &ChecklistView, proj: Optio
         app.global::<Od>().set_editor_status(SharedString::new());
         app.global::<Od>().set_notes(SharedString::new());
         cl.clear(app);
+        // Sem projeto, zera os contadores da caixa e o aviso de skills — senão os
+        // números do projeto anterior ficariam na tela falando de outro lugar.
+        crate::wire::caixa::atualiza_caixa(app, None);
         return;
     };
     app.global::<Od>().set_has_project(true);
+    // Recontagem da caixa de entrada e das skills desatualizadas. Fica AQUI, e não em
+    // cada chamador, porque esta é a função única que significa "a tela passou a
+    // mostrar este projeto" — ligar em cada ponto de chamada garantiria esquecer um.
+    crate::wire::caixa::atualiza_caixa(app, Some(p));
     apply_agent_budget(app); // linha do governador (teto/livre/load) na aba Overdev
     app.global::<Od>().set_current(basename_of(p).into());
     let ov = panel::load_overdev(p);

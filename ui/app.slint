@@ -44,6 +44,8 @@ import { AccountModal } from "modal_account.slint";
 import { CompareModal } from "modal_compare.slint";
 import { DbGenModal } from "modal_dbgen.slint";
 import { DiscoConfirmModal } from "modal_discoconfirm.slint";
+import { ResolveModal } from "modal_resolve.slint";
+import { LangModal } from "modal_lang.slint";
 import { GitConfirmModal } from "modal_gitconfirm.slint";
 
 // Reexporta os globais que o RUST acessa (`app.global::<L>()`): só o que sai do
@@ -457,4 +459,10 @@ export component AppWindow inherits Window {
 
     // ---- CONFIRMAÇÃO de aplicar uma conta a um repositório --------------
     if Gh.confirm-open: GitConfirmModal { }
+
+    // ---- RESOLVER item humano (responder libera a máquina · recusar cancela) ----
+    if Od.resolve-open: ResolveModal { }
+
+    // ---- SELETOR DE IDIOMA (era um PopupWindow quebrado; ver modal_lang.slint) ----
+    if Cfg.lang-open: LangModal { }
 }

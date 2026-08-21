@@ -405,6 +405,15 @@ export component HomeCard inherits Rectangle {
     in property <bool> soon: false;
     callback clicked();
     height: 158px;
+    // Todos os cards ocupam a MESMA largura, independente do tamanho do texto.
+    //
+    // Sem isto, a largura de cada card vinha da sua largura PREFERIDA — que sai do
+    // texto interno. Descrições de tamanhos diferentes produziam cards de tamanhos
+    // diferentes, e linhas com contagens diferentes de cards desalinhavam entre si:
+    // é o "monte de blocos tortos". `horizontal-stretch` divide o espaço em partes
+    // iguais e `min-width` impede que apertem além do legível.
+    horizontal-stretch: 1;
+    min-width: 150px;
     border-radius: 16px;
     background: (ha.has-hover && !root.soon) ? Theme.surface-2 : Theme.surface;
     border-width: 1px;
