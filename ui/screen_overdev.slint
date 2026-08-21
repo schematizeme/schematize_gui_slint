@@ -282,10 +282,10 @@ export component OverdevScreen inherits VerticalLayout {
                         if od-show-monitor: HorizontalLayout {
                             spacing: 18px;
                             alignment: start;
-                            Text { text: "✓ \{Od.run-done}"; font-size: 13px; font-weight: 700; color: Theme.good; }
-                            Text { text: "○ \{Od.run-open}"; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
-                            Text { text: "\{L.od-human} \{Od.mon-human}"; font-size: 13px; font-weight: 700; color: Theme.accent; }
-                            Text { text: "~ \{Od.mon-hold}"; font-size: 13px; font-weight: 700; color: Theme.warn; }
+                            Text { text: "✓ \{Od.done}"; font-size: 13px; font-weight: 700; color: Theme.good; }
+                            Text { text: "○ \{Od.open}"; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
+                            Text { text: "\{L.od-human} \{Od.human-open}"; font-size: 13px; font-weight: 700; color: Theme.accent; }
+                            Text { text: "~ \{Od.hold}"; font-size: 13px; font-weight: 700; color: Theme.warn; }
                             Rectangle {}
                             Text {
                                 text: "\{L.od-mon-iters} \{Od.mon-iter}/\{Od.mon-max}";
@@ -305,14 +305,14 @@ export component OverdevScreen inherits VerticalLayout {
                                 Rectangle {
                                     x: 0;
                                     height: 100%;
-                                    width: parent.width * Od.run-done / max(1, Od.run-done + Od.run-open);
+                                    width: parent.width * Od.done / max(1, Od.done + Od.open);
                                     border-radius: 4px;
                                     background: Theme.good;
                                     animate width { duration: 240ms; }
                                 }
                             }
                             Text {
-                                text: "\{round(100 * Od.run-done / max(1, Od.run-done + Od.run-open))}%";
+                                text: "\{round(100 * Od.done / max(1, Od.done + Od.open))}%";
                                 font-size: 12px;
                                 font-weight: 700;
                                 color: Theme.text-dim;

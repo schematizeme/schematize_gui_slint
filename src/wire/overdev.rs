@@ -482,10 +482,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 }
                 app.global::<Od>().set_confirm_open(false);
                 app.global::<Od>().set_run_status(SharedString::new());
-                app.global::<Od>().set_run_done(0);
-                app.global::<Od>().set_run_open(0);
-                app.global::<Od>().set_mon_human(0);
-                app.global::<Od>().set_mon_hold(0);
+                // Os CONTADORES não são zerados: agora são a fonte única, compartilhada
+                // com o bloco de progresso do projeto. Zerá-los pintaria 0 na tela até o
+                // 1º tick do monitor (~3s) — mentir pra baixo em vez de pra cima. Eles já
+                // carregam a verdade lida do disco; o monitor só os atualiza.
                 app.global::<Od>().set_mon_iter(0);
                 app.global::<Od>().set_mon_max(0);
                 app.global::<Od>().set_mon_mode(SharedString::new());
@@ -567,10 +567,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
             // Zera o painel e liga o monitor anexado ao run externo.
             app.global::<Od>().set_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
-            app.global::<Od>().set_run_done(0);
-            app.global::<Od>().set_run_open(0);
-            app.global::<Od>().set_mon_human(0);
-            app.global::<Od>().set_mon_hold(0);
+            // Idem: contadores preservados (fonte única — ver a nota no `on_run`).
             app.global::<Od>().set_mon_iter(0);
             app.global::<Od>().set_mon_max(0);
             app.global::<Od>().set_mon_mode(SharedString::new());

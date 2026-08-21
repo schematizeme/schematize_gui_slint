@@ -156,10 +156,13 @@ export global Od {
     in-out property <bool> confirm-open: false;          // guardrail (mini-modal de confirmação) aberto
     in-out property <string> agent-cmdline;              // comando que abre no terminal externo (guardrail)
     in-out property <string> run-status;                 // msg do launch/monitor (vazio = ocioso)
-    in-out property <int> run-done: 0;                   // monitor: feitos
-    in-out property <int> run-open: 0;                   // monitor: abertos (máquina)
-    in-out property <int> mon-human: 0;                  // monitor: humanos abertos (- [H ])
-    in-out property <int> mon-hold: 0;                   // monitor: on-hold (- [~])
+    // Os contadores do monitor FORAM REMOVIDOS de propósito: eram um segundo par de
+    // olhos sobre o MESMO checklist (`done`/`open`/`hold`/`human-open`, acima), e o de
+    // cima só era reescrito no load/reload — durante um run ele congelava na contagem
+    // de quando o projeto foi aberto, enquanto o de baixo andava. Dois números para o
+    // mesmo fato, discordando na tela. Agora há UMA fonte: tanto o load quanto o
+    // monitor escrevem os mesmos globais (mesma lição da v0.50.0 do CLI, quando o
+    // badge de notificações dizia "3" e o painel abria vazio).
     in-out property <int> mon-iter: 0;                   // monitor: iterações gastas
     in-out property <int> mon-max: 0;                    // monitor: teto de iterações
     in-out property <string> mon-mode;                   // monitor: estado do run (active/stopped/…)

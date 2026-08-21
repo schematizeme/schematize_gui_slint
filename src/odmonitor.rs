@@ -50,10 +50,19 @@ pub(crate) fn post_monitor(weak: &Weak<AppWindow>, prog: overdev::Progress, item
     let w = weak.clone();
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = w.upgrade() {
-            app.global::<Od>().set_run_done(prog.done as i32);
-            app.global::<Od>().set_run_open(prog.open as i32);
-            app.global::<Od>().set_mon_human(prog.human as i32);
-            app.global::<Od>().set_mon_hold(prog.hold as i32);
+            // FONTE ÚNICA dos contadores. Estes mesmos globais são os que o bloco de
+            // cima (objetivo + progresso do projeto) exibe, e que a `ChecklistView`
+            // escreve no load/reload. Antes o monitor tinha um par próprio
+            // (`run-done`/`run-open`/`mon-human`/`mon-hold`): como o de cima só era
+            // reescrito no load, durante um run ele CONGELAVA na contagem de quando o
+            // projeto foi aberto e a tela mostrava dois números discordantes pro mesmo
+            // checklist. Escrever aqui mantém os dois blocos vivos e iguais.
+            app.global::<Od>().set_done(prog.done as i32);
+            app.global::<Od>().set_open(prog.open as i32);
+            app.global::<Od>().set_human_open(prog.human as i32);
+            app.global::<Od>().set_hold(prog.hold as i32);
+            // O selo de estado também era só do load — ficava "stopped" com o run vivo.
+            app.global::<Od>().set_mode(prog.mode.clone().into());
             app.global::<Od>().set_mon_iter(prog.iterations as i32);
             app.global::<Od>().set_mon_max(prog.max_iters as i32);
             app.global::<Od>().set_mon_mode(prog.mode.into());
