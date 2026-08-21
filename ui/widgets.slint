@@ -405,13 +405,18 @@ export component HomeCard inherits Rectangle {
     in property <bool> soon: false;
     callback clicked();
     height: 158px;
-    // Todos os cards ocupam a MESMA largura, independente do tamanho do texto.
+    // Todos os cards com a MESMA largura, independente do tamanho do texto.
     //
-    // Sem isto, a largura de cada card vinha da sua largura PREFERIDA — que sai do
-    // texto interno. Descrições de tamanhos diferentes produziam cards de tamanhos
-    // diferentes, e linhas com contagens diferentes de cards desalinhavam entre si:
-    // é o "monte de blocos tortos". `horizontal-stretch` divide o espaço em partes
-    // iguais e `min-width` impede que apertem além do legível.
+    // `horizontal-stretch` sozinho NÃO basta, e essa foi a tentativa que falhou: no
+    // Slint o stretch reparte o EXCEDENTE, não a largura total. Cada filho parte da
+    // sua largura PREFERIDA — que, num card, sai do texto interno — e só o que sobra
+    // é dividido. Descrição maior continuava dando card maior, e linhas com textos
+    // diferentes fechavam em larguras diferentes: as bordas direitas não batiam.
+    //
+    // Zerando a largura preferida, todos os cards partem do mesmo ponto e o stretch
+    // passa a repartir o espaço INTEIRO em partes iguais. `min-width` é o piso de
+    // legibilidade (4 cards + espaçamento cabem na janela mínima de 820px).
+    preferred-width: 0px;
     horizontal-stretch: 1;
     min-width: 150px;
     border-radius: 16px;

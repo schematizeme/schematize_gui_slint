@@ -24,7 +24,7 @@ pub(crate) fn tor(key: &str, fallback: &str) -> String {
 // ---------------------------------------------------------------------------
 pub(crate) fn install_i18n(app: &AppWindow) {
     let l = app.global::<L>();
-    l.set_window_title("Overflow".into());
+    l.set_window_title("schematize".into());
     l.set_subtitle(t("app.tagline").into());
     l.set_theme_light(t("gui.theme_light").into());
     l.set_theme_dark(t("gui.theme_dark").into());

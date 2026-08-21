@@ -75,12 +75,12 @@ pub(crate) fn open_in_vscode(root: &Path) {
     util::open_url(&format!("vscode://file/{root_s}"));
 }
 
-/// Nomes do binário do CLI, do mais novo pro anterior.
+/// Nomes do binário do CLI: o canônico primeiro, e o do interregno como rede.
 ///
-/// O app virou **Overflow**, mas `schematize` não foi aposentado — segue instalado
-/// em máquina que não atualizou, e vai virar outro produto. A GUI tem de achar
-/// qualquer um dos dois, ou o botão que abre o terminal não faz nada.
-pub(crate) const CLI_BINS: [&str; 2] = ["overflow", "schematize"];
+/// Houve uma janela curta em que o app se chamou Overflow. Máquina que instalou ali
+/// pode ter só aquele binário — e sem achá-lo o botão que abre o terminal não faria
+/// nada, sem dizer por quê.
+pub(crate) const CLI_BINS: [&str; 2] = ["schematize", "overflow"];
 
 /// Localiza o binário do CLI pra montar o comando do terminal: primeiro um irmão do
 /// executável atual (instalação da casa põe os dois lado a lado), senão o do PATH.
@@ -95,8 +95,8 @@ pub(crate) fn schematize_bin() -> String {
             }
         }
     }
-    // Nada ao lado: escolhe pelo PATH, novo primeiro. Sem nada, devolve o nome novo —
-    // o erro que o usuário vê passa a ser "overflow: not found", que é acionável.
+    // Nada ao lado: escolhe pelo PATH, canônico primeiro. Sem nada, devolve o canônico —
+    // o erro que o usuário vê passa a ser "schematize: not found", que é acionável.
     CLI_BINS
         .iter()
         .find(|n| which_bin(n))
@@ -154,10 +154,14 @@ pub(crate) fn launch_terminal(inner: &str) -> bool {
 /// Vale um teste porque a falha é silenciosa e chata: app_id que não casa com nenhum
 /// `.desktop` não quebra nada — só faz o dock mostrar um ícone genérico, e ninguém
 /// liga o sintoma à causa. Já aconteceu neste app.
+///
+/// Um binário `overflow-gui` remanescente do interregno anuncia o id dele, que é o
+/// que casa com o `.desktop` que aquela instalação escreveu. Tudo o mais cai no
+/// canônico.
 pub(crate) fn app_id_de(exe: Option<&str>) -> &'static str {
     match exe {
-        Some("schematize-gui") => "schematize-gui",
-        _ => "overflow-gui",
+        Some("overflow-gui") => "overflow-gui",
+        _ => "schematize-gui",
     }
 }
 
@@ -207,9 +211,8 @@ mod tests {
     fn app_id_acompanha_o_nome_do_binario() {
         assert_eq!(app_id_de(Some("schematize-gui")), "schematize-gui");
         assert_eq!(app_id_de(Some("overflow-gui")), "overflow-gui");
-        // Qualquer outra coisa (renomeado à mão, rodado do target/) cai no nome novo —
-        // nunca no antigo, pra não ressuscitar a identidade velha por acidente.
-        assert_eq!(app_id_de(Some("schematize-gui-old")), "overflow-gui");
-        assert_eq!(app_id_de(None), "overflow-gui");
+        // Qualquer outra coisa (renomeado à mão, rodado do target/) cai no CANÔNICO.
+        assert_eq!(app_id_de(Some("schematize-gui-old")), "schematize-gui");
+        assert_eq!(app_id_de(None), "schematize-gui");
     }
 }
