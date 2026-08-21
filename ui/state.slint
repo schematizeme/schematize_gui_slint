@@ -381,9 +381,12 @@ export global Notif {
     in-out property <int> total: 0;              // total colhido (empty-state)
     in-out property <[NotifItem]> global;            // notificações de escopo Global
     in-out property <[NotifItem]> personal;          // notificações de escopo Pessoal
-    callback refresh();                           // só recomputa a contagem (thread)
-    callback toggle();                            // abre o painel + collect() (thread)
-    callback action(string, string);              // executa a ação (kind, action) da notificação
+    in-out property <[NotifItem]> historico;         // já concluídas (não somem, só saem da frente)
+    in-out property <bool> mostrar-historico: false;
+    callback refresh();                           // lê o badge do CACHE + sincroniza em thread
+    callback toggle();                            // abre o painel: preenche do CACHE na hora
+    callback action(string, string, string);      // (kind, action, id) — executa e conclui
+    callback concluir(string);                    // marca como concluída (vai pro histórico)
 }
 
 // COMPARAR fork vs oficial — diff por arquivo.

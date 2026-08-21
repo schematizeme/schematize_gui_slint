@@ -174,13 +174,18 @@ export struct CommitRow {
 // `scope` = "global" | "personal" (agrupador). `has-action` decide se mostra o
 // botão de ação; `kind` decide o rótulo/efeito ("app_update"|"news"|"skill_outdated").
 export struct NotifItem {
-    idx: int,        // posição na lista completa colhida (arg de notif-action)
+    // Id ESTÁVEL, derivado do conteúdo. Substitui o índice posicional: a lista é
+    // reordenada a cada sincronização (não-lidas sobem, concluídas afundam), e um
+    // índice resolveria a notificação errada depois de um refresh.
+    id: string,
     scope: string,
     title: string,
     body: string,
     kind: string,
     action: string,
     has-action: bool,
+    // "nova" | "lida" | "concluida" — decide o marcador e se vai pro histórico.
+    estado: string,
 }
 
 // Um arquivo na comparação fork-ativo vs nova oficial (mapeado de `skills::FileDiff`).

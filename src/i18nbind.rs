@@ -454,4 +454,5 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_home_research_desc(tor("gui.home_research_desc", "Artigos densos, para disseminar conhecimento.").into());
     l.set_home_blog(tor("gui.home_blog", "Blog").into());
     l.set_home_blog_desc(tor("gui.home_blog_desc", "Opinião, notícias e novidades.").into());
+    l.set_notif_history(tor("gui.notif_history", "Histórico").into());
 }

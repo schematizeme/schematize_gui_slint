@@ -1304,7 +1304,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4326,7 +4326,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4364,8 +4364,8 @@ dependencies = [
 
 [[package]]
 name = "schematize"
-version = "0.49.0"
-source = "git+https://github.com/schematizeme/schematize-cli?branch=main#e782c4d67ea6a3f9bb92513ff07cbedbdb8759c8"
+version = "0.50.0"
+source = "git+https://github.com/schematizeme/schematize-cli?branch=main#13636e87c6dc6cfc6a2619a028c76b418111af14"
 dependencies = [
  "clap",
  "notify-rust",
@@ -4378,7 +4378,7 @@ dependencies = [
 
 [[package]]
 name = "schematize-gui-slint"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "i-slint-backend-winit",
@@ -5000,7 +5000,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

@@ -36,7 +36,7 @@ export component NotifModal inherits Rectangle {
                 }
                 Rectangle { height: 1px; background: Theme.border; }
                 if Notif.loading: Text { text: L.notif-loading; font-size: 12.5px; color: Theme.text-dim; }
-                if !Notif.loading && Notif.total == 0: VerticalLayout {
+                if !Notif.loading && Notif.total == 0 && Notif.historico.length == 0: VerticalLayout {
                     alignment: center;
                     Text {
                         text: L.notif-empty;
@@ -45,7 +45,7 @@ export component NotifModal inherits Rectangle {
                         horizontal-alignment: center;
                     }
                 }
-                if !Notif.loading && Notif.total > 0: ScrollView {
+                if !Notif.loading && (Notif.total > 0 || Notif.historico.length > 0): ScrollView {
                     VerticalLayout {
                         spacing: 10px;
                         // ---- Globais ----
@@ -70,7 +70,7 @@ export component NotifModal inherits Rectangle {
                                                  : L.notif-go-installed;
                                             small: true;
                                             primary: n.kind == "app_update";
-                                            clicked => { Notif.action(n.kind, n.action); }
+                                            clicked => { Notif.action(n.kind, n.action, n.id); }
                                         }
                                     }
                                 }
@@ -95,9 +95,64 @@ export component NotifModal inherits Rectangle {
                                         Btn {
                                             label: n.kind == "skill_outdated" ? L.notif-go-installed : L.notif-open;
                                             small: true;
-                                            clicked => { Notif.action(n.kind, n.action); }
+                                            clicked => { Notif.action(n.kind, n.action, n.id); }
                                         }
                                     }
+                                }
+                            }
+                        }
+                        // ---- HISTÓRICO: o que já foi resolvido ----
+                        //
+                        // Colapsado por padrão: não é pendência, mas também não é lixo —
+                        // é o registro de que o aviso existiu, que é o que se consulta
+                        // depois ("quando essa skill ficou desatualizada?").
+                        if Notif.historico.length > 0: Rectangle { height: 1px; background: Theme.border; }
+                        if Notif.historico.length > 0: Rectangle {
+                            height: 26px;
+                            border-radius: 7px;
+                            background: htta.has-hover ? Theme.surface-2 : transparent;
+                            HorizontalLayout {
+                                padding-left: 6px;
+                                spacing: 6px;
+                                Text {
+                                    text: Notif.mostrar-historico ? "▾" : "▸";
+                                    font-size: 11px;
+                                    color: Theme.text-dim;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: "\{L.notif-history} (\{Notif.historico.length})";
+                                    font-size: 11.5px;
+                                    font-weight: 800;
+                                    color: Theme.text-dim;
+                                    vertical-alignment: center;
+                                }
+                                Rectangle {}
+                            }
+                            htta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { Notif.mostrar-historico = !Notif.mostrar-historico; }
+                            }
+                        }
+                        if Notif.mostrar-historico: VerticalLayout {
+                            spacing: 4px;
+                            for h in Notif.historico: HorizontalLayout {
+                                spacing: 8px;
+                                padding-left: 6px;
+                                Text {
+                                    text: "✓";
+                                    font-size: 11.5px;
+                                    font-weight: 800;
+                                    color: Theme.good;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: h.title;
+                                    font-size: 12px;
+                                    color: Theme.text-dim;
+                                    overflow: elide;
+                                    horizontal-stretch: 1;
+                                    vertical-alignment: center;
                                 }
                             }
                         }
