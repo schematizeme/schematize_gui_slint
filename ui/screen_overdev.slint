@@ -278,23 +278,13 @@ export component OverdevScreen inherits VerticalLayout {
                             color: Theme.text-dim;
                             wrap: word-wrap;
                         }
-                        // contadores do monitor: feitos / abertos / humano / on-hold + iterações.
-                        if od-show-monitor: HorizontalLayout {
-                            spacing: 18px;
-                            alignment: start;
-                            Text { text: "✓ \{Od.done}"; font-size: 13px; font-weight: 700; color: Theme.good; }
-                            Text { text: "○ \{Od.open}"; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
-                            Text { text: "\{L.od-human} \{Od.human-open}"; font-size: 13px; font-weight: 700; color: Theme.accent; }
-                            Text { text: "~ \{Od.hold}"; font-size: 13px; font-weight: 700; color: Theme.warn; }
-                            Rectangle {}
-                            Text {
-                                text: "\{L.od-mon-iters} \{Od.mon-iter}/\{Od.mon-max}";
-                                font-size: 13px;
-                                font-weight: 700;
-                                color: Theme.text-dim;
-                            }
-                        }
-                        // barra de progresso (feitos / feitos+abertos) + percentual.
+                        // Os contadores NÃO se repetem aqui. Eles já estão no bloco do
+                        // objetivo, no topo desta mesma tela, lendo os MESMOS globais —
+                        // repetir era desenhar o mesmo fato duas vezes e dava à tela duas
+                        // chances de discordar de si mesma (foi o que aconteceu enquanto o
+                        // de cima só era reescrito no load). O que é exclusivo do monitor —
+                        // as iterações — vai na linha da barra, ao lado do percentual.
+                        // barra de progresso (feitos / feitos+abertos) + percentual + ciclos.
                         if od-show-monitor: HorizontalLayout {
                             spacing: 10px;
                             Rectangle {
@@ -313,6 +303,13 @@ export component OverdevScreen inherits VerticalLayout {
                             }
                             Text {
                                 text: "\{round(100 * Od.done / max(1, Od.done + Od.open))}%";
+                                font-size: 12px;
+                                font-weight: 700;
+                                color: Theme.text-dim;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: "\{L.od-mon-iters} \{Od.mon-iter}/\{Od.mon-max}";
                                 font-size: 12px;
                                 font-weight: 700;
                                 color: Theme.text-dim;
