@@ -181,6 +181,19 @@ export component OverdevScreen inherits VerticalLayout {
                                 enabled: Od.has-project && !Od.session-running;
                                 clicked => { Od.gen-from-archive(); }
                             }
+                            // RECARREGAR o projeto do disco (checklist, contadores, estado).
+                            // Existe porque o `Od.reload()` só era disparado pelo FIM do run e
+                            // pela restauração de histórico — não havia como pedir releitura
+                            // durante um run, e a única saída era sair da tela e voltar. O botão
+                            // ao lado (`od-attach`) tem "reload" no label mas ANEXA o monitor, e
+                            // fica desligado justamente enquanto o run vive. Habilitado sempre
+                            // que há projeto: reler disco é barato e nunca é destrutivo.
+                            Btn {
+                                label: L.g-reload;
+                                small: true;
+                                enabled: Od.has-project;
+                                clicked => { Od.reload(); }
+                            }
                             // Atualizar tokens — relê o uso do run sob demanda, INLINE nos controles.
                             Btn {
                                 label: L.od-refresh-tokens;

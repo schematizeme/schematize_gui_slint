@@ -239,8 +239,31 @@ pub(crate) fn graph_mark_dirty(loaded: &RefCell<Option<PathBuf>>) {
     *loaded.borrow_mut() = None;
 }
 
+/// Instante mais recente entre os arquivos de grafo do projeto (`.schematize/grafos/`).
+///
+/// O quê: varre o dir (sem recursão) e devolve o maior `mtime`. Onde: [`graph_enter`],
+/// pra saber se o disco mudou desde a última leitura.
+/// Por que existe: a aba só relia quando o CAMINHO do projeto mudava, então um overdev
+/// regenerando o índice do projeto ABERTO não aparecia — a tela ficava mostrando o grafo
+/// de minutos antes e a única saída era trocar de projeto e voltar.
+/// **Entrada:** raiz do projeto. **Saída:** `None` se não há dir/arquivo legível.
+/// **Efeitos:** só `stat` no dir; nunca panica.
+fn grafos_mtime(proj: &Path) -> Option<std::time::SystemTime> {
+    let dir = proj.join(".schematize").join("grafos");
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter_map(|e| e.metadata().ok()?.modified().ok())
+        .max()
+}
+
 /// Entrada na aba Grafo: carrega o grafo do projeto corrente se ainda não estiver
-/// carregado e (re)liga a física. Idempotente — reentrar na aba não recarrega nada.
+/// carregado OU se os arquivos mudaram no disco, e (re)liga a física.
+///
+/// A idempotência era por CAMINHO apenas — reentrar na aba nunca relia. Isso mantinha o
+/// layout estável (bom), mas escondia toda alteração do próprio projeto (ruim). Agora o
+/// gatilho é caminho OU `mtime`: sem mudança no disco, segue idempotente e o grafo não
+/// "pula"; com mudança, relê.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn graph_enter(
     proj: Option<&Path>,
@@ -251,9 +274,12 @@ pub(crate) fn graph_enter(
     nodes: &Rc<VecModel<GraphNode>>,
     edges: &Rc<VecModel<GraphEdge>>,
 ) {
-    let ja_carregado = loaded.borrow().as_deref() == proj;
-    if !ja_carregado {
+    let mtime_agora = proj.and_then(grafos_mtime);
+    let mesmo_projeto = loaded.borrow().as_deref() == proj;
+    let disco_igual = state.borrow().carregado_em == mtime_agora;
+    if !mesmo_projeto || !disco_igual {
         load_graph_into(&mut state.borrow_mut(), proj);
+        state.borrow_mut().carregado_em = mtime_agora;
         *loaded.borrow_mut() = proj.map(|p| p.to_path_buf());
         if let Some(app) = weak.upgrade() {
             graph_sync(&app, &state.borrow(), nodes, edges);

@@ -58,6 +58,12 @@ pub(crate) struct GraphState {
     pub(crate) canvas_w: f32,
     pub(crate) canvas_h: f32,
     pub(crate) fit_pending: bool,
+    /// Instante mais recente entre os arquivos do grafo quando ele foi lido do disco.
+    /// Serve pra `graph_enter` decidir se REENTRAR na aba precisa reler: a idempotência
+    /// era só por caminho de projeto, então mudança nos `.md` do MESMO projeto (o overdev
+    /// regenerando o índice, por exemplo) não reaparecia até trocar de projeto ou clicar
+    /// em recarregar. `None` = nunca lido / dir ausente.
+    pub(crate) carregado_em: Option<std::time::SystemTime>,
     // `true` quando o grafo global foi AGREGADO por microserviço (índice flat > cap, sem
     // GRAFO_GLOBAL.md): cada nó é um serviço ("<serviço> · N funções") e o drill abre o detalhe.
     pub(crate) aggregated: bool,
