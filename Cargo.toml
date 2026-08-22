@@ -1,6 +1,6 @@
 [package]
 name = "schematize-gui-slint"
-version = "0.7.4"
+version = "0.7.5"
 edition = "2021"
 description = "schematize em Slint (migração incremental) — aba Skills como GESTOR funcional (dados/ações reais via o crate `schematize`). A GUI egui segue shippando até o Slint chegar a paridade."
 license = "MIT"
