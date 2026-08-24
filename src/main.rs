@@ -62,6 +62,15 @@ use skillrows::*;
 use sysenv::*;
 
 fn main() -> Result<(), slint::PlatformError> {
+    // `--version`/`-V` ANTES de qualquer coisa: sem isto o binário ABRIA A JANELA quando
+    // alguém perguntava a versão. O coletor de debug do CLI (`sec_sistema`) faz exatamente
+    // essa pergunta, então gerar um relatório tentava subir a GUI e o campo de versão vinha
+    // com a primeira linha do log de ambiente (`(WAYLAND_DISPLAY=wayland-0))`) no lugar do
+    // número. Responder e sair é o contrato mínimo de um binário de linha de comando.
+    if std::env::args().skip(1).any(|a| a == "--version" || a == "-V") {
+        println!("schematize-gui {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     detect_display_env();
     set_window_app_id();
 
