@@ -82,7 +82,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 let mut cmd = std::process::Command::new(exe);
                 cmd.arg("--project").arg(&p);
                 cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-                cmd.process_group(0); // sessão de processos própria — sobrevive a esta janela
+                crate::sysenv::desacopla_processo(&mut cmd); // sobrevive a esta janela
                 let _ = cmd.spawn();
             }
         });

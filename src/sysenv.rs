@@ -39,11 +39,30 @@ pub(crate) fn detect_display_env() {
 // + stdio em /dev/null) ANTES do `exit(0)`, então a janela nova sobe sozinha e
 // sobrevive à saída deste. Chamado pelo callback `restart` do Slint.
 // ---------------------------------------------------------------------------
+/// Desacopla o processo filho do atual — ele sobrevive ao fechamento desta janela.
+///
+/// O quê: `process_group(0)` em Unix; NO-OP em Windows. Onde: `restart_app` e o relançamento
+/// da GUI por projeto (`wire::overdev`).
+///
+/// Por que existe: os dois chamadores usavam `cmd.process_group(0)` direto, com o trait
+/// importado sem `#[cfg(unix)]` no prelude — o que quebra o build de Windows. Concentrar aqui
+/// evita que o próximo `spawn` repita o erro.
+///
+/// **Limite honesto:** em Windows isto NÃO desacopla nada. O equivalente é
+/// `CREATE_NEW_PROCESS_GROUP`/`DETACHED_PROCESS` via `CommandExt` do Windows, que é outro
+/// trabalho; até lá, o filho morre junto com o pai naquela plataforma.
+pub(crate) fn desacopla_processo(cmd: &mut std::process::Command) {
+    #[cfg(unix)]
+    cmd.process_group(0);
+    #[cfg(not(unix))]
+    let _ = cmd;
+}
+
 pub(crate) fn restart_app() -> ! {
     if let Ok(exe) = std::env::current_exe() {
         let mut cmd = std::process::Command::new(&exe);
         cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-        cmd.process_group(0); // grupo próprio → não morre com o processo atual
+        desacopla_processo(&mut cmd); // grupo próprio → não morre com o processo atual
         let _ = cmd.spawn(); // best-effort: se falhar, ainda saímos limpo
     }
     std::process::exit(0);
@@ -158,6 +177,9 @@ pub(crate) fn launch_terminal(inner: &str) -> bool {
 /// Um binário `overflow-gui` remanescente do interregno anuncia o id dele, que é o
 /// que casa com o `.desktop` que aquela instalação escreveu. Tudo o mais cai no
 /// canônico.
+// Só o caminho Wayland/X11 consome isto — em Windows vira aviso de código morto, e ruído
+// esconde sinal no log do CI.
+#[cfg(unix)]
 pub(crate) fn app_id_de(exe: Option<&str>) -> &'static str {
     match exe {
         Some("overflow-gui") => "overflow-gui",

@@ -24,7 +24,11 @@ pub(crate) use schematize::{
 pub(crate) use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 pub(crate) use std::cell::RefCell;
 pub(crate) use std::collections::{HashMap, HashSet};
-pub(crate) use std::os::unix::process::CommandExt; // process_group: desacopla o restart
+// `process_group` só existe em Unix. Sem a guarda, o build de Windows quebra em
+// `cannot find 'unix' in 'os'` — foi o que derrubou o job de release da v0.52.0 depois que o
+// CLI passou a compilar. Os chamadores usam `desacopla_processo` (abaixo), não este trait.
+#[cfg(unix)]
+pub(crate) use std::os::unix::process::CommandExt;
 pub(crate) use std::path::{Path, PathBuf};
 pub(crate) use std::process::Stdio;
 pub(crate) use std::rc::Rc;
