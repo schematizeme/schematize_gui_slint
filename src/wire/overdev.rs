@@ -143,6 +143,26 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
         });
     }
+    // Abre um TERMINAL interativo na pasta do projeto, com o claude pronto (bypass ligado).
+    // Diferente do "Executar overdev": lá o agente recebe um objetivo e trabalha sozinho;
+    // aqui a sessão é do humano, sem prompt embutido, e o shell continua vivo quando o
+    // claude sai. Por isso NÃO sobe supervisor — não há run pra vigiar.
+    {
+        let weak = app.as_weak();
+        let cur = od_current.clone();
+        app.global::<Od>().on_open_terminal(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let Some(project) = cur.borrow().clone() else {
+                app.global::<Od>().set_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
+                return;
+            };
+            match schematize::agentrun::abrir_terminal_no_projeto(&project) {
+                Ok(term) => app.global::<Od>()
+                    .set_run_status(format!("terminal `{term}` aberto em {}", project.display()).into()),
+                Err(e) => app.global::<Od>().set_run_status(format!("não consegui abrir o terminal: {e}").into()),
+            }
+        });
+    }
     // Split multiagent: divide o checklist em K parts (checklist/part-NN.md) respeitando o teto do
     // governador; com dispatch, lança K claudes (um por fatia), cada um limitado a subagents_each.
     {

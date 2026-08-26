@@ -88,6 +88,7 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_od_plan(t("gui.od_plan").into());
     l.set_od_questions(t("gui.od_questions").into());
     l.set_open_browser(t("gui.open_browser").into());
+    l.set_od_open_terminal(tor("gui.od_open_terminal", "abrir no terminal").into());
     // aba Overdev — Fase 3 (editor + tasks + checklist 2-níveis). Chaves NOVAS com
     // fallback embutido via `tor` até serem adicionadas ao lib (ver relatório).
     l.set_od_human(tor("gui.od_human", "humano").into());

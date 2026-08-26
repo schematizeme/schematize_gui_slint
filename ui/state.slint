@@ -210,7 +210,9 @@ export global Od {
     callback remove-dev-dir(string); // remove um diretório de desenvolvimento
     callback pin-folder();           // fixa uma pasta como projeto (picker nativo → pin_project)
     callback unpin(string);          // desafixa uma pasta fixada (unpin_project)
-    callback open-browser();         // abre o painel HTML do projeto no navegador
+    callback open-browser();
+    // Abre um terminal interativo NA PASTA do projeto, com o claude pronto (bypass ligado).
+    callback open-terminal();         // abre o painel HTML do projeto no navegador
     callback mark-human(int);        // fecha o i-ésimo humano aberto (- [H ]→- [H x])
     callback cl-set-page(int);       // checklist fatiado: vai pra página N (0-based)
     callback cl-set-filter(int);     // checklist fatiado: troca o filtro (volta pra página 0)

@@ -136,6 +136,7 @@ export component OverdevScreen inherits VerticalLayout {
                         Text { text: "\{L.od-human} \{Od.human-open}"; font-size: 13.5px; font-weight: 700; color: Theme.accent; }
                         Rectangle {}
                         Btn { label: L.open-browser; small: true; clicked => { Od.open-browser(); } }
+                        Btn { label: L.od-open-terminal; small: true; clicked => { Od.open-terminal(); } }
                     }
                     // ---- Fase 4: overdev em terminal externo + MONITOR leve ----
                     // O `claude` roda num terminal do sistema (processo próprio, RAM dele,
