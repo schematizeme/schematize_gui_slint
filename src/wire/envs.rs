@@ -36,7 +36,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 if r.category != "tool" && r.method_sel.is_empty() {
                     return;
                 }
-                let label = run_env_action("install", &r.lang.to_string(), &r.method_sel.to_string());
+                let label = run_env_action("install", r.lang.as_ref(), r.method_sel.as_ref());
                 r.op_label = label.into();
                 env_model.set_row_data(i, r);
             }
@@ -52,7 +52,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 if r.category != "tool" && r.method_sel.is_empty() {
                     return;
                 }
-                let label = run_env_action("remove", &r.lang.to_string(), &r.method_sel.to_string());
+                let label = run_env_action("remove", r.lang.as_ref(), r.method_sel.as_ref());
                 r.op_label = label.into();
                 env_model.set_row_data(i, r);
             }

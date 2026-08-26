@@ -21,7 +21,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     let db_graph_timer = Rc::new(slint::Timer::default());
     app.global::<Db>().set_graph_nodes(ModelRc::from(db_graph_nodes.clone()));
     app.global::<Db>().set_graph_edges(ModelRc::from(db_graph_edges.clone()));
-    db_rebuild(&app, &db_schema.lock().unwrap());
+    db_rebuild(app, &db_schema.lock().unwrap());
 
     // escolher arquivo SQLite (picker nativo).
     {
@@ -268,7 +268,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             else {
                 return;
             };
-            let _ = std::fs::write(&path, app.global::<Db>().get_gen_content().to_string());
+            let _ = std::fs::write(&path, app.global::<Db>().get_gen_content());
         });
     }
     // (re)construir o grafo do schema atual (tabela=nó, FK=aresta) e ligar a física.

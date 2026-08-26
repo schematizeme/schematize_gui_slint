@@ -63,8 +63,9 @@ pub(crate) fn db_rebuild(app: &AppWindow, schema: &database::Schema) {
 }
 
 /// Carrega um grafo já pronto (nós/arestas/descrições vindos de `database::to_graph`
-/// + `table_descriptions`) no estado — sem projeto no disco. Espelha o arranjo em
-/// espiral + graus + fit pendente do `load_graph_into`.
+/// + `table_descriptions`) no estado — sem projeto no disco.
+///
+/// Espelha o arranjo em espiral + graus + fit pendente do `load_graph_into`.
 pub(crate) fn load_db_graph_into(
     st: &mut GraphState,
     nodes: Vec<panel::Node>,

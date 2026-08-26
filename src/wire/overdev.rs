@@ -31,12 +31,13 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gl = graph_loaded.clone();
+        let sf = od_stop_flag.clone();
         app.global::<Od>().on_pick_project(move |path| {
             if path.is_empty() {
                 return;
             }
             if let Some(app) = weak.upgrade() {
-                select_project(&app, &cl, &pm, &dm, &pnm, &cur, PathBuf::from(path.to_string()));
+                select_project(&app, &cl, &pm, &dm, &pnm, &cur, &sf, PathBuf::from(path.to_string()));
                 graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
                 app.global::<Od>().invoke_refresh_history();
             }
@@ -51,10 +52,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gl = graph_loaded.clone();
+        let sf = od_stop_flag.clone();
         app.global::<Od>().on_open_folder(move || {
             if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_folder() {
                 if let Some(app) = weak.upgrade() {
-                    select_project(&app, &cl, &pm, &dm, &pnm, &cur, dir);
+                    select_project(&app, &cl, &pm, &dm, &pnm, &cur, &sf, dir);
                     graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
                     app.global::<Od>().invoke_refresh_history();
                 }
@@ -252,7 +254,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
         app.global::<Od>().on_remove_dev_dir(move |path| {
-            config::remove_dev_dir(&path.to_string());
+            config::remove_dev_dir(path.as_ref());
             refresh_proj_models(&pm, &dm, &pnm);
         });
     }
@@ -276,7 +278,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
         app.global::<Od>().on_unpin(move |path| {
-            config::unpin_project(&path.to_string());
+            config::unpin_project(path.as_ref());
             refresh_proj_models(&pm, &dm, &pnm);
         });
     }

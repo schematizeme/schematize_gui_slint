@@ -6,6 +6,11 @@
 //! a lógica de verdade mora nos módulos irmãos.
 
 use crate::prelude::*;
+
+/// Resultado achatado de `skills::compare_update`, pronto pra cruzar o event loop:
+/// (slug, versão, mudanças `nome→descrição`, resumo) ou o erro. Existe como alias porque
+/// o tipo cru é ilegível na assinatura e o lint reclamava com razão.
+type ComparacaoDeSkill = Result<(String, String, Vec<(String, String)>, String), String>;
 use schematize::updaterboot;
 use crate::wire::{set_rows, Ctx};
 
@@ -298,7 +303,7 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             std::thread::spawn(move || {
                 let res = skills::compare_update(&slug);
                 // extrai os campos (String/bool) antes de cruzar pro event loop.
-                let out: Result<(String, String, Vec<(String, String)>, String), String> =
+                let out: ComparacaoDeSkill =
                     res.map(|c| {
                         (
                             c.base_version,
