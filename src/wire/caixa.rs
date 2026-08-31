@@ -188,9 +188,12 @@ fn resolver_em(
     // A decisão vai pro registro durável do projeto — mesmo destino do CLI.
     let dec = schematize::paths::overdev_dir_at(root).join("DECISOES.md");
     let rotulo = if acao == resposta::Acao::Responder { "RESPOSTA" } else { "RECUSA" };
-    let mut atual = std::fs::read_to_string(&dec).unwrap_or_default();
+    // Mesmo cuidado do CLI: `unwrap_or_default` mapeia falha de leitura para vazio, e o
+    // `escreve_atomico` seguinte reescreveria o DECISOES.md inteiro a partir do vazio —
+    // o historico de decisoes do projeto apagado por um byte nao-UTF-8.
+    let mut atual = schematize::util::ler_para_modificar(&dec)?;
     atual.push_str(&format!("\n## {rotulo}: {}\n\n{texto}\n", r.item));
-    let _ = trava::escreve_atomico(&dec, &atual);
+    trava::escreve_atomico(&dec, &atual)?;
     Ok(r)
 }
 
