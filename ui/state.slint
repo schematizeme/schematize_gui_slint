@@ -2,6 +2,7 @@ import {
     SkillRow, EnvRow, LangItem, ProjItem, OverItem, SnapRow, CommitRow, SshRow,
     GraphNode, GraphEdge, DbTableRow, NotifItem, CmpFile, SkillAction,
     DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow,
+    VpsRow, VpsLogRow, VpsVerbRow,
 } from "types.slint";
 
 // Estado de TELA da GUI, agrupado por área — um `global` por recorte.
@@ -376,6 +377,63 @@ export global Ssh {
     callback remove-confirm();   // remove de fato
     callback remove-cancel();
     callback refresh();
+}
+
+// Gestor de VPS — hosts, trilha de auditoria, catálogo de verbos e a política.
+//
+// Toda ação daqui é DISPARADA em thread no Rust (`wire/vps.rs`) e volta pela event
+// loop: sondar/instalar/executar falam com a rede, e travar a janela num host que
+// não responde seria o piso 10 quebrado dentro da própria UI.
+export global Vps {
+    in-out property <[VpsRow]> rows;
+    in-out property <int> sel: -1;                  // linha selecionada (-1 = nenhuma)
+    in-out property <[VpsLogRow]> log;
+    in-out property <[VpsVerbRow]> verbos;
+    in-out property <string> banner;                // resultado da última ação
+    in-out property <bool> banner-error: false;
+    in-out property <bool> busy: false;             // uma ação de rede está em curso
+
+    // --- formulário de novo host ---
+    in-out property <string> f-alias;
+    in-out property <string> f-host;
+    in-out property <string> f-user;
+    in-out property <string> f-key;
+    in-out property <string> f-port: "22";
+    in-out property <string> f-env: "prd";          // nasce no mais restritivo
+
+    // --- execução ---
+    in-out property <string> cmd;                   // comando/verbo a rodar
+    in-out property <string> saida;                 // stdout+stderr da última execução
+
+    // --- modal de confirmação (produção / encadeamento) ---
+    // O gate humano do piso: o agente NUNCA responde isto, e a GUI só o mostra
+    // porque do outro lado há uma pessoa.
+    in-out property <bool> confirm-open: false;
+    in-out property <string> confirm-msg;
+    in-out property <string> confirm-cmd;
+
+    // --- modal de confiar na host key (TOFU explícito, nunca cego) ---
+    in-out property <bool> trust-open: false;
+    in-out property <string> trust-fingerprint;
+    in-out property <string> trust-alias;
+    in-out property <bool> trust-mudou: false;      // a fingerprint MUDOU em relação à pinada
+
+    callback refresh();
+    callback pick(int);                             // seleciona a linha i e carrega log+verbos
+    callback add();                                 // grava o host do formulário
+    callback remove(int);
+    callback probe(int);                            // sonda: o que este host aguenta
+    callback bootstrap(int);                        // instala a melhor fronteira possível
+    callback trust-request(int);                    // busca a fingerprint e abre o modal
+    callback trust-confirm();
+    callback trust-cancel();
+    callback exec();                                // roda `cmd` no host selecionado
+    callback confirm-yes();                         // humano confirmou o Confirm
+    callback confirm-no();
+    callback set-modo(int, string);                 // troca o modo de política
+    callback set-env(int, string);                  // troca o ambiente
+    callback seed-verbs(int);                       // semeia o catálogo sugerido
+    callback open-terminal(int);                    // abre o host no terminal do sistema
 }
 
 // SININHO — contagem e as listas de notificações (global e pessoal).

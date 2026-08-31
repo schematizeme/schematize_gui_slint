@@ -26,6 +26,7 @@ pub(crate) mod overdev;
 pub(crate) mod settings;
 pub(crate) mod skills;
 pub(crate) mod ssh;
+pub(crate) mod vps;
 
 /// Estado compartilhado pelos callbacks da janela.
 ///

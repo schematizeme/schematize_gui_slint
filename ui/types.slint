@@ -303,3 +303,39 @@ export struct GitRepoRow {
     descricao: string,
     atualizado: string,
 }
+
+// ---- Gestor de VPS ---------------------------------------------------------
+// Uma linha da lista de hosts. Espelha `schematize::vps::VpsProfile` mais o que a
+// UI precisa mostrar sem consultar de novo: se a host key está pinada, o RÓTULO do
+// nível de fronteira e a frase honesta do que ele garante (a UI não pode prometer
+// mais do que o host tem — ver ADR-0005).
+export struct VpsRow {
+    alias: string,
+    destino: string,        // user@host:porta, já montado pelo Rust
+    ambiente: string,       // dev | hml | prd
+    modo: string,           // readonly | opsverbs | livre
+    confiado: bool,         // host key pinada?
+    fronteira: string,      // rótulo do nível ("ops-shell (root)" / "SEM (só o cliente)")
+    server-side: bool,      // há fronteira NO SERVIDOR? governa o badge vermelho
+    explicacao: string,     // o que este nível garante e o que não garante
+    verbos: int,            // quantos verbos o catálogo tem
+    op-label: string,       // feedback transitório da linha
+    op-error: bool,
+}
+
+// Uma linha da trilha de auditoria (já redigida pelo lib — a UI nunca vê segredo).
+export struct VpsLogRow {
+    quando: string,         // já formatado pelo Rust
+    alias: string,
+    veredito: string,       // allow | confirm | deny
+    exit-code: string,      // "-" quando nada rodou
+    duracao: string,
+    comando: string,
+    negado: bool,           // pinta a linha
+}
+
+// Um verbo do catálogo de um host.
+export struct VpsVerbRow {
+    nome: string,
+    comando: string,
+}

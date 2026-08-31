@@ -14,6 +14,7 @@ import { Theme } from "theme.slint";
 import { L } from "i18n.slint";
 import {
     GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
+    VpsRow, VpsLogRow, VpsVerbRow,
     LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
     DbTableRow, DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow,
 } from "types.slint";
@@ -30,6 +31,7 @@ import { GraphScreen } from "screen_graph.slint";
 import { OverdevScreen } from "screen_overdev.slint";
 import { EnvsScreen } from "screen_envs.slint";
 import { SshScreen } from "screen_ssh.slint";
+import { VpsScreen } from "screen_vps.slint";
 import { SkillsScreen } from "screen_skills.slint";
 import { DiscoScreen } from "screen_disco.slint";
 import { GitScreen } from "screen_git.slint";
@@ -37,6 +39,7 @@ import { InstallModal } from "modal_install.slint";
 import { DevDirsModal } from "modal_devdirs.slint";
 import { RunConfirmModal } from "modal_runconfirm.slint";
 import { SshConfirmModal } from "modal_sshconfirm.slint";
+import { VpsConfirmModal, VpsTrustModal } from "modal_vpsconfirm.slint";
 import { SnapConfirmModal } from "modal_snapconfirm.slint";
 import { SnapViewModal } from "modal_snapview.slint";
 import { NotifModal } from "modal_notif.slint";
@@ -54,8 +57,8 @@ export { L } from "i18n.slint";
 export { Theme } from "theme.slint";
 // Estado de tela por área (globals). Reexportado porque o Rust acessa via
 // `app.global::<Od>()` — só o que sai do arquivo de entrada vira API gerada.
-import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
-export { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Vps, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
+export { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Vps, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
 
 export component AppWindow inherits Window {
     title: L.window-title;
@@ -158,6 +161,7 @@ export component AppWindow inherits Window {
         // repo, em thread). Disco NÃO: medir GB de árvore é caro e não pode disparar
         // sozinho — a tela abre pedindo "Varrer".
         if (root.screen == 8) { Gh.refresh(); }
+        if (root.screen == 9) { Vps.refresh(); }
     }
 
     VerticalLayout {
@@ -334,6 +338,13 @@ export component AppWindow inherits Window {
         // dentro dos diretórios de dev cadastrados (a trava mora no lib).
         if root.screen == 7: DiscoScreen {  }
 
+        // ---- TELA VPS (9) — o gestor de servidores -------------------------
+        // Hosts registrados com o NÍVEL DE FRONTEIRA de cada um (o badge nunca mente:
+        // vermelho quando não há fronteira no servidor), execução auditada, trilha
+        // append-only e o catálogo de verbos. Toda I/O em thread — um host fora do ar
+        // não pode congelar a janela.
+        if root.screen == 9: VpsScreen {  }
+
         // ---- TELA GIT (8) — contas, o que falta enviar, repositórios -------
         // Contas cadastradas (sem segredo: só o NOME da chave), qual identidade
         // vale em cada repo, quantos commits só existem NESTA máquina, e os
@@ -427,6 +438,9 @@ export component AppWindow inherits Window {
 
     // ---- MODAL de confirmação de remoção de chave SSH -------------------
     if Ssh.confirm-open: SshConfirmModal { }
+    // O gate HUMANO de produção e o TOFU explícito da host key.
+    if Vps.confirm-open: VpsConfirmModal { }
+    if Vps.trust-open: VpsTrustModal { }
 
     // ---- MODAL de confirmação de RESTAURAR snapshot ---------------------
     if Od.snap-confirm-open: SnapConfirmModal { }

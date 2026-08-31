@@ -456,4 +456,51 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_home_blog(tor("gui.home_blog", "Blog").into());
     l.set_home_blog_desc(tor("gui.home_blog_desc", "Opinião, notícias e novidades.").into());
     l.set_notif_history(tor("gui.notif_history", "Histórico").into());
+
+    // ---- Gestor de VPS -----------------------------------------------------
+    // `tor` = traduz com FALLBACK: chave ainda não traduzida cai no texto pt-BR em vez
+    // de renderizar vazio. Tela nova nasce utilizável nos 11 locales e a tradução chega
+    // depois — o contrário deixaria a UI muda pra quem não usa pt.
+    l.set_vps_title(tor("gui.vps_title", "Gestor de VPS").into());
+    l.set_vps_busy(tor("gui.vps_busy", "trabalhando…").into());
+    l.set_vps_add(tor("gui.vps_add", "Registrar um host").into());
+    l.set_vps_add_btn(tor("gui.vps_add_btn", "Registrar").into());
+    l.set_vps_f_alias(tor("gui.vps_f_alias", "alias").into());
+    l.set_vps_f_host(tor("gui.vps_f_host", "IP ou domínio").into());
+    l.set_vps_f_user(tor("gui.vps_f_user", "usuário").into());
+    l.set_vps_f_key(tor("gui.vps_f_key", "chave (~/.ssh)").into());
+    l.set_vps_f_port(tor("gui.vps_f_port", "porta").into());
+    l.set_vps_empty(tor(
+        "gui.vps_empty",
+        "Nenhuma VPS registrada. Preencha o formulário acima — a chave privada nunca é lida, só referenciada por caminho.",
+    ).into());
+    l.set_vps_untrusted(tor("gui.vps_untrusted", "host key NÃO confiada").into());
+    l.set_vps_trust(tor("gui.vps_trust", "Confiar na host key").into());
+    l.set_vps_probe(tor("gui.vps_probe", "Sondar").into());
+    l.set_vps_bootstrap(tor("gui.vps_bootstrap", "Instalar fronteira").into());
+    l.set_vps_seed(tor("gui.vps_seed", "Semear verbos").into());
+    l.set_vps_terminal(tor("gui.vps_terminal", "Abrir no terminal").into());
+    l.set_vps_cmd(tor("gui.vps_cmd", "comando ou verbo…").into());
+    l.set_vps_run(tor("gui.vps_run", "Executar").into());
+    l.set_vps_verbs(tor("gui.vps_verbs", "CATÁLOGO DE VERBOS").into());
+    l.set_vps_audit(tor("gui.vps_audit", "TRILHA DE AUDITORIA (append-only, já redigida)").into());
+    l.set_vps_confirm_title(tor("gui.vps_confirm_title", "Confirmação humana necessária").into());
+    l.set_vps_confirm_yes(tor("gui.vps_confirm_yes", "Sim, executar").into());
+    l.set_vps_trust_title(tor("gui.vps_trust_title", "Confiar nesta host key?").into());
+    l.set_vps_trust_desc(tor(
+        "gui.vps_trust_desc",
+        "Compare esta fingerprint com a que o provedor informou. Confiar sem conferir é o mesmo que aceitar qualquer servidor que atenda neste endereço.",
+    ).into());
+    l.set_vps_trust_changed(tor(
+        "gui.vps_trust_changed",
+        "ATENÇÃO: a fingerprint MUDOU em relação à que estava pinada. Ou o servidor foi reinstalado, ou você não está falando com ele.",
+    ).into());
+    l.set_vps_trust_yes(tor("gui.vps_trust_yes", "Confiar").into());
+    l.set_refresh(tor("gui.refresh", "Atualizar").into());
+    l.set_cancel(tor("gui.cancel", "Cancelar").into());
+    l.set_home_vps(tor("gui.home_vps", "VPS").into());
+    l.set_home_vps_desc(tor(
+        "gui.home_vps_desc",
+        "Servidores registrados, deploy auditado e o que cada host aceita — sem chave no contexto.",
+    ).into());
 }

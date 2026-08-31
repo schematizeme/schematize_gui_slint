@@ -1,0 +1,131 @@
+// Modais do gestor de VPS: o gate humano de PRODUÇÃO e o TOFU explícito da host key.
+//
+// Estes dois modais são a materialização de dois pisos do ADR-0005 na interface:
+//
+// 1. **Confirmação humana** — em produção, ou com encadeamento, a execução para e pergunta.
+//    O agente não tem este botão: ele recebe a recusa pedindo que um humano confirme. Este
+//    modal existe porque do outro lado dele há uma pessoa; é a única razão de ele existir.
+//
+// 2. **Confiar na host key** — mostra a FINGERPRINT antes de confiar. É o oposto do
+//    `StrictHostKeyChecking=accept-new`, que aceitava qualquer um que atendesse no endereço.
+//    Se a fingerprint MUDOU em relação à pinada, o alerta é vermelho e explícito: ou o
+//    servidor foi reinstalado, ou não é ele.
+
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { Vps } from "state.slint";
+import { Btn } from "widgets.slint";
+
+export component VpsConfirmModal inherits Rectangle {
+    background: #000000.transparentize(0.55);
+    TouchArea { clicked => { Vps.confirm-no(); } }
+    Rectangle {
+        width: 520px;
+        height: caixa.preferred-height + 40px;
+        border-radius: 12px;
+        background: Theme.bg;
+        border-width: 1px;
+        border-color: Theme.border;
+        // Engole o clique pra não fechar ao clicar DENTRO do modal.
+        TouchArea { }
+        caixa := VerticalLayout {
+            padding: 20px;
+            spacing: 12px;
+            Text {
+                text: L.vps-confirm-title;
+                font-size: 15px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+            Text {
+                text: Vps.confirm-msg;
+                font-size: 12px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+            Rectangle {
+                height: cmd.preferred-height + 16px;
+                border-radius: 6px;
+                background: Theme.surface;
+                border-width: 1px;
+                border-color: Theme.warn.transparentize(0.4);
+                cmd := Text {
+                    text: Vps.confirm-cmd;
+                    font-family: "monospace";
+                    font-size: 12px;
+                    color: Theme.text;
+                    wrap: word-wrap;
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Rectangle { horizontal-stretch: 1; }
+                Btn { label: L.cancel;          clicked => { Vps.confirm-no(); } }
+                Btn { label: L.vps-confirm-yes; clicked => { Vps.confirm-yes(); } }
+            }
+        }
+    }
+}
+
+export component VpsTrustModal inherits Rectangle {
+    background: #000000.transparentize(0.55);
+    TouchArea { clicked => { Vps.trust-cancel(); } }
+    Rectangle {
+        width: 560px;
+        height: cx.preferred-height + 40px;
+        border-radius: 12px;
+        background: Theme.bg;
+        border-width: 1px;
+        border-color: Theme.border;
+        TouchArea { }
+        cx := VerticalLayout {
+            padding: 20px;
+            spacing: 12px;
+            Text {
+                text: L.vps-trust-title;
+                font-size: 15px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+            // O caso perigoso primeiro: a chave mudou.
+            if Vps.trust-mudou: Rectangle {
+                height: aviso.preferred-height + 16px;
+                border-radius: 6px;
+                background: Theme.warn.transparentize(0.14);
+                aviso := Text {
+                    text: L.vps-trust-changed;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: Theme.warn;
+                    wrap: word-wrap;
+                }
+            }
+            Text {
+                text: L.vps-trust-desc;
+                font-size: 12px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+            Rectangle {
+                height: fp.preferred-height + 16px;
+                border-radius: 6px;
+                background: Theme.surface;
+                border-width: 1px;
+                border-color: Theme.border;
+                fp := Text {
+                    text: Vps.trust-fingerprint;
+                    font-family: "monospace";
+                    font-size: 12px;
+                    color: Theme.text;
+                    wrap: word-wrap;
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Rectangle { horizontal-stretch: 1; }
+                Btn { label: L.cancel;        clicked => { Vps.trust-cancel(); } }
+                Btn { label: L.vps-trust-yes; clicked => { Vps.trust-confirm(); } }
+            }
+        }
+    }
+}

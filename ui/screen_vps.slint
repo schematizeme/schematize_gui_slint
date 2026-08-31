@@ -1,0 +1,302 @@
+// Tela do GESTOR DE VPS — o "Termius embutido".
+//
+// O quê: lista de hosts com o NÍVEL DE FRONTEIRA de cada um, formulário de registro,
+// execução auditada, trilha de auditoria e catálogo de verbos.
+// Onde: `screen == 9`, alcançada pelo card da Home.
+//
+// A decisão visual que governa esta tela: **o badge de fronteira nunca mente**. Um host
+// sem fronteira server-side ostenta um badge vermelho e a frase do que isso significa
+// (ADR-0005). A alternativa — um cadeado verde genérico — venderia segurança que não
+// existe, que é justamente o risco R1 do plano.
+
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { Vps } from "state.slint";
+import { VpsRow, VpsLogRow, VpsVerbRow } from "types.slint";
+import { Btn, Chip, IconBtn } from "widgets.slint";
+import { ScrollView, LineEdit, ComboBox } from "std-widgets.slint";
+
+// Badge do nível de fronteira. Vermelho quando não há fronteira no servidor — é a
+// informação mais importante da linha, e por isso é a que tem mais contraste.
+component FronteiraBadge inherits Rectangle {
+    in property <string> rotulo;
+    in property <bool> server-side;
+    height: 22px;
+    width: txt.preferred-width + 16px;
+    border-radius: 11px;
+    background: root.server-side ? Theme.accent.transparentize(0.15) : Theme.warn.transparentize(0.18);
+    border-width: 1px;
+    border-color: root.server-side ? Theme.accent.transparentize(0.5) : Theme.warn.transparentize(0.6);
+    txt := Text {
+        text: root.rotulo;
+        font-size: 11px;
+        font-weight: 600;
+        color: root.server-side ? Theme.accent : Theme.warn;
+        vertical-alignment: center;
+    }
+}
+
+// Pastilha do ambiente. `prd` se destaca porque é onde toda execução para e pergunta.
+component EnvPill inherits Rectangle {
+    in property <string> env;
+    height: 22px;
+    width: 44px;
+    border-radius: 6px;
+    background: root.env == "prd" ? Theme.warn.transparentize(0.18) : Theme.border.transparentize(0.5);
+    Text {
+        text: root.env;
+        font-size: 11px;
+        font-weight: root.env == "prd" ? 700 : 500;
+        color: root.env == "prd" ? Theme.warn : Theme.text-dim;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component VpsScreen inherits VerticalLayout {
+    padding: 20px;
+    spacing: 14px;
+
+    // ---- banner de resultado da última ação --------------------------------
+    if Vps.banner != "": Rectangle {
+        height: 40px;
+        border-radius: 8px;
+        background: Vps.banner-error ? Theme.warn.transparentize(0.12) : Theme.accent.transparentize(0.10);
+        HorizontalLayout {
+            padding-left: 12px; padding-right: 12px;
+            Text {
+                text: Vps.banner;
+                color: Vps.banner-error ? Theme.warn : Theme.text;
+                font-size: 12px;
+                vertical-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+    }
+
+    // ---- cabeçalho + registro de host --------------------------------------
+    HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: L.vps-title;
+            font-size: 18px;
+            font-weight: 700;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        if Vps.busy: Text {
+            text: L.vps-busy;
+            font-size: 12px;
+            color: Theme.text-dim;
+            vertical-alignment: center;
+        }
+        Btn { label: L.refresh; clicked => { Vps.refresh(); } }
+    }
+
+    Rectangle {
+        height: 76px;
+        border-radius: 8px;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.border;
+        VerticalLayout {
+            padding: 10px;
+            spacing: 6px;
+            Text { text: L.vps-add; font-size: 12px; font-weight: 600; color: Theme.text-dim; }
+            HorizontalLayout {
+                spacing: 6px;
+                LineEdit { placeholder-text: L.vps-f-alias; text <=> Vps.f-alias; width: 130px; }
+                LineEdit { placeholder-text: L.vps-f-host;  text <=> Vps.f-host;  width: 160px; }
+                LineEdit { placeholder-text: L.vps-f-user;  text <=> Vps.f-user;  width: 110px; }
+                LineEdit { placeholder-text: L.vps-f-key;   text <=> Vps.f-key;   width: 130px; }
+                LineEdit { placeholder-text: L.vps-f-port;  text <=> Vps.f-port;  width: 60px; }
+                ComboBox {
+                    model: ["prd", "hml", "dev"];
+                    current-value <=> Vps.f-env;
+                    width: 80px;
+                }
+                Btn { label: L.vps-add-btn; clicked => { Vps.add(); } }
+            }
+        }
+    }
+
+    // ---- lista de hosts ----------------------------------------------------
+    Rectangle {
+        vertical-stretch: 1;
+        border-radius: 8px;
+        border-width: 1px;
+        border-color: Theme.border;
+        background: Theme.surface;
+        ScrollView {
+            VerticalLayout {
+                padding: 6px;
+                spacing: 4px;
+                if Vps.rows.length == 0: Rectangle {
+                    height: 70px;
+                    Text {
+                        text: L.vps-empty;
+                        color: Theme.text-dim;
+                        font-size: 12px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+                for r[i] in Vps.rows: Rectangle {
+                    height: linha.preferred-height + 16px;
+                    border-radius: 6px;
+                    background: Vps.sel == i ? Theme.accent.transparentize(0.08) : transparent;
+                    TouchArea { clicked => { Vps.pick(i); } }
+                    linha := VerticalLayout {
+                        padding: 8px;
+                        spacing: 5px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: r.alias;
+                                font-size: 13px;
+                                font-weight: 700;
+                                color: Theme.text;
+                                vertical-alignment: center;
+                                width: 130px;
+                            }
+                            Text {
+                                text: r.destino;
+                                font-size: 12px;
+                                color: Theme.text-dim;
+                                vertical-alignment: center;
+                                width: 190px;
+                            }
+                            EnvPill { env: r.ambiente; }
+                            Chip { label: r.modo; }
+                            // Host key não pinada = nada vai funcionar. Precisa gritar.
+                            if !r.confiado: Rectangle {
+                                height: 22px;
+                                width: hk.preferred-width + 14px;
+                                border-radius: 6px;
+                                background: Theme.warn.transparentize(0.18);
+                                hk := Text {
+                                    text: L.vps-untrusted;
+                                    font-size: 11px;
+                                    font-weight: 600;
+                                    color: Theme.warn;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            FronteiraBadge { rotulo: r.fronteira; server-side: r.server-side; }
+                            Rectangle { horizontal-stretch: 1; }
+                            if r.op-label != "": Text {
+                                text: r.op-label;
+                                font-size: 11px;
+                                color: r.op-error ? Theme.warn : Theme.text-dim;
+                                vertical-alignment: center;
+                            }
+                        }
+                        // A frase honesta do nível — a UI diz o que garante e o que não.
+                        Text {
+                            text: r.explicacao;
+                            font-size: 11px;
+                            color: Theme.text-dim;
+                            wrap: word-wrap;
+                        }
+                        if Vps.sel == i: HorizontalLayout {
+                            spacing: 6px;
+                            Btn { label: L.vps-trust;     clicked => { Vps.trust-request(i); } }
+                            Btn { label: L.vps-probe;     clicked => { Vps.probe(i); } }
+                            Btn { small: true; label: L.vps-bootstrap; clicked => { Vps.bootstrap(i); } }
+                            Btn { label: L.vps-seed;      clicked => { Vps.seed-verbs(i); } }
+                            Btn { label: L.vps-terminal;  clicked => { Vps.open-terminal(i); } }
+                            Rectangle { horizontal-stretch: 1; }
+                            ComboBox {
+                                model: ["readonly", "opsverbs", "livre"];
+                                current-value: r.modo;
+                                width: 110px;
+                                selected(v) => { Vps.set-modo(i, v); }
+                            }
+                            ComboBox {
+                                model: ["prd", "hml", "dev"];
+                                current-value: r.ambiente;
+                                width: 80px;
+                                selected(v) => { Vps.set-env(i, v); }
+                            }
+                            Btn { label: L.remove; clicked => { Vps.remove(i); } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- execução + saída ---------------------------------------------------
+    if Vps.sel >= 0: HorizontalLayout {
+        spacing: 6px;
+        LineEdit {
+            placeholder-text: L.vps-cmd;
+            text <=> Vps.cmd;
+            horizontal-stretch: 1;
+            accepted => { Vps.exec(); }
+        }
+        Btn { label: L.vps-run; clicked => { Vps.exec(); } }
+    }
+    if Vps.saida != "": Rectangle {
+        height: 120px;
+        border-radius: 6px;
+        background: Theme.bg;
+        border-width: 1px;
+        border-color: Theme.border;
+        ScrollView {
+            Text {
+                text: Vps.saida;
+                font-family: "monospace";
+                font-size: 11px;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+        }
+    }
+
+    // ---- catálogo de verbos do host selecionado ----------------------------
+    if Vps.sel >= 0 && Vps.verbos.length > 0: Rectangle {
+        height: 90px;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: Theme.border;
+        ScrollView {
+            VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+                Text { text: L.vps-verbs; font-size: 11px; font-weight: 600; color: Theme.text-dim; }
+                for v in Vps.verbos: HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: v.nome; font-size: 11px; font-weight: 600; color: Theme.text; width: 130px; }
+                    Text { text: v.comando; font-size: 11px; color: Theme.text-dim; }
+                }
+            }
+        }
+    }
+
+    // ---- trilha de auditoria ------------------------------------------------
+    Rectangle {
+        height: 150px;
+        border-radius: 8px;
+        border-width: 1px;
+        border-color: Theme.border;
+        background: Theme.surface;
+        ScrollView {
+            VerticalLayout {
+                padding: 6px;
+                spacing: 2px;
+                Text { text: L.vps-audit; font-size: 11px; font-weight: 600; color: Theme.text-dim; }
+                for l in Vps.log: HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: l.quando;    font-size: 11px; color: Theme.text-dim; width: 130px; }
+                    Text { text: l.veredito;  font-size: 11px; color: l.negado ? Theme.warn : Theme.text-dim; width: 60px; font-weight: l.negado ? 700 : 400; }
+                    Text { text: l.exit-code; font-size: 11px; color: Theme.text-dim; width: 40px; }
+                    Text { text: l.duracao;   font-size: 11px; color: Theme.text-dim; width: 70px; }
+                    Text { text: l.comando;   font-size: 11px; color: Theme.text; overflow: elide; }
+                }
+            }
+        }
+    }
+}
