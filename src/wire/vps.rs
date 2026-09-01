@@ -562,6 +562,64 @@ fn trocar(app: &AppWindow, i: i32, modo: Option<String>, env: Option<String>) {
 mod tests {
     use super::quando;
 
+    /// Lê o FONTE deste arquivo, só a metade de produção.
+    ///
+    /// **Onde:** os dois testes de conformidade abaixo, que asseveram propriedades da
+    /// FIAÇÃO — o que chama o quê, e de dentro de quê — e não do valor de retorno.
+    ///
+    /// **De onde veio:** os dois moravam no `schematize_cli_rs`, lendo este arquivo por
+    /// caminho relativo (`../schematize_gui_slint/src/wire/vps.rs`). Funcionava na máquina
+    /// de quem desenvolve, com os dois repos lado a lado, e **falhava sempre no CI**, onde
+    /// só um repo é clonado. Teste que não consegue passar no CI é teste que ensina a
+    /// ignorar o CI — ou que alguém apaga. O lugar dele é o repo dono do arquivo.
+    fn producao() -> String {
+        let s = std::fs::read_to_string("src/wire/vps.rs").expect("o próprio fonte");
+        s.split("#[cfg(test)]").next().unwrap_or("").to_string()
+    }
+
+    /// PISO 10 — a janela nunca bloqueia na rede.
+    ///
+    /// Toda chamada pesada (sondagem, bootstrap, host key, execução remota) tem que estar
+    /// dentro de `em_thread` ou de um `thread::spawn`. Uma delas no event loop congela a
+    /// janela inteira enquanto o SSH pensa — e SSH pensa por segundos, ou por um timeout.
+    #[test]
+    fn piso10_a_gui_nao_bloqueia_na_rede() {
+        let prod = producao();
+        for pesada in
+            ["vps::sondar(", "bootstrap::instalar(", "vps::descobrir_host_key(", "vps::executar("]
+        {
+            for (n, l) in prod.lines().enumerate() {
+                if !l.contains(pesada) {
+                    continue;
+                }
+                // Procura para trás por um `spawn`/`em_thread` no mesmo bloco (30 linhas).
+                let ini = n.saturating_sub(30);
+                let contexto: String =
+                    prod.lines().skip(ini).take(n - ini + 1).collect::<Vec<_>>().join("\n");
+                assert!(
+                    contexto.contains("em_thread") || contexto.contains("thread::spawn"),
+                    "wire/vps.rs:{}: `{pesada}` fora de thread — trava a janela",
+                    n + 1
+                );
+            }
+        }
+    }
+
+    /// P12 — entre VER a fingerprint e CONFIAR nela, o app não pode pinar outra.
+    ///
+    /// O confirmar re-colhe a chave no momento de confiar, em vez de gravar a que foi
+    /// exibida: um intervalo grande entre ver e clicar não pode pinar algo que ninguém viu.
+    #[test]
+    fn p12_toctou_no_trust() {
+        let prod = producao();
+        let confirm = prod.split("on_trust_confirm").nth(1).expect("o callback de confirmar");
+        let corpo: String = confirm.chars().take(1200).collect();
+        assert!(
+            corpo.contains("descobrir_host_key"),
+            "o confirmar tem que RE-COLHER a chave, não usar a que ficou na tela"
+        );
+    }
+
     #[test]
     fn timestamp_absurdo_nao_congela_a_janela() {
         // O laço avançava ano a ano: `i64::MAX` são ~2,9e11 voltas. Se este teste demorar,
