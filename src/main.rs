@@ -22,6 +22,7 @@ slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/
 // este `main.rs` guarda só o arranque e a FIAÇÃO das telas; toda a lógica mora nos
 // módulos abaixo. `prelude` centraliza os imports comuns (inclusive os tipos que o
 // `include_modules!()` acima gera).
+mod lockpin; // guarda: o Cargo.lock tem que pinar um commit do CLI, não um caminho local
 mod prelude;
 
 mod checklist; // paginação PURA do checklist (o que segura o custo de render)
