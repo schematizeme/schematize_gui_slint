@@ -52,7 +52,8 @@ pub(crate) fn build_db_table_rows(schema: &database::Schema) -> Vec<DbTableRow> 
 /// Reflete o `database::Schema` na UI: modelo de tabelas + nomes (dropdown) + flag
 /// has-schema. Mantém a tabela alvo do editor se ainda existir; senão pega a 1ª.
 pub(crate) fn db_rebuild(app: &AppWindow, schema: &database::Schema) {
-    app.global::<Db>().set_tables(ModelRc::from(Rc::new(VecModel::from(build_db_table_rows(schema)))));
+    app.global::<Db>()
+        .set_tables(ModelRc::from(Rc::new(VecModel::from(build_db_table_rows(schema)))));
     let names: Vec<String> = schema.tables.iter().map(|t| t.name.clone()).collect();
     app.global::<Db>().set_table_names(strings_model(names.clone()));
     app.global::<Db>().set_has_schema(!schema.tables.is_empty());
@@ -115,7 +116,12 @@ pub(crate) fn load_db_graph_into(
 
 /// Como `graph_sync`, mas escreve as propriedades `db-g-*` do grafo do SCHEMA (sem
 /// arquivo:linha — tabela não tem local no código; só nome + descrição das colunas).
-pub(crate) fn db_graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edges: &VecModel<GraphEdge>) {
+pub(crate) fn db_graph_sync(
+    app: &AppWindow,
+    st: &GraphState,
+    nodes: &VecModel<GraphNode>,
+    edges: &VecModel<GraphEdge>,
+) {
     app.global::<Db>().set_g_scale(st.scale);
     app.global::<Db>().set_g_ox(st.ox);
     app.global::<Db>().set_g_oy(st.oy);

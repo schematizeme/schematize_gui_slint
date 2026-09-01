@@ -110,34 +110,29 @@ pub(crate) fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
             });
             continue;
         }
-        let (kind, machine, hidx, rest): (&str, bool, i32, &str) =
-            if let Some(r) = t.strip_prefix("- [H ]") {
-                hopen += 1;
-                ("hopen", false, hopen, r)
-            } else if let Some(r) = t.strip_prefix("- [H x]").or_else(|| t.strip_prefix("- [H X]")) {
-                ("hdone", false, -1, r)
-            } else if let Some(r) = t.strip_prefix("- [H r]").or_else(|| t.strip_prefix("- [H R]")) {
-                ("hresp", false, -1, r)
-            } else if let Some(r) = t.strip_prefix("- [H -]") {
-                ("hrec", false, -1, r)
-            } else if let Some(r) = t.strip_prefix("- [-]") {
-                ("cancel", true, -1, r)
-            } else if let Some(r) = t.strip_prefix("- [ ]") {
-                ("open", true, -1, r)
-            } else if let Some(r) = t.strip_prefix("- [x]").or_else(|| t.strip_prefix("- [X]")) {
-                ("done", true, -1, r)
-            } else if let Some(r) = t.strip_prefix("- [~]") {
-                ("hold", true, -1, r)
-            } else {
-                continue;
-            };
-        out.push(OverItem {
-            kind: kind.into(),
-            text: limpa(rest),
-            machine,
-            hindex: hidx,
-            sub,
-        });
+        let (kind, machine, hidx, rest): (&str, bool, i32, &str) = if let Some(r) =
+            t.strip_prefix("- [H ]")
+        {
+            hopen += 1;
+            ("hopen", false, hopen, r)
+        } else if let Some(r) = t.strip_prefix("- [H x]").or_else(|| t.strip_prefix("- [H X]")) {
+            ("hdone", false, -1, r)
+        } else if let Some(r) = t.strip_prefix("- [H r]").or_else(|| t.strip_prefix("- [H R]")) {
+            ("hresp", false, -1, r)
+        } else if let Some(r) = t.strip_prefix("- [H -]") {
+            ("hrec", false, -1, r)
+        } else if let Some(r) = t.strip_prefix("- [-]") {
+            ("cancel", true, -1, r)
+        } else if let Some(r) = t.strip_prefix("- [ ]") {
+            ("open", true, -1, r)
+        } else if let Some(r) = t.strip_prefix("- [x]").or_else(|| t.strip_prefix("- [X]")) {
+            ("done", true, -1, r)
+        } else if let Some(r) = t.strip_prefix("- [~]") {
+            ("hold", true, -1, r)
+        } else {
+            continue;
+        };
+        out.push(OverItem { kind: kind.into(), text: limpa(rest), machine, hindex: hidx, sub });
     }
     out
 }

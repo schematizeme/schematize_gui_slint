@@ -116,11 +116,7 @@ pub(crate) fn schematize_bin() -> String {
     }
     // Nada ao lado: escolhe pelo PATH, canônico primeiro. Sem nada, devolve o canônico —
     // o erro que o usuário vê passa a ser "schematize: not found", que é acionável.
-    CLI_BINS
-        .iter()
-        .find(|n| which_bin(n))
-        .unwrap_or(&CLI_BINS[0])
-        .to_string()
+    CLI_BINS.iter().find(|n| which_bin(n)).unwrap_or(&CLI_BINS[0]).to_string()
 }
 
 /// Um binário existe no PATH?
@@ -198,7 +194,11 @@ pub(crate) fn set_window_app_id() {
     // antigo anunciasse o app_id novo, o `.desktop` antigo deixaria de casar e o dock
     // voltaria ao ícone genérico. Cada nome anuncia o seu, e os dois ficam certos.
     let id: &'static str = app_id_de(
-        std::env::current_exe().ok().as_deref().and_then(|p| p.file_name()).and_then(|s| s.to_str()),
+        std::env::current_exe()
+            .ok()
+            .as_deref()
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str()),
     );
     let built = i_slint_backend_winit::Backend::builder()
         .with_window_attributes_hook(move |attrs| {

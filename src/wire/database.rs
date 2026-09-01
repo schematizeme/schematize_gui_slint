@@ -15,7 +15,8 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // Schema canônico compartilhado (Send+Sync → cruza pra a thread do Postgres e é
     // lido pelos callbacks na UI thread). Grafo do schema em estado DEDICADO.
     let db_schema: Arc<Mutex<database::Schema>> = Arc::new(Mutex::new(database::Schema::default()));
-    let db_graph_state = Rc::new(RefCell::new(GraphState { scale: 1.0, alpha: 1.0, ..Default::default() }));
+    let db_graph_state =
+        Rc::new(RefCell::new(GraphState { scale: 1.0, alpha: 1.0, ..Default::default() }));
     let db_graph_nodes = Rc::new(VecModel::<GraphNode>::from(Vec::new()));
     let db_graph_edges = Rc::new(VecModel::<GraphEdge>::from(Vec::new()));
     let db_graph_timer = Rc::new(slint::Timer::default());
@@ -51,7 +52,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     let n = schema.tables.len();
                     *sh.lock().unwrap() = schema;
                     db_rebuild(&app, &sh.lock().unwrap());
-                    app.global::<Db>().set_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
+                    app.global::<Db>().set_status(
+                        format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n)
+                            .into(),
+                    );
                     app.global::<Db>().set_view(1);
                 }
                 Err(e) => app.global::<Db>().set_error(e.into()),
@@ -87,7 +91,14 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                                 let n = schema.tables.len();
                                 *sh.lock().unwrap() = schema;
                                 db_rebuild(&app, &sh.lock().unwrap());
-                                app.global::<Db>().set_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
+                                app.global::<Db>().set_status(
+                                    format!(
+                                        "{} — {} tabela(s)",
+                                        tor("gui.db_loaded", "Schema carregado"),
+                                        n
+                                    )
+                                    .into(),
+                                );
                                 app.global::<Db>().set_view(1);
                             }
                             Err(e) => app.global::<Db>().set_error(e.into()),
@@ -103,19 +114,22 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let sh = db_schema.clone();
         app.global::<Db>().on_load_json(move || {
             let Some(app) = weak.upgrade() else { return };
-            let Some(path) = rfd::FileDialog::new().add_filter("schema", &["json"]).pick_file() else {
+            let Some(path) = rfd::FileDialog::new().add_filter("schema", &["json"]).pick_file()
+            else {
                 return;
             };
             app.global::<Db>().set_error(SharedString::new());
-            match std::fs::read_to_string(&path)
-                .map_err(|e| e.to_string())
-                .and_then(|s| serde_json::from_str::<database::Schema>(&s).map_err(|e| e.to_string()))
-            {
+            match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| {
+                serde_json::from_str::<database::Schema>(&s).map_err(|e| e.to_string())
+            }) {
                 Ok(schema) => {
                     let n = schema.tables.len();
                     *sh.lock().unwrap() = schema;
                     db_rebuild(&app, &sh.lock().unwrap());
-                    app.global::<Db>().set_status(format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n).into());
+                    app.global::<Db>().set_status(
+                        format!("{} — {} tabela(s)", tor("gui.db_loaded", "Schema carregado"), n)
+                            .into(),
+                    );
                     app.global::<Db>().set_view(1);
                 }
                 Err(e) => app.global::<Db>().set_error(tf("err.prefix", &[("e", &e)]).into()),
@@ -138,9 +152,12 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let json = serde_json::to_string_pretty(&*sh.lock().unwrap()).unwrap_or_default();
             match std::fs::write(&path, json) {
                 Ok(()) => app.global::<Db>().set_status(
-                    format!("{} {}", tor("gui.db_saved", "schema.json salvo em"), path.display()).into(),
+                    format!("{} {}", tor("gui.db_saved", "schema.json salvo em"), path.display())
+                        .into(),
                 ),
-                Err(e) => app.global::<Db>().set_error(tf("err.prefix", &[("e", &e.to_string())]).into()),
+                Err(e) => {
+                    app.global::<Db>().set_error(tf("err.prefix", &[("e", &e.to_string())]).into())
+                }
             }
         });
     }
@@ -166,7 +183,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             {
                 let mut s = sh.lock().unwrap();
                 if s.tables.iter().any(|t| t.name == name) {
-                    app.global::<Db>().set_error(tor("gui.db_table_exists", "já existe uma tabela com esse nome").into());
+                    app.global::<Db>().set_error(
+                        tor("gui.db_table_exists", "já existe uma tabela com esse nome").into(),
+                    );
                     return;
                 }
                 s.tables.push(database::Table { name: name.clone(), ..Default::default() });
@@ -225,7 +244,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     t.fks.push(database::Fk {
                         column,
                         ref_table,
-                        ref_column: if ref_column.trim().is_empty() { "id".into() } else { ref_column },
+                        ref_column: if ref_column.trim().is_empty() {
+                            "id".into()
+                        } else {
+                            ref_column
+                        },
                     });
                 }
             }
@@ -253,8 +276,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let sh = db_schema.clone();
         app.global::<Db>().on_gen_migration(move || {
             if let Some(app) = weak.upgrade() {
-                app.global::<Db>().set_gen_title(tor("gui.db_gen_migration", "Gerar migration").into());
-                app.global::<Db>().set_gen_content(database::to_migration(&sh.lock().unwrap()).into());
+                app.global::<Db>()
+                    .set_gen_title(tor("gui.db_gen_migration", "Gerar migration").into());
+                app.global::<Db>()
+                    .set_gen_content(database::to_migration(&sh.lock().unwrap()).into());
                 app.global::<Db>().set_gen_open(true);
             }
         });
@@ -264,7 +289,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         app.global::<Db>().on_gen_save(move || {
             let Some(app) = weak.upgrade() else { return };
-            let Some(path) = rfd::FileDialog::new().add_filter("sql", &["sql"]).set_file_name("schema.sql").save_file()
+            let Some(path) = rfd::FileDialog::new()
+                .add_filter("sql", &["sql"])
+                .set_file_name("schema.sql")
+                .save_file()
             else {
                 return;
             };
@@ -304,7 +332,13 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 return;
             }
             let Some(root) = cur.borrow().clone() else {
-                app.global::<Db>().set_ai_status(tor("gui.db_ai_no_project", "Selecione um projeto na tela Overdev/Grafo primeiro.").into());
+                app.global::<Db>().set_ai_status(
+                    tor(
+                        "gui.db_ai_no_project",
+                        "Selecione um projeto na tela Overdev/Grafo primeiro.",
+                    )
+                    .into(),
+                );
                 return;
             };
             let base = basename_of(&root);
@@ -317,9 +351,15 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                         let msg = match res {
                             Ok(term) => format!(
                                 "{}{}{}",
-                                tor("gui.db_ai_running_pre", "schematize-database rodando no terminal "),
+                                tor(
+                                    "gui.db_ai_running_pre",
+                                    "schematize-database rodando no terminal "
+                                ),
                                 term,
-                                tor("gui.db_ai_running_post", " — carregue o schema.json quando terminar."),
+                                tor(
+                                    "gui.db_ai_running_post",
+                                    " — carregue o schema.json quando terminar."
+                                ),
                             ),
                             Err(e) => e,
                         };
@@ -470,5 +510,4 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
         });
     }
-
 }

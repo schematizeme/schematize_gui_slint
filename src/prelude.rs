@@ -17,9 +17,9 @@ pub(crate) use schematize::i18n::{self, t, tf};
 pub(crate) use schematize::registry::{self, Item};
 pub(crate) use schematize::skillsproj;
 pub(crate) use schematize::{
-    account, links, autostart, config, database, debugreport, environments, githist, market, notifications,
-    overdev, overdevdb, panel, projects, selfupdate, settings, skilledit, skills, sshkeys, upgrade,
-    usage, util,
+    account, autostart, config, database, debugreport, environments, githist, links, market,
+    notifications, overdev, overdevdb, panel, projects, selfupdate, settings, skilledit, skills,
+    sshkeys, upgrade, usage, util,
 };
 pub(crate) use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 pub(crate) use std::cell::RefCell;

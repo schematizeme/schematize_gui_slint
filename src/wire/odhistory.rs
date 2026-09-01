@@ -99,7 +99,8 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             if let (Some(p), true) = (root, id >= 0) {
                 match overdevdb::restore(id as i64, &p) {
                     Ok(dest) => app.global::<Od>().set_run_status(
-                        format!("{} {}", tor("gui.od_restored", "restaurado:"), dest.display()).into(),
+                        format!("{} {}", tor("gui.od_restored", "restaurado:"), dest.display())
+                            .into(),
                     ),
                     Err(e) => app.global::<Od>().set_run_status(e.into()),
                 }
@@ -143,5 +144,4 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
         });
     }
-
 }

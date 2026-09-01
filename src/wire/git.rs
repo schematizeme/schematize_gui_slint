@@ -65,8 +65,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     app.global::<Gh>().set_loading_projects(false);
                     app.global::<Gh>().set_scanned(true);
                     app.global::<Gh>().set_status_error(false);
-                    app.global::<Gh>()
-                        .set_status(format!("{n} {}", tor("gui.git_repo_count", "repositórios")).into());
+                    app.global::<Gh>().set_status(
+                        format!("{n} {}", tor("gui.git_repo_count", "repositórios")).into(),
+                    );
                 });
             });
         });
@@ -95,7 +96,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             };
             if c.usuario.is_empty() || c.email.is_empty() {
                 g.set_form_error(true);
-                g.set_form_status(tor("gui.git_need_user_email", "usuário e e-mail são obrigatórios.").into());
+                g.set_form_status(
+                    tor("gui.git_need_user_email", "usuário e e-mail são obrigatórios.").into(),
+                );
                 return;
             }
             match contas::adicionar(c.clone()) {
@@ -110,7 +113,10 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     // certa — dizer isso agora evita o push que falha depois.
                     g.set_form_status(
                         if matches!(c.auth, Auth::Ssh { .. }) && !aplicar::alias_configurado(&c) {
-                            tor("gui.git_saved_need_alias", "conta salva — falta escrever o alias SSH.")
+                            tor(
+                                "gui.git_saved_need_alias",
+                                "conta salva — falta escrever o alias SSH.",
+                            )
                         } else {
                             tor("gui.git_saved", "conta salva.")
                         }
@@ -134,7 +140,10 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let rotulo = r.rotulo.to_string();
             match contas::remover(&rotulo) {
                 Ok(_) => {
-                    set_rows(&app.global::<Gh>().get_accounts(), gitrows::account_rows(&contas::listar()));
+                    set_rows(
+                        &app.global::<Gh>().get_accounts(),
+                        gitrows::account_rows(&contas::listar()),
+                    );
                     app.global::<Gh>().set_form_error(false);
                     // Remover o cadastro NÃO desfaz o que já foi aplicado nos repos nem
                     // apaga a chave — dizer o que ficou é mais honesto que "removida".
@@ -142,7 +151,10 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                         format!(
                             "{} '{rotulo}' — {}",
                             tor("gui.git_removed", "conta removida:"),
-                            tor("gui.git_removed_note", "a chave e a config dos repositórios ficam como estão.")
+                            tor(
+                                "gui.git_removed_note",
+                                "a chave e a config dos repositórios ficam como estão."
+                            )
                         )
                         .into(),
                     );
@@ -163,8 +175,13 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let Some(r) = app.global::<Gh>().get_accounts().row_data(i as usize) else { return };
             let Some(c) = contas::por_rotulo(&r.rotulo) else { return };
             let (msg, erro) = match aplicar::escreve_alias(&c) {
-                Ok(true) => (tor("gui.git_alias_written", "alias adicionado ao ~/.ssh/config."), false),
-                Ok(false) => (tor("gui.git_alias_noop", "nada a fazer (conta gh ou alias já existe)."), false),
+                Ok(true) => {
+                    (tor("gui.git_alias_written", "alias adicionado ao ~/.ssh/config."), false)
+                }
+                Ok(false) => (
+                    tor("gui.git_alias_noop", "nada a fazer (conta gh ou alias já existe)."),
+                    false,
+                ),
                 Err(e) => (e, true),
             };
             set_rows(&app.global::<Gh>().get_accounts(), gitrows::account_rows(&contas::listar()));
@@ -221,7 +238,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let rotulo = g.get_sel_account().to_string();
             let idx = g.get_sel_project();
             let lista = trava(&ps);
-            let (Some(e), Some(c)) = (lista.get(idx.max(0) as usize), contas::por_rotulo(&rotulo)) else {
+            let (Some(e), Some(c)) = (lista.get(idx.max(0) as usize), contas::por_rotulo(&rotulo))
+            else {
                 return;
             };
             // Diz exatamente o que muda: identidade local e (se der pra saber qual repo
@@ -303,8 +321,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                         Ok((n, linhas)) => {
                             set_rows(&app.global::<Gh>().get_repos(), linhas);
                             app.global::<Gh>().set_status_error(false);
-                            app.global::<Gh>()
-                                .set_status(format!("{n} {}", tor("gui.git_repo_count", "repositórios")).into());
+                            app.global::<Gh>().set_status(
+                                format!("{n} {}", tor("gui.git_repo_count", "repositórios")).into(),
+                            );
                         }
                         // Erro do `gh` vai INTEIRO pra tela: "não está logado" e "não
                         // está instalado" pedem ações diferentes, e uma lista vazia

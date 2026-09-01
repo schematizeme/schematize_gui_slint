@@ -68,8 +68,8 @@ fn quando(ts: i64) -> String {
     //
     // Timestamp fora da faixa plausível não é data: é dado corrompido, e a UI diz isso em vez
     // de fingir uma data ou travar.
-    const MIN: i64 = 0;                 // 1970-01-01
-    const MAX: i64 = 253_402_300_799;   // 9999-12-31 23:59:59
+    const MIN: i64 = 0; // 1970-01-01
+    const MAX: i64 = 253_402_300_799; // 9999-12-31 23:59:59
     if !(MIN..=MAX).contains(&ts) {
         return format!("(data inválida: {ts})");
     }
@@ -253,7 +253,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let Some(alias) = alias_de(&app, i) else { return };
             let r = conn().and_then(|c| vps::remover(&c, &alias));
             match r {
-                Ok(_) => banner(&app, format!("host {alias:?} removido — a trilha permanece"), false),
+                Ok(_) => {
+                    banner(&app, format!("host {alias:?} removido — a trilha permanece"), false)
+                }
                 Err(e) => banner(&app, e, true),
             }
             app.global::<Vps>().set_sel(-1);
@@ -299,9 +301,18 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                 let mut p = vps::buscar(&c, &alias)?.ok_or("host sumiu do registro")?;
                 let r = vps::bootstrap::instalar(&c, &mut p)?;
                 Ok(if r.melhorou() {
-                    format!("{alias}: {} -> {} · {} verbo(s) sincronizado(s)", r.antes.rotulo(), r.depois.rotulo(), r.verbos)
+                    format!(
+                        "{alias}: {} -> {} · {} verbo(s) sincronizado(s)",
+                        r.antes.rotulo(),
+                        r.depois.rotulo(),
+                        r.verbos
+                    )
                 } else {
-                    format!("{alias}: {} (sem mudança). {}", r.depois.rotulo(), r.depois.explicacao())
+                    format!(
+                        "{alias}: {} (sem mudança). {}",
+                        r.depois.rotulo(),
+                        r.depois.explicacao()
+                    )
                 })
             });
         });
@@ -320,10 +331,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     let c = conn()?;
                     let p = vps::buscar(&c, &alias)?.ok_or("host sumiu do registro")?;
                     let cand = vps::descobrir_host_key(&p)?;
-                    let mudou = p
-                        .fingerprint
-                        .as_ref()
-                        .is_some_and(|a| a.trim() != cand.fingerprint.trim());
+                    let mudou =
+                        p.fingerprint.as_ref().is_some_and(|a| a.trim() != cand.fingerprint.trim());
                     Ok((cand.fingerprint, mudou))
                 })();
                 let _ = slint::invoke_from_event_loop(move || {
@@ -435,7 +444,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let Some(alias) = alias_de(&app, i) else { return };
             let r = conn().and_then(|c| vps::verbos::semear(&c, &alias));
             match r {
-                Ok(n) => banner(&app, format!("{n} verbo(s) criado(s) — revise antes de instalar a fronteira"), false),
+                Ok(n) => banner(
+                    &app,
+                    format!("{n} verbo(s) criado(s) — revise antes de instalar a fronteira"),
+                    false,
+                ),
                 Err(e) => banner(&app, e, true),
             }
             let vm = Rc::new(VecModel::<VpsVerbRow>::from(build_verbos(&alias)));

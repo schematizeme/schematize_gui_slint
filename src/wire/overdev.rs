@@ -37,7 +37,16 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 return;
             }
             if let Some(app) = weak.upgrade() {
-                select_project(&app, &cl, &pm, &dm, &pnm, &cur, &sf, PathBuf::from(path.to_string()));
+                select_project(
+                    &app,
+                    &cl,
+                    &pm,
+                    &dm,
+                    &pnm,
+                    &cur,
+                    &sf,
+                    PathBuf::from(path.to_string()),
+                );
                 graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
                 app.global::<Od>().invoke_refresh_history();
             }
@@ -54,7 +63,8 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let gl = graph_loaded.clone();
         let sf = od_stop_flag.clone();
         app.global::<Od>().on_open_folder(move || {
-            if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_folder() {
+            if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_folder()
+            {
                 if let Some(app) = weak.upgrade() {
                     select_project(&app, &cl, &pm, &dm, &pnm, &cur, &sf, dir);
                     graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
@@ -134,12 +144,18 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         app.global::<Od>().on_run_skill_action(move |command| {
             let Some(app) = weak.upgrade() else { return };
             let Some(project) = cur.borrow().clone() else {
-                app.global::<Od>().set_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
+                app.global::<Od>().set_run_status(
+                    tor("gui.od_no_project", "Escolha um projeto primeiro.").into(),
+                );
                 return;
             };
             match schematize::agentrun::launch_prompt_in_terminal(&project, command.as_str()) {
-                Ok(_) => app.global::<Od>().set_run_status(format!("Rodando {command} num terminal externo…").into()),
-                Err(e) => app.global::<Od>().set_run_status(format!("falhou ao rodar {command}: {e}").into()),
+                Ok(_) => app
+                    .global::<Od>()
+                    .set_run_status(format!("Rodando {command} num terminal externo…").into()),
+                Err(e) => app
+                    .global::<Od>()
+                    .set_run_status(format!("falhou ao rodar {command}: {e}").into()),
             }
         });
     }
@@ -153,13 +169,18 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         app.global::<Od>().on_open_terminal(move || {
             let Some(app) = weak.upgrade() else { return };
             let Some(project) = cur.borrow().clone() else {
-                app.global::<Od>().set_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
+                app.global::<Od>().set_run_status(
+                    tor("gui.od_no_project", "Escolha um projeto primeiro.").into(),
+                );
                 return;
             };
             match schematize::agentrun::abrir_terminal_no_projeto(&project) {
-                Ok(term) => app.global::<Od>()
-                    .set_run_status(format!("terminal `{term}` aberto em {}", project.display()).into()),
-                Err(e) => app.global::<Od>().set_run_status(format!("não consegui abrir o terminal: {e}").into()),
+                Ok(term) => app.global::<Od>().set_run_status(
+                    format!("terminal `{term}` aberto em {}", project.display()).into(),
+                ),
+                Err(e) => app
+                    .global::<Od>()
+                    .set_run_status(format!("não consegui abrir o terminal: {e}").into()),
             }
         });
     }
@@ -230,23 +251,28 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let root = cur.borrow().clone();
             let Some(root) = root else {
                 if let Some(app) = weak.upgrade() {
-                    app.global::<Od>().set_run_status(tor("gui.od_no_project", "Escolha um projeto primeiro.").into());
+                    app.global::<Od>().set_run_status(
+                        tor("gui.od_no_project", "Escolha um projeto primeiro.").into(),
+                    );
                 }
                 return;
             };
             if let Some(app) = weak.upgrade() {
                 app.global::<Od>().set_run_status(
-                    tor("gui.od_gen_running", "Gerando afazeres do archive num terminal externo…").into(),
+                    tor("gui.od_gen_running", "Gerando afazeres do archive num terminal externo…")
+                        .into(),
                 );
             }
             let weak = weak.clone();
             std::thread::spawn(move || {
-                let res = agentrun::launch_prompt_in_terminal(&root, &agentrun::archive_todos_prompt());
+                let res =
+                    agentrun::launch_prompt_in_terminal(&root, &agentrun::archive_todos_prompt());
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
                         match res {
                             Ok(term) => app.global::<Od>().set_run_status(
-                                format!("{} {}", tor("gui.od_gen_ok", "gerando no terminal"), term).into(),
+                                format!("{} {}", tor("gui.od_gen_ok", "gerando no terminal"), term)
+                                    .into(),
                             ),
                             Err(e) => app.global::<Od>().set_run_status(e.into()),
                         }
@@ -261,7 +287,8 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
         app.global::<Od>().on_add_dev_dir(move || {
-            if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.add_dev_dir")).pick_folder() {
+            if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.add_dev_dir")).pick_folder()
+            {
                 let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
                 config::add_dev_dir(&abs.to_string_lossy());
                 refresh_proj_models(&pm, &dm, &pnm);
@@ -285,7 +312,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
         app.global::<Od>().on_pin_folder(move || {
-            if let Some(dir) = rfd::FileDialog::new().set_title(tor("gui.pin_folder", "Fixar pasta…")).pick_folder() {
+            if let Some(dir) = rfd::FileDialog::new()
+                .set_title(tor("gui.pin_folder", "Fixar pasta…"))
+                .pick_folder()
+            {
                 let abs = std::fs::canonicalize(&dir).unwrap_or(dir);
                 config::pin_project(&abs.to_string_lossy());
                 refresh_proj_models(&pm, &dm, &pnm);
@@ -404,10 +434,15 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 // Guarda-corpo: com o editor FECHADO ou com o arquivo acima de
                 // EDITOR_MAX_BYTES o `od-editor-content` está VAZIO de propósito.
                 // Gravar aqui truncaria o PLAN/CHECKLIST do projeto — recusa.
-                if !app.global::<Od>().get_editor_open() || app.global::<Od>().get_editor_too_big() {
+                if !app.global::<Od>().get_editor_open() || app.global::<Od>().get_editor_too_big()
+                {
                     app.global::<Od>().set_editor_error(true);
                     app.global::<Od>().set_editor_status(
-                        tor("gui.od_editor_readonly", "Arquivo grande demais para editar aqui — abra no editor externo.").into(),
+                        tor(
+                            "gui.od_editor_readonly",
+                            "Arquivo grande demais para editar aqui — abra no editor externo.",
+                        )
+                        .into(),
                     );
                     return;
                 }
@@ -511,7 +546,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 app.global::<Od>().set_mon_iter(0);
                 app.global::<Od>().set_mon_max(0);
                 app.global::<Od>().set_mon_mode(SharedString::new());
-                app.global::<Od>().set_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
+                app.global::<Od>().set_mon_items(ModelRc::from(Rc::new(
+                    VecModel::<SharedString>::from(Vec::new()),
+                )));
                 stop.store(false, Ordering::SeqCst);
                 let objetivo = overdev::objetivo_at(&p).unwrap_or_default();
                 let w = weak.clone();
@@ -573,27 +610,36 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let root = cur.borrow().clone();
             let Some(app) = weak.upgrade() else { return };
             let Some(p) = root else {
-                app.global::<Od>().set_run_status(tor("gui.od_pick_first", "Selecione um projeto primeiro.").into());
+                app.global::<Od>().set_run_status(
+                    tor("gui.od_pick_first", "Selecione um projeto primeiro.").into(),
+                );
                 return;
             };
             if !overdev_dir(&p).is_dir() {
-                app.global::<Od>().set_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
+                app.global::<Od>().set_run_status(
+                    tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into(),
+                );
                 return;
             }
             // Já monitorando: não dispara outra thread (evita duplicata na mesma
             // `stop`); só reforça os tokens agora.
             if app.global::<Od>().get_session_running() {
                 spawn_usage(weak.clone(), p.clone());
-                app.global::<Od>().set_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
+                app.global::<Od>().set_run_status(
+                    tor("gui.od_attached", "acompanhando o overdev deste projeto…").into(),
+                );
                 return;
             }
             // Zera o painel e liga o monitor anexado ao run externo.
-            app.global::<Od>().set_run_status(tor("gui.od_attached", "acompanhando o overdev deste projeto…").into());
+            app.global::<Od>().set_run_status(
+                tor("gui.od_attached", "acompanhando o overdev deste projeto…").into(),
+            );
             // Idem: contadores preservados (fonte única — ver a nota no `on_run`).
             app.global::<Od>().set_mon_iter(0);
             app.global::<Od>().set_mon_max(0);
             app.global::<Od>().set_mon_mode(SharedString::new());
-            app.global::<Od>().set_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
+            app.global::<Od>()
+                .set_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
             app.global::<Od>().set_session_running(true);
             stop.store(false, Ordering::SeqCst);
             run_monitor(weak.clone(), p, stop.clone(), true);
@@ -609,7 +655,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 if overdev_dir(&p).is_dir() {
                     spawn_usage(weak.clone(), p);
                 } else {
-                    app.global::<Od>().set_run_status(tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into());
+                    app.global::<Od>().set_run_status(
+                        tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into(),
+                    );
                 }
             }
         });

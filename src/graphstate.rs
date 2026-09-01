@@ -162,7 +162,15 @@ impl GraphState {
             Some(i) => self
                 .edges
                 .iter()
-                .filter_map(|&(a, b)| if a == i { Some(b) } else if b == i { Some(a) } else { None })
+                .filter_map(|&(a, b)| {
+                    if a == i {
+                        Some(b)
+                    } else if b == i {
+                        Some(a)
+                    } else {
+                        None
+                    }
+                })
                 .collect(),
             None => HashSet::new(),
         };
@@ -170,7 +178,8 @@ impl GraphState {
             let matched = !q.is_empty() && n.id.to_lowercase().contains(&q);
             n.selected = focus == Some(i);
             n.hot = nb.contains(&i) || matched;
-            n.dim = (focus.is_some() && focus != Some(i) && !nb.contains(&i)) || (!q.is_empty() && !matched);
+            n.dim = (focus.is_some() && focus != Some(i) && !nb.contains(&i))
+                || (!q.is_empty() && !matched);
         }
     }
 }

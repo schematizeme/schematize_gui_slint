@@ -21,19 +21,18 @@ pub(crate) fn graph_node_row(n: &GNode) -> GraphNode {
 /// Constrói uma linha do modelo de arestas (pontas em mundo + realce).
 pub(crate) fn graph_edge_row(st: &GraphState, a: usize, b: usize) -> GraphEdge {
     let on = st.sel == Some(a) || st.sel == Some(b);
-    GraphEdge {
-        x1: st.nodes[a].x,
-        y1: st.nodes[a].y,
-        x2: st.nodes[b].x,
-        y2: st.nodes[b].y,
-        on,
-    }
+    GraphEdge { x1: st.nodes[a].x, y1: st.nodes[a].y, x2: st.nodes[b].x, y2: st.nodes[b].y, on }
 }
 
 /// Empurra TUDO pro Slint: transformação (props), seleção (info) e os dois
 /// VecModel (nós/arestas). Atualiza in-place quando o tamanho casa (sem realloc
 /// no loop da física); senão troca o vec inteiro (carga/relayout).
-pub(crate) fn graph_sync(app: &AppWindow, st: &GraphState, nodes: &VecModel<GraphNode>, edges: &VecModel<GraphEdge>) {
+pub(crate) fn graph_sync(
+    app: &AppWindow,
+    st: &GraphState,
+    nodes: &VecModel<GraphNode>,
+    edges: &VecModel<GraphEdge>,
+) {
     app.global::<G>().set_scale(st.scale);
     app.global::<G>().set_ox(st.ox);
     app.global::<G>().set_oy(st.oy);
@@ -250,11 +249,7 @@ pub(crate) fn graph_mark_dirty(loaded: &RefCell<Option<PathBuf>>) {
 /// **Efeitos:** só `stat` no dir; nunca panica.
 fn grafos_mtime(proj: &Path) -> Option<std::time::SystemTime> {
     let dir = proj.join(".schematize").join("grafos");
-    std::fs::read_dir(dir)
-        .ok()?
-        .flatten()
-        .filter_map(|e| e.metadata().ok()?.modified().ok())
-        .max()
+    std::fs::read_dir(dir).ok()?.flatten().filter_map(|e| e.metadata().ok()?.modified().ok()).max()
 }
 
 /// Entrada na aba Grafo: carrega o grafo do projeto corrente se ainda não estiver

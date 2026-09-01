@@ -99,7 +99,12 @@ pub(crate) fn post_monitor_end(weak: &Weak<AppWindow>, mode: String) {
 /// andamento (mode "active") é seguido de imediato e um run já FINALIZADO
 /// ("stopped") posta o snapshot final uma vez e encerra, em vez de exigir que o
 /// monitor testemunhe a transição pra active (que já aconteceu antes de anexarmos).
-pub(crate) fn run_monitor(weak: Weak<AppWindow>, project: PathBuf, stop: Arc<AtomicBool>, attach: bool) {
+pub(crate) fn run_monitor(
+    weak: Weak<AppWindow>,
+    project: PathBuf,
+    stop: Arc<AtomicBool>,
+    attach: bool,
+) {
     std::thread::spawn(move || {
         let mut seen_active = attach;
         // Última lista de conclusões ESPELHADA na UI (pra não republicar igual).

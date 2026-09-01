@@ -45,7 +45,10 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                 let err = if slug.is_empty() || skilledit::validate_slug(&slug).is_ok() {
                     String::new()
                 } else {
-                    tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito")
+                    tor(
+                        "gui.slug_invalid",
+                        "slug inválido — use só [a-z0-9-], começando por letra/dígito",
+                    )
                 };
                 app.global::<Mg>().set_slug_error(err.into());
             }
@@ -64,7 +67,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             // trava dupla: valida antes de spawnar (feedback imediato).
             if skilledit::validate_slug(&slug).is_err() {
                 app.global::<Mg>().set_slug_error(
-                    tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito").into(),
+                    tor(
+                        "gui.slug_invalid",
+                        "slug inválido — use só [a-z0-9-], começando por letra/dígito",
+                    )
+                    .into(),
                 );
                 return;
             }
@@ -139,7 +146,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                 // lista os arquivos + status de FORK (oficial? já forkada?) da skill escolhida.
                 let files = skilledit::list_files(&slug).unwrap_or_default();
                 let official = skills::is_official(&slug);
-                let forked = skills::load_state().skills.get(&slug).map(|e| e.forked).unwrap_or(false);
+                let forked =
+                    skills::load_state().skills.get(&slug).map(|e| e.forked).unwrap_or(false);
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
                         app.global::<Mg>().set_files(strings_model(files));
@@ -170,7 +178,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                             Err(e) => {
                                 app.global::<Mg>().set_content(SharedString::new());
                                 app.global::<Mg>().set_save_error(true);
-                                app.global::<Mg>().set_save_result(tf("err.prefix", &[("e", &e)]).into());
+                                app.global::<Mg>()
+                                    .set_save_result(tf("err.prefix", &[("e", &e)]).into());
                             }
                         }
                     }
@@ -204,13 +213,15 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                         match res {
                             Ok(()) => {
                                 app.global::<Mg>().set_save_error(false);
-                                app.global::<Mg>().set_save_result(tor("gui.saved", "Salvo").into());
+                                app.global::<Mg>()
+                                    .set_save_result(tor("gui.saved", "Salvo").into());
                                 app.global::<Mg>().set_sel_forked(forked);
                                 mark_row_forked(&app, &slug2, forked);
                             }
                             Err(e) => {
                                 app.global::<Mg>().set_save_error(true);
-                                app.global::<Mg>().set_save_result(tf("err.prefix", &[("e", &e)]).into());
+                                app.global::<Mg>()
+                                    .set_save_result(tf("err.prefix", &[("e", &e)]).into());
                             }
                         }
                     }
@@ -218,5 +229,4 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             });
         });
     }
-
 }

@@ -24,26 +24,26 @@ slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/
 // `include_modules!()` acima gera).
 mod prelude;
 
-mod checklist;      // paginação PURA do checklist (o que segura o custo de render)
-mod checklistview;  // ligação do checklist fatiado com as propriedades da UI
-mod dbbuilder;      // Database builder: linhas de schema + grafo do schema
-mod discorows;      // linhas/paginação da tela Disco (o Rust é dono da lista inteira)
-mod envrows;        // linhas de Environments/SSH/idiomas + ações em terminal
-mod fmt;            // formatação de valores pra UI (puro)
-mod gitrows;        // linhas da tela Git (contas, estado dos repos, commits)
-mod graphstate;     // estado + passo da física do grafo
-mod graphview;      // ponte do grafo com a UI (modelos, carga preguiçosa, timer)
-mod i18nbind;       // catálogo i18n -> propriedades do `global L`
-mod odhistory;      // histórico do overdev (snapshots + commits), paginado
-mod odload;         // carga do estado do overdev + editor acoplado
-mod odmonitor;      // monitor leve do .schematize/overdev/ (thread -> UI)
-mod odproj;         // projetos, caminhos e parse do CHECKLIST 2-níveis
-mod repulsion;      // repulsão do grafo em grade espacial (era O(n²)/quadro)
-mod skilljobs;      // trabalho de skills fora do event loop (rede/IO em thread)
-mod skillrows;      // linhas e paginação da lista de skills
-mod spiral;         // semente de posição dos nós do grafo (espiral áurea)
-mod sysenv;         // integração com o sistema (processo, PATH, terminal, editor)
-mod wire;           // FIAÇÃO da janela: um módulo por recorte da UI (ver wire/mod.rs)
+mod checklist; // paginação PURA do checklist (o que segura o custo de render)
+mod checklistview; // ligação do checklist fatiado com as propriedades da UI
+mod dbbuilder; // Database builder: linhas de schema + grafo do schema
+mod discorows; // linhas/paginação da tela Disco (o Rust é dono da lista inteira)
+mod envrows; // linhas de Environments/SSH/idiomas + ações em terminal
+mod fmt; // formatação de valores pra UI (puro)
+mod gitrows; // linhas da tela Git (contas, estado dos repos, commits)
+mod graphstate; // estado + passo da física do grafo
+mod graphview; // ponte do grafo com a UI (modelos, carga preguiçosa, timer)
+mod i18nbind; // catálogo i18n -> propriedades do `global L`
+mod odhistory; // histórico do overdev (snapshots + commits), paginado
+mod odload; // carga do estado do overdev + editor acoplado
+mod odmonitor; // monitor leve do .schematize/overdev/ (thread -> UI)
+mod odproj; // projetos, caminhos e parse do CHECKLIST 2-níveis
+mod repulsion; // repulsão do grafo em grade espacial (era O(n²)/quadro)
+mod skilljobs; // trabalho de skills fora do event loop (rede/IO em thread)
+mod skillrows; // linhas e paginação da lista de skills
+mod spiral; // semente de posição dos nós do grafo (espiral áurea)
+mod sysenv; // integração com o sistema (processo, PATH, terminal, editor)
+mod wire; // FIAÇÃO da janela: um módulo por recorte da UI (ver wire/mod.rs)
 
 use crate::prelude::*;
 use checklistview::ChecklistView;
@@ -86,7 +86,8 @@ fn main() -> Result<(), slint::PlatformError> {
     // Ícone da janela DESENHADO em código (resiliente — sem depender de arquivo).
     app.set_app_icon(make_app_icon());
     // Ações declaradas por skills instaladas (gui.json) → botões (Q.A., Pentest, …) na aba do projeto.
-    app.global::<Od>().set_skill_actions(ModelRc::from(Rc::new(VecModel::from(skill_action_rows()))));
+    app.global::<Od>()
+        .set_skill_actions(ModelRc::from(Rc::new(VecModel::from(skill_action_rows()))));
     // Versão do app (Configurações) — ex.: "schematize v0.49.0".
     app.global::<App>().set_version(format!("schematize v{}", upgrade::app_version()).into());
     app.global::<Sk>().set_rows(ModelRc::from(model.clone()));
@@ -140,7 +141,8 @@ fn main() -> Result<(), slint::PlatformError> {
     // Estado (dono da física + transformação), dois VecModel (nós/arestas) e o
     // Timer da física. O grafo COMPARTILHA o projeto com a aba Overdev — carregado
     // junto na seleção/restauração de projeto (mais abaixo).
-    let graph_state = Rc::new(RefCell::new(GraphState { scale: 1.0, alpha: 1.0, ..Default::default() }));
+    let graph_state =
+        Rc::new(RefCell::new(GraphState { scale: 1.0, alpha: 1.0, ..Default::default() }));
     let graph_nodes = Rc::new(VecModel::<GraphNode>::from(Vec::new()));
     let graph_edges = Rc::new(VecModel::<GraphEdge>::from(Vec::new()));
     let graph_timer = Rc::new(slint::Timer::default());
@@ -201,7 +203,14 @@ fn main() -> Result<(), slint::PlatformError> {
             let abs = std::fs::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(&p));
             *od_current.borrow_mut() = Some(abs.clone());
             load_overdev_into(&app, &od_cl, Some(&abs));
-            refresh_od_history(&app, &od_snaps_all, &od_snaps_model, &od_commits_all, &od_commits_model, Some(&abs));
+            refresh_od_history(
+                &app,
+                &od_snaps_all,
+                &od_snaps_model,
+                &od_commits_all,
+                &od_commits_model,
+                Some(&abs),
+            );
             // grafo compartilha o projeto restaurado.
             graph_mark_dirty(&graph_loaded); // grafo carrega só quando a aba Grafo abrir
             if arg_project.is_some() {
@@ -265,7 +274,8 @@ mod tests {
     fn scratch(checklist: &str) -> std::path::PathBuf {
         static SEQ: AtomicUsize = AtomicUsize::new(0);
         let uniq = SEQ.fetch_add(1, Ordering::SeqCst);
-        let base = std::env::temp_dir().join(format!("gui-od-test-{}-{}", std::process::id(), uniq));
+        let base =
+            std::env::temp_dir().join(format!("gui-od-test-{}-{}", std::process::id(), uniq));
         let od = base.join(".overdev");
         std::fs::create_dir_all(&od).unwrap();
         std::fs::write(od.join("CHECKLIST.md"), checklist).unwrap();

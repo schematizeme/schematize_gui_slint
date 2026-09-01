@@ -128,7 +128,8 @@ pub(crate) fn run_env_action(action: &str, lang: &str, method: &str) -> String {
     if launch_terminal(&inner) {
         t("gui.env_terminal_opened")
     } else {
-        let method_arg = if method.is_empty() { String::new() } else { format!(" --method {method}") };
+        let method_arg =
+            if method.is_empty() { String::new() } else { format!(" --method {method}") };
         let cmd = format!("{bin} env {action} {lang}{method_arg}");
         tf("gui.env_no_terminal", &[("cmd", &cmd)])
     }

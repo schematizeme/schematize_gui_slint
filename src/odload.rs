@@ -87,7 +87,6 @@ pub(crate) fn load_editor_content(app: &AppWindow, root: &Path) {
     app.global::<Od>().set_editor_content(content.into());
 }
 
-
 /// Zera TUDO que pertence ao projeto anterior e para o monitor dele.
 ///
 /// O quê: sinaliza o stop do monitor, larga o flag de sessão e limpa os globais de escopo
@@ -118,11 +117,23 @@ pub(crate) fn reset_projeto(app: &AppWindow, stop: &std::sync::atomic::AtomicBoo
 
     // Escopo de projeto: sem isto, sobra do anterior.
     for setter in [
-        Od::set_objetivo, Od::set_mode, Od::set_decisoes, Od::set_plano, Od::set_perguntas,
-        Od::set_editor_content, Od::set_editor_status, Od::set_editor_target, Od::set_notes,
-        Od::set_note_input, Od::set_correction_input,
-        Od::set_run_status, Od::set_split_status, Od::set_agent_cmdline,
-        Od::set_mon_mode, Od::set_usage_line, Od::set_upstream_line,
+        Od::set_objetivo,
+        Od::set_mode,
+        Od::set_decisoes,
+        Od::set_plano,
+        Od::set_perguntas,
+        Od::set_editor_content,
+        Od::set_editor_status,
+        Od::set_editor_target,
+        Od::set_notes,
+        Od::set_note_input,
+        Od::set_correction_input,
+        Od::set_run_status,
+        Od::set_split_status,
+        Od::set_agent_cmdline,
+        Od::set_mon_mode,
+        Od::set_usage_line,
+        Od::set_upstream_line,
     ] {
         setter(&od, SharedString::new());
     }

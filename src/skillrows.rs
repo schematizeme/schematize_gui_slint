@@ -40,7 +40,10 @@ pub(crate) fn strings_model(v: Vec<String>) -> ModelRc<SharedString> {
 // ---------------------------------------------------------------------------
 // Estado derivado (missing/outdated/current/loading) + rótulo traduzido.
 // ---------------------------------------------------------------------------
-pub(crate) fn compute_state(installed: &Option<String>, latest: &Option<String>) -> (String, String) {
+pub(crate) fn compute_state(
+    installed: &Option<String>,
+    latest: &Option<String>,
+) -> (String, String) {
     match (installed, latest) {
         // Não instalada — mesmo com latest desconhecido, dá pra instalar.
         (None, _) => ("missing".into(), t("common.not_installed")),
@@ -58,7 +61,11 @@ pub(crate) fn compute_state(installed: &Option<String>, latest: &Option<String>)
 // ---------------------------------------------------------------------------
 /// Categoria normalizada de um item (vazio → "language").
 pub(crate) fn category_of(it: &Item) -> &str {
-    if it.category.is_empty() { "language" } else { it.category.as_str() }
+    if it.category.is_empty() {
+        "language"
+    } else {
+        it.category.as_str()
+    }
 }
 
 /// Cabeçalho de categoria de UMA página (page 0 = Instaladas, 1 = Marketplace).
@@ -123,12 +130,7 @@ pub(crate) fn skill_row(it: &Item, forked: bool) -> SkillRow {
 
 /// Conjunto dos slugs atualmente FORKADOS (lido do estado uma vez).
 pub(crate) fn forked_slugs() -> HashSet<String> {
-    skills::load_state()
-        .skills
-        .iter()
-        .filter(|(_, e)| e.forked)
-        .map(|(k, _)| k.clone())
-        .collect()
+    skills::load_state().skills.iter().filter(|(_, e)| e.forked).map(|(k, _)| k.clone()).collect()
 }
 
 /// Ordena os itens em grupos (base, language, external). Por categoria emite
@@ -322,7 +324,5 @@ pub(crate) fn slug_installed(model: &VecModel<SkillRow>, slug: &str) -> bool {
 
 /// Índice da linha de uma skill (por slug) no vetor de itens alinhado ao modelo.
 pub(crate) fn row_idx_of_slug(row_items: &[Option<Item>], slug: &str) -> Option<usize> {
-    row_items
-        .iter()
-        .position(|m| m.as_ref().map(|it| it.slug == slug).unwrap_or(false))
+    row_items.iter().position(|m| m.as_ref().map(|it| it.slug == slug).unwrap_or(false))
 }

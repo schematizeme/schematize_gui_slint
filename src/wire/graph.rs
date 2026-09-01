@@ -190,7 +190,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 match panel::export_obsidian_at(&p, None) {
                     Ok(dir) => {
                         if let Some(app) = weak.upgrade() {
-                            app.global::<Sk>().set_status(tf("gui.exported", &[("p", &dir.to_string_lossy())]).into());
+                            app.global::<Sk>().set_status(
+                                tf("gui.exported", &[("p", &dir.to_string_lossy())]).into(),
+                            );
                         }
                         util::open_url(&dir.to_string_lossy());
                     }
@@ -287,8 +289,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     app.global::<G>().set_reindex_status(SharedString::new());
                 } else {
                     app.global::<G>().set_reindex_status(
-                        tor("gui.g_no_service_graph", "sem grafo detalhado para este serviço (rode Reindexar).")
-                            .into(),
+                        tor(
+                            "gui.g_no_service_graph",
+                            "sem grafo detalhado para este serviço (rode Reindexar).",
+                        )
+                        .into(),
                     );
                 }
             }
@@ -325,5 +330,4 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
         });
     }
-
 }

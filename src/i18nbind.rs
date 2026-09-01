@@ -79,10 +79,13 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_pinned_projects(tor("gui.pinned_projects", "Projetos fixados").into());
     l.set_pin_folder(tor("gui.pin_folder", "Fixar pasta…").into());
     l.set_unpin(tor("gui.unpin", "Desafixar").into());
-    l.set_pin_hint(tor(
-        "gui.pin_hint",
-        "Uma pasta fixada vira UM projeto no selector — útil pra workspace de microserviços.",
-    ).into());
+    l.set_pin_hint(
+        tor(
+            "gui.pin_hint",
+            "Uma pasta fixada vira UM projeto no selector — útil pra workspace de microserviços.",
+        )
+        .into(),
+    );
     l.set_no_overdev(t("gui.no_overdev").into());
     l.set_od_decisions(t("gui.od_decisions").into());
     l.set_od_plan(t("gui.od_plan").into());
@@ -128,10 +131,13 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     ).into());
     l.set_od_run_done(tor("gui.od_done", "concluído").into());
     l.set_od_agent_cmd(tor("gui.od_agent_cmd", "Comando do agente").into());
-    l.set_od_ext_terminal(tor(
-        "gui.od_ext_terminal",
-        "claude rodando em terminal externo (processo próprio) — o load dele fica fora do app.",
-    ).into());
+    l.set_od_ext_terminal(
+        tor(
+            "gui.od_ext_terminal",
+            "claude rodando em terminal externo (processo próprio) — o load dele fica fora do app.",
+        )
+        .into(),
+    );
     l.set_od_mon_iters(tor("gui.od_mon_iters", "iterações").into());
     l.set_od_mon_open_title(tor("gui.od_mon_open_title", "Itens abertos (máquina)").into());
     // Reload/Acompanhar + log de conclusões + tokens (anexar monitor a run externo).
@@ -152,17 +158,27 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_g_reload(tor("gui.g_reload", "Recarregar").into());
     l.set_g_drill(tor("gui.g_drill", "Grafo do serviço").into());
     l.set_g_global(tor("gui.g_global", "← Grafo global").into());
-    l.set_g_node_nodesc(tor("gui.g_node_nodesc", "(sem descrição no índice — rode Reindexar)").into());
+    l.set_g_node_nodesc(
+        tor("gui.g_node_nodesc", "(sem descrição no índice — rode Reindexar)").into(),
+    );
     // Home + navegação (Fase 1) — chaves NOVAS, com fallback embutido via `tor`
     // até serem adicionadas ao lib. Ver lista no relatório de entrega.
     l.set_home(tor("gui.home", "Início").into());
     l.set_home_title(tor("gui.home_title", "O que você quer fazer?").into());
     l.set_home_market(tor("gui.home_market", "Mercado de Skills").into());
-    l.set_home_overdev_desc(tor("gui.home_overdev_desc", "Acompanhe o desenvolvimento contínuo do projeto.").into());
-    l.set_home_market_desc(tor("gui.home_market_desc", "Instale, atualize e descubra skills e environments.").into());
-    l.set_home_graph_desc(tor("gui.home_graph_desc", "Explore o grafo de microfunções do projeto.").into());
+    l.set_home_overdev_desc(
+        tor("gui.home_overdev_desc", "Acompanhe o desenvolvimento contínuo do projeto.").into(),
+    );
+    l.set_home_market_desc(
+        tor("gui.home_market_desc", "Instale, atualize e descubra skills e environments.").into(),
+    );
+    l.set_home_graph_desc(
+        tor("gui.home_graph_desc", "Explore o grafo de microfunções do projeto.").into(),
+    );
     l.set_home_environments(tor("gui.home_environments", "Environments").into());
-    l.set_home_environments_desc(tor("gui.home_environments_desc", "Gerencie os runtimes de linguagem.").into());
+    l.set_home_environments_desc(
+        tor("gui.home_environments_desc", "Gerencie os runtimes de linguagem.").into(),
+    );
     l.set_home_ssh(tor("gui.home_ssh", "SSH").into());
     l.set_home_ssh_desc(tor("gui.home_ssh_desc", "Chaves e acesso remoto.").into());
     l.set_home_settings(tor("gui.home_settings", "Configurações").into());
@@ -179,14 +195,21 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_create(tor("gui.create", "Criar").into());
     l.set_save(tor("gui.save", "Salvar").into());
     l.set_saved(tor("gui.saved", "Salvo").into());
-    l.set_slug_invalid(tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito").into());
+    l.set_slug_invalid(
+        tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito")
+            .into(),
+    );
     l.set_skill_exists(tor("gui.skill_exists", "essa skill já existe").into());
     l.set_pick_skill(tor("gui.pick_skill", "Escolha uma skill…").into());
     l.set_pick_file(tor("gui.pick_file", "Arquivos").into());
     l.set_skill_created(tor("gui.skill_created", "Skill criada em").into());
-    l.set_no_installed_skills(tor("gui.no_installed_skills", "Nenhuma skill instalada para editar").into());
+    l.set_no_installed_skills(
+        tor("gui.no_installed_skills", "Nenhuma skill instalada para editar").into(),
+    );
     l.set_edit_now(tor("gui.edit_now", "Editar agora").into());
-    l.set_pick_file_hint(tor("gui.pick_file_hint", "Selecione um arquivo na barra lateral para editar").into());
+    l.set_pick_file_hint(
+        tor("gui.pick_file_hint", "Selecione um arquivo na barra lateral para editar").into(),
+    );
     // Tela SSH — chaves NOVAS via `tor`.
     l.set_ssh_title(tor("gui.ssh_title", "Chaves SSH").into());
     l.set_ssh_generate(tor("gui.ssh_generate", "Gerar chave").into());
@@ -198,7 +221,9 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_ssh_copied(tor("gui.ssh_copied", "copiado").into());
     l.set_ssh_remove(tor("gui.ssh_remove", "Remover").into());
     l.set_ssh_empty(tor("gui.ssh_empty", "Nenhuma chave em ~/.ssh — gere uma acima.").into());
-    l.set_ssh_priv_note(tor("gui.ssh_priv_note", "A chave privada nunca é exposta — só a pública sai.").into());
+    l.set_ssh_priv_note(
+        tor("gui.ssh_priv_note", "A chave privada nunca é exposta — só a pública sai.").into(),
+    );
     l.set_ssh_keys_title(tor("gui.ssh_keys_title", "Suas chaves").into());
     // SSH — entropia (do lib, por tipo) + prova + Bitwarden. Chaves NOVAS via `tor`.
     l.set_ssh_entropy_ed25519(sshkeys::entropy_note(sshkeys::KeyKind::Ed25519).into());
@@ -207,7 +232,9 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         "gui.ssh_kind_hint",
         "ed25519 é o default forte da casa; use RSA só para hosts legados — e nunca abaixo de 4096 bits.",
     ).into());
-    l.set_ssh_proof_label(tor("gui.ssh_proof_label", "Prova da chave (bits · fingerprint · tipo)").into());
+    l.set_ssh_proof_label(
+        tor("gui.ssh_proof_label", "Prova da chave (bits · fingerprint · tipo)").into(),
+    );
     l.set_ssh_export_bw(tor("gui.ssh_export_bw", "Exportar → Bitwarden").into());
     l.set_ssh_bw_note(tor(
         "gui.ssh_bw_note",
@@ -219,11 +246,19 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_cfg_language(tor("gui.cfg_language", "Idioma").into());
     l.set_cfg_theme(tor("gui.cfg_theme", "Tema").into());
     l.set_cfg_autostart(tor("gui.cfg_autostart", "Autostart do agente").into());
-    l.set_cfg_autostart_desc(tor("gui.cfg_autostart_desc", "Inicia o agente de atualização junto com a sua sessão.").into());
+    l.set_cfg_autostart_desc(
+        tor("gui.cfg_autostart_desc", "Inicia o agente de atualização junto com a sua sessão.")
+            .into(),
+    );
     l.set_cfg_hooks(tor("gui.cfg_hooks", "Hooks do overdev").into());
-    l.set_cfg_hooks_desc(tor("gui.cfg_hooks_desc", "Registra os hooks (Stop/PreToolUse) do overdev no Claude Code.").into());
+    l.set_cfg_hooks_desc(
+        tor("gui.cfg_hooks_desc", "Registra os hooks (Stop/PreToolUse) do overdev no Claude Code.")
+            .into(),
+    );
     l.set_cfg_dirs(tor("gui.cfg_dirs", "Diretórios de dev e projetos fixados").into());
-    l.set_cfg_dirs_desc(tor("gui.cfg_dirs_desc", "Onde o schematize procura os seus projetos.").into());
+    l.set_cfg_dirs_desc(
+        tor("gui.cfg_dirs_desc", "Onde o schematize procura os seus projetos.").into(),
+    );
     l.set_cfg_manage(tor("gui.cfg_manage", "Gerenciar…").into());
     l.set_cfg_on(tor("gui.cfg_on", "ligado").into());
     l.set_cfg_off(tor("gui.cfg_off", "desligado").into());
@@ -232,11 +267,13 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_cfg_debug_btn(tor("gui.cfg_debug_btn", "Gerar relatório de debug").into());
     l.set_cfg_debug_generating(tor("gui.cfg_debug_generating", "Gerando…").into());
     l.set_cfg_debug_open(tor("gui.cfg_debug_open", "Abrir pasta").into());
-    l.set_cfg_debug_note(tor(
-        "gui.cfg_debug_note",
-        "modo 600 · segredos redigidos · revise antes de compartilhar",
-    ).into());
-    l.set_cfg_debug_net(tor("gui.cfg_debug_net", "incluir diagnóstico de rede (mais lento)").into());
+    l.set_cfg_debug_note(
+        tor("gui.cfg_debug_note", "modo 600 · segredos redigidos · revise antes de compartilhar")
+            .into(),
+    );
+    l.set_cfg_debug_net(
+        tor("gui.cfg_debug_net", "incluir diagnóstico de rede (mais lento)").into(),
+    );
     l.set_cfg_debug_saved(tor("gui.cfg_debug_saved", "Relatório gravado em").into());
     // Overdev — aditivos.
     l.set_od_history(tor("gui.od_history", "Histórico (cópia de segurança)").into());
@@ -245,7 +282,9 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_od_restore(tor("gui.od_restore", "Restaurar").into());
     l.set_od_snap_empty(tor("gui.od_snap_empty", "Sem snapshots ainda.").into());
     l.set_od_commits(tor("gui.od_commits", "Commits e push").into());
-    l.set_od_commits_empty(tor("gui.od_commits_empty", "Sem commits (ou não é um repositório git).").into());
+    l.set_od_commits_empty(
+        tor("gui.od_commits_empty", "Sem commits (ou não é um repositório git).").into(),
+    );
     l.set_od_close(tor("gui.od_close", "Fechar").into());
     // Paginação.
     l.set_pg_prev(tor("gui.pg_prev", "‹ Anterior").into());
@@ -258,7 +297,9 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_app_up_to_date(tor("gui.app_up_to_date", "Você está atualizado").into());
     l.set_app_update_btn(tor("gui.app_update_btn", "Atualizar app").into());
     l.set_app_updating(tor("gui.app_updating", "Atualizando…").into());
-    l.set_app_restart_hint(tor("gui.app_restart_hint", "Atualização concluída — reinicie o app.").into());
+    l.set_app_restart_hint(
+        tor("gui.app_restart_hint", "Atualização concluída — reinicie o app.").into(),
+    );
     l.set_app_restart(tor("gui.app_restart", "Reiniciar").into());
     l.set_updater_missing_msg(tor("gui.updater_missing", "O gestor de atualizações (schematize-updater) não está instalado — ele cuida de instalar/atualizar o app.").into());
     l.set_updater_install_btn(tor("gui.updater_install", "Instalar gestor de atualizações").into());
@@ -277,10 +318,10 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         "gui.fork_will",
         "Esta é uma skill OFICIAL. Ao editá-la, ela será forkada: uma cópia editável fica ativa e a versão oficial é preservada para comparar depois.",
     ).into());
-    l.set_fork_active(tor(
-        "gui.fork_active",
-        "Fork ativo — a versão oficial está preservada para você comparar.",
-    ).into());
+    l.set_fork_active(
+        tor("gui.fork_active", "Fork ativo — a versão oficial está preservada para você comparar.")
+            .into(),
+    );
     l.set_compare_official(tor("gui.compare_official", "Comparar com oficial").into());
     l.set_compare_note(tor(
         "gui.compare_note",
@@ -293,15 +334,18 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_acc_login(tor("gui.acc_login", "Entrar na plataforma").into());
     l.set_acc_logout(tor("gui.acc_logout", "Sair").into());
     l.set_acc_connected_as(tor("gui.acc_connected_as", "Conectado como").into());
-    l.set_acc_logged_out_hint(tor(
-        "gui.acc_logged_out_hint",
-        "Entre na plataforma para receber notificações e sincronizar suas skills.",
-    ).into());
+    l.set_acc_logged_out_hint(
+        tor(
+            "gui.acc_logged_out_hint",
+            "Entre na plataforma para receber notificações e sincronizar suas skills.",
+        )
+        .into(),
+    );
     l.set_acc_modal_title(tor("gui.acc_modal_title", "Entrar na plataforma").into());
-    l.set_acc_code_label(tor(
-        "gui.acc_code_label",
-        "Abra o endereço abaixo no navegador e digite este código:",
-    ).into());
+    l.set_acc_code_label(
+        tor("gui.acc_code_label", "Abra o endereço abaixo no navegador e digite este código:")
+            .into(),
+    );
     l.set_acc_open_browser(tor("gui.acc_open_browser", "Abrir no navegador").into());
     l.set_acc_verification_at(tor("gui.acc_verification_at", "Acesse:").into());
     l.set_acc_waiting(tor("gui.acc_waiting", "Aguardando confirmação…").into());
@@ -309,7 +353,9 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_acc_indicator_tip(tor("gui.acc_indicator_tip", "Conectado — abrir Conta").into());
     // Database builder (tela 6) — chaves NOVAS via `tor`.
     l.set_home_database(tor("gui.home_database", "Banco de dados").into());
-    l.set_home_database_desc(tor("gui.home_database_desc", "Leia, modele e gere o schema do seu banco.").into());
+    l.set_home_database_desc(
+        tor("gui.home_database_desc", "Leia, modele e gere o schema do seu banco.").into(),
+    );
     l.set_db_title(tor("gui.db_title", "Database builder").into());
     l.set_db_sub_connect(tor("gui.db_sub_connect", "Conectar").into());
     l.set_db_sub_schema(tor("gui.db_sub_schema", "Schema").into());
@@ -350,13 +396,17 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         "gui.db_ai_note",
         "Segue a skill schematize-database num terminal externo e emite schema.json + schema.sql + migration no <projeto>_archive/database/. Roda no terminal; carregue o schema.json quando terminar.",
     ).into());
-    l.set_db_ai_no_project(tor("gui.db_ai_no_project", "Selecione um projeto na tela Overdev/Grafo primeiro.").into());
+    l.set_db_ai_no_project(
+        tor("gui.db_ai_no_project", "Selecione um projeto na tela Overdev/Grafo primeiro.").into(),
+    );
     l.set_db_view_graph(tor("gui.db_view_graph", "Ver grafo").into());
     l.set_db_node_cols(tor("gui.db_node_cols", "(sem colunas)").into());
 
     // ---- Disco (tela 7) ----
     l.set_home_disk(tor("gui.home_disk", "Disco").into());
-    l.set_home_disk_desc(tor("gui.home_disk_desc", "O que está enchendo o disco e pode ser refeito.").into());
+    l.set_home_disk_desc(
+        tor("gui.home_disk_desc", "O que está enchendo o disco e pode ser refeito.").into(),
+    );
     l.set_disk_min_days(tor("gui.disk_min_days", "Parado há").into());
     l.set_disk_any(tor("gui.disk_any", "qualquer").into());
     l.set_disk_scan(tor("gui.disk_scan", "Varrer").into());
@@ -381,7 +431,9 @@ pub(crate) fn install_i18n(app: &AppWindow) {
 
     // ---- Git (tela 8) ----
     l.set_home_git(tor("gui.home_git", "Git").into());
-    l.set_home_git_desc(tor("gui.home_git_desc", "Contas, o que ainda não saiu daqui, e seus repositórios.").into());
+    l.set_home_git_desc(
+        tor("gui.home_git_desc", "Contas, o que ainda não saiu daqui, e seus repositórios.").into(),
+    );
     l.set_git_projects(tor("gui.git_projects", "Projetos").into());
     l.set_git_accounts(tor("gui.git_accounts", "Contas").into());
     l.set_git_repos(tor("gui.git_repos", "Repositórios").into());
@@ -391,13 +443,17 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         "gui.git_intro",
         "Git não guarda histórico de push — mas guarda o que ainda NÃO foi enviado. É isso que esta lista mostra: commit que só existe nesta máquina some com a máquina.",
     ).into());
-    l.set_git_at_risk(tor("gui.git_at_risk", "projeto(s) com commit que só existe nesta máquina.").into());
+    l.set_git_at_risk(
+        tor("gui.git_at_risk", "projeto(s) com commit que só existe nesta máquina.").into(),
+    );
     l.set_git_no_remote(tor("gui.git_no_remote", "sem remoto").into());
     l.set_git_dirty(tor("gui.git_dirty", "sujo").into());
     l.set_git_open(tor("gui.git_open", "Abrir").into());
     l.set_git_use_account(tor("gui.git_use_account", "Usar a conta neste repositório").into());
     l.set_git_apply(tor("gui.git_apply", "Aplicar").into());
-    l.set_git_no_accounts(tor("gui.git_no_accounts", "Nenhuma conta cadastrada — cadastre em Contas.").into());
+    l.set_git_no_accounts(
+        tor("gui.git_no_accounts", "Nenhuma conta cadastrada — cadastre em Contas.").into(),
+    );
     l.set_git_history(tor("gui.git_history", "Histórico").into());
     l.set_git_accounts_intro(tor(
         "gui.git_accounts_intro",
@@ -439,20 +495,28 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         "gui.od_caixa_hint",
         "Escreva o que mais precisa ser feito. Isto NÃO toca o checklist agora — nenhum agente é interrompido. Um agente organiza depois, e só então entra.",
     ).into());
-    l.set_od_caixa_placeholder(tor("gui.od_caixa_placeholder", "ex.: precisa exportar em CSV e mandar por e-mail…").into());
+    l.set_od_caixa_placeholder(
+        tor("gui.od_caixa_placeholder", "ex.: precisa exportar em CSV e mandar por e-mail…").into(),
+    );
     l.set_od_caixa_add(tor("gui.od_caixa_add", "Capturar").into());
     l.set_od_caixa_agent(tor("gui.od_caixa_agent", "Organizar com agente").into());
     l.set_od_caixa_merge(tor("gui.od_caixa_merge", "Fundir no checklist").into());
     l.set_od_caixa_pending(tor("gui.od_caixa_pending", "a organizar").into());
     l.set_od_caixa_ready(tor("gui.od_caixa_ready", "a fundir").into());
     l.set_od_skills_title(tor("gui.od_skills_title", "Skills deste projeto").into());
-    l.set_od_skills_outdated(tor("gui.od_skills_outdated", "evoluíram desde que moldaram este projeto").into());
+    l.set_od_skills_outdated(
+        tor("gui.od_skills_outdated", "evoluíram desde que moldaram este projeto").into(),
+    );
     l.set_od_skills_rerun(tor("gui.od_skills_rerun", "Rerodar skills").into());
     // ---- Portal (Home) ----
     l.set_home_academy(tor("gui.home_academy", "Academy").into());
-    l.set_home_academy_desc(tor("gui.home_academy_desc", "Cursos estruturados de como usar IA.").into());
+    l.set_home_academy_desc(
+        tor("gui.home_academy_desc", "Cursos estruturados de como usar IA.").into(),
+    );
     l.set_home_research(tor("gui.home_research", "Research").into());
-    l.set_home_research_desc(tor("gui.home_research_desc", "Artigos densos, para disseminar conhecimento.").into());
+    l.set_home_research_desc(
+        tor("gui.home_research_desc", "Artigos densos, para disseminar conhecimento.").into(),
+    );
     l.set_home_blog(tor("gui.home_blog", "Blog").into());
     l.set_home_blog_desc(tor("gui.home_blog_desc", "Opinião, notícias e novidades.").into());
     l.set_notif_history(tor("gui.notif_history", "Histórico").into());

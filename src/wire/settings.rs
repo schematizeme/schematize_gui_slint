@@ -40,7 +40,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let Some(app) = weak.upgrade() else { return };
             let on = app.global::<Cfg>().get_autostart_on();
             let res = if on { autostart::disable() } else { autostart::enable(&schematize_bin()) };
-            app.global::<Cfg>().set_autostart_on(if res.is_ok() { !on } else { autostart::is_active() });
+            app.global::<Cfg>().set_autostart_on(if res.is_ok() {
+                !on
+            } else {
+                autostart::is_active()
+            });
         });
     }
     // hooks do overdev no settings.json do Claude Code.
@@ -50,7 +54,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let Some(app) = weak.upgrade() else { return };
             let on = app.global::<Cfg>().get_hooks_on();
             let res = if on { settings::disable() } else { settings::enable(&schematize_bin()) };
-            app.global::<Cfg>().set_hooks_on(if res.is_ok() { !on } else { settings::overdev_enabled() });
+            app.global::<Cfg>().set_hooks_on(if res.is_ok() {
+                !on
+            } else {
+                settings::overdev_enabled()
+            });
         });
     }
     // atalho: reusa o modal de diretórios de dev / projetos fixados.
@@ -96,12 +104,14 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                         app.global::<Cfg>().set_debug_running(false);
                         match res {
                             Ok(path) => {
-                                app.global::<Cfg>().set_debug_path(path.to_string_lossy().into_owned().into());
+                                app.global::<Cfg>()
+                                    .set_debug_path(path.to_string_lossy().into_owned().into());
                                 app.global::<Cfg>().set_debug_summary(summary.into());
                                 app.global::<Cfg>().set_debug_error(SharedString::new());
                             }
                             Err(e) => {
-                                app.global::<Cfg>().set_debug_error(tf("err.prefix", &[("e", &e)]).into());
+                                app.global::<Cfg>()
+                                    .set_debug_error(tf("err.prefix", &[("e", &e)]).into());
                             }
                         }
                     }
@@ -124,5 +134,4 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             open_path_in_files(dir);
         });
     }
-
 }

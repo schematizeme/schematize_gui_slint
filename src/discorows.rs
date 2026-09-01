@@ -25,12 +25,7 @@ pub(crate) const MINIMO: u64 = 50 * 1024 * 1024;
 /// voltam como argumento de "apagar este". O índice do repeater não serviria — ele
 /// é relativo à página.
 pub(crate) fn filtrados(achados: &[Achado], min_dias: u64) -> Vec<usize> {
-    achados
-        .iter()
-        .enumerate()
-        .filter(|(_, a)| a.dias_parado >= min_dias)
-        .map(|(i, _)| i)
-        .collect()
+    achados.iter().enumerate().filter(|(_, a)| a.dias_parado >= min_dias).map(|(i, _)| i).collect()
 }
 
 /// A página `page` dos achados filtrados, já como linhas da UI.

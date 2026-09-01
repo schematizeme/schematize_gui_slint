@@ -52,7 +52,9 @@ pub(crate) fn proj_rows(v: &[EstadoLocal]) -> Vec<GitProjRow> {
                 raiz: e.raiz.display().to_string().into(),
                 conta: match &e.conta {
                     Some(r) => r.clone().into(),
-                    None if e.email.is_empty() => tor("gui.git_no_identity", "sem identidade").into(),
+                    None if e.email.is_empty() => {
+                        tor("gui.git_no_identity", "sem identidade").into()
+                    }
                     None => format!("? {}", e.email).into(),
                 },
                 known_account: conhecida,

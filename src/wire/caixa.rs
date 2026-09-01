@@ -50,7 +50,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
             let prompt = caixa::prompt_agente(&schematize_bin(), n);
             match agentrun::launch_prompt_in_terminal(&root, &prompt) {
-                Ok(_) => aviso(&app, tor("gui.od_caixa_agent_ok", "agente aberto no terminal."), false),
+                Ok(_) => {
+                    aviso(&app, tor("gui.od_caixa_agent_ok", "agente aberto no terminal."), false)
+                }
                 Err(e) => aviso(&app, e, true),
             }
         });
@@ -66,7 +68,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let Some(root) = cur.borrow().clone() else { return };
             match caixa::mesclar(&root) {
                 Ok(n) => {
-                    aviso(&app, format!("{n} {}", tor("gui.od_caixa_merged", "item(ns) no checklist.")), false);
+                    aviso(
+                        &app,
+                        format!("{n} {}", tor("gui.od_caixa_merged", "item(ns) no checklist.")),
+                        false,
+                    );
                     // Recarrega o checklist: os itens novos têm de aparecer na hora,
                     // senão parece que a fusão não fez nada.
                     load_overdev_into(&app, &cl, Some(&root));
@@ -110,7 +116,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let Some(app) = weak.upgrade() else { return };
             let Some(root) = cur.borrow().clone() else { return };
             let o = app.global::<Od>();
-            let acao = if o.get_resolve_answer() { resposta::Acao::Responder } else { resposta::Acao::Recusar };
+            let acao = if o.get_resolve_answer() {
+                resposta::Acao::Responder
+            } else {
+                resposta::Acao::Recusar
+            };
             let alvo = resposta::Alvo::Indice(o.get_resolve_index().max(1) as usize);
             let texto = o.get_resolve_text().to_string();
             match resolver_em(&root, &alvo, acao, &texto) {
@@ -149,7 +159,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
             let prompt = skillsproj::prompt_rerun(&schematize_bin(), &alvos);
             match agentrun::launch_prompt_in_terminal(&root, &prompt) {
-                Ok(_) => aviso(&app, tor("gui.od_rerun_ok", "agente aberto pra reaplicar as skills."), false),
+                Ok(_) => aviso(
+                    &app,
+                    tor("gui.od_rerun_ok", "agente aberto pra reaplicar as skills."),
+                    false,
+                ),
                 Err(e) => aviso(&app, e, true),
             }
         });

@@ -120,22 +120,16 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 .cloned()
                 .unwrap_or_default();
             // environment a oferecer: se o slug da skill é uma das 7 linguagens.
-            let env_lang = if env_langs.contains(it.slug.as_str()) {
-                it.slug.clone()
-            } else {
-                String::new()
-            };
+            let env_lang =
+                if env_langs.contains(it.slug.as_str()) { it.slug.clone() } else { String::new() };
             // Nada a oferecer → instala direto, sem modal.
             if rec_slug.is_empty() && env_lang.is_empty() {
                 run_batch(weak.clone(), vec![(i, true, it.clone())]);
                 return;
             }
             let Some(app) = weak.upgrade() else { return };
-            *modal.borrow_mut() = ModalState {
-                skill_idx: i,
-                rec_slug: rec_slug.clone(),
-                env_lang: env_lang.clone(),
-            };
+            *modal.borrow_mut() =
+                ModalState { skill_idx: i, rec_slug: rec_slug.clone(), env_lang: env_lang.clone() };
             app.global::<Mp>().set_title(tf("gui.mp_install_title", &[("slug", &it.slug)]).into());
             app.global::<Mp>().set_idx(i as i32);
             // dependência opcional (base recomendada) — NUNCA marcada por padrão.
@@ -143,14 +137,16 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             app.global::<Mp>().set_rec_show(rec_show);
             app.global::<Mp>().set_rec_check(false);
             if rec_show {
-                app.global::<Mp>().set_rec_label(tf("gui.mp_with_recommended", &[("slug", &rec_slug)]).into());
+                app.global::<Mp>()
+                    .set_rec_label(tf("gui.mp_with_recommended", &[("slug", &rec_slug)]).into());
             }
             // environment opcional — NUNCA marcado por padrão.
             let env_show = !env_lang.is_empty();
             app.global::<Mp>().set_env_show(env_show);
             app.global::<Mp>().set_env_check(false);
             if env_show {
-                app.global::<Mp>().set_env_label(tf("gui.mp_with_env", &[("lang", &env_lang)]).into());
+                app.global::<Mp>()
+                    .set_env_label(tf("gui.mp_with_env", &[("lang", &env_lang)]).into());
                 let methods: Vec<SharedString> = env_methods
                     .get(&env_lang)
                     .cloned()
@@ -260,5 +256,4 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
         });
     }
-
 }

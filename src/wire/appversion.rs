@@ -11,8 +11,8 @@ use crate::prelude::*;
 /// (slug, versão, mudanças `nome→descrição`, resumo) ou o erro. Existe como alias porque
 /// o tipo cru é ilegível na assinatura e o lint reclamava com razão.
 type ComparacaoDeSkill = Result<(String, String, Vec<(String, String)>, String), String>;
-use schematize::updaterboot;
 use crate::wire::{set_rows, Ctx};
+use schematize::updaterboot;
 
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
@@ -39,12 +39,18 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                             Some((_cur, new)) => {
                                 app.global::<App>().set_has_update(true);
                                 app.global::<App>().set_update_status(
-                                    format!("{} v{new}", tor("gui.app_new_version", "Nova versão disponível:")).into(),
+                                    format!(
+                                        "{} v{new}",
+                                        tor("gui.app_new_version", "Nova versão disponível:")
+                                    )
+                                    .into(),
                                 );
                             }
                             None => {
                                 app.global::<App>().set_has_update(false);
-                                app.global::<App>().set_update_status(tor("gui.app_up_to_date", "Você está atualizado").into());
+                                app.global::<App>().set_update_status(
+                                    tor("gui.app_up_to_date", "Você está atualizado").into(),
+                                );
                             }
                         }
                     }
@@ -74,7 +80,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                 app.global::<App>().set_update_status(msg.into());
                             }
                             Err(e) => {
-                                app.global::<App>().set_update_status(tf("err.prefix", &[("e", &e)]).into());
+                                app.global::<App>()
+                                    .set_update_status(tf("err.prefix", &[("e", &e)]).into());
                             }
                         }
                     }
@@ -105,10 +112,16 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                             Ok(_p) => {
                                 app.global::<App>().set_updater_missing(false);
                                 app.global::<App>().set_updater_status(
-                                    tor("gui.updater_installed", "Gestor de atualizações instalado.").into(),
+                                    tor(
+                                        "gui.updater_installed",
+                                        "Gestor de atualizações instalado.",
+                                    )
+                                    .into(),
                                 );
                             }
-                            Err(e) => app.global::<App>().set_updater_status(tf("err.prefix", &[("e", &e)]).into()),
+                            Err(e) => app
+                                .global::<App>()
+                                .set_updater_status(tf("err.prefix", &[("e", &e)]).into()),
                         }
                     }
                 });
@@ -134,7 +147,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     updaterboot::Outcome::Instalado(_) | updaterboot::Outcome::JaTinha => {
                         app.global::<App>().set_updater_missing(false);
                         app.global::<App>().set_updater_status(
-                            tor("gui.updater_installed", "Gestor de atualizações instalado.").into(),
+                            tor("gui.updater_installed", "Gestor de atualizações instalado.")
+                                .into(),
                         );
                     }
                     // Adiado/Falhou: mantém o prompt visível pra tentativa manual.
@@ -161,9 +175,12 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // Os modelos (Global/Pessoal) são REMONTADOS no event loop a cada abertura (não
     // cruzam a fronteira da thread — padrão thread→UI do resto da GUI). A ação de
     // cada item viaja pelo próprio callback (kind, action), sem estado Rust extra.
-    app.global::<Notif>().set_global(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
-    app.global::<Notif>().set_personal(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
-    app.global::<Notif>().set_historico(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
+    app.global::<Notif>()
+        .set_global(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
+    app.global::<Notif>()
+        .set_personal(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
+    app.global::<Notif>()
+        .set_historico(ModelRc::from(Rc::new(VecModel::<NotifItem>::from(Vec::new()))));
 
     // BADGE: lê o CACHE (instantâneo, sem rede) e só DEPOIS sincroniza em thread.
     //
@@ -297,38 +314,46 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             app.global::<Cmp>().set_diff(SharedString::new());
             app.global::<Cmp>().set_versions(SharedString::new());
             app.global::<Cmp>().set_slug(slug.clone().into());
-            app.global::<Cmp>().set_title(format!("{} {slug}", tor("gui.compare_title", "Comparar:")).into());
-            app.global::<Cmp>().set_files(ModelRc::from(Rc::new(VecModel::<CmpFile>::from(Vec::new()))));
+            app.global::<Cmp>()
+                .set_title(format!("{} {slug}", tor("gui.compare_title", "Comparar:")).into());
+            app.global::<Cmp>()
+                .set_files(ModelRc::from(Rc::new(VecModel::<CmpFile>::from(Vec::new()))));
             let weak = weak.clone();
             std::thread::spawn(move || {
                 let res = skills::compare_update(&slug);
                 // extrai os campos (String/bool) antes de cruzar pro event loop.
-                let out: ComparacaoDeSkill =
-                    res.map(|c| {
-                        (
-                            c.base_version,
-                            c.new_version,
-                            c.files.into_iter().map(|f| (f.path, f.status)).collect(),
-                            c.diff_text,
-                        )
-                    });
+                let out: ComparacaoDeSkill = res.map(|c| {
+                    (
+                        c.base_version,
+                        c.new_version,
+                        c.files.into_iter().map(|f| (f.path, f.status)).collect(),
+                        c.diff_text,
+                    )
+                });
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
                         app.global::<Cmp>().set_loading(false);
                         match out {
                             Ok((base, new, files, diff)) => {
-                                app.global::<Cmp>().set_versions(format!("v{base} → v{new}").into());
+                                app.global::<Cmp>()
+                                    .set_versions(format!("v{base} → v{new}").into());
                                 app.global::<Cmp>().set_diff(if diff.trim().is_empty() {
-                                    tor("gui.compare_identical", "(sem diferenças de conteúdo)").into()
+                                    tor("gui.compare_identical", "(sem diferenças de conteúdo)")
+                                        .into()
                                 } else {
                                     diff.into()
                                 });
-                                app.global::<Cmp>().set_files(ModelRc::from(Rc::new(VecModel::from(
-                                    files
-                                        .into_iter()
-                                        .map(|(path, status)| CmpFile { path: path.into(), status: status.into() })
-                                        .collect::<Vec<CmpFile>>(),
-                                ))));
+                                app.global::<Cmp>().set_files(ModelRc::from(Rc::new(
+                                    VecModel::from(
+                                        files
+                                            .into_iter()
+                                            .map(|(path, status)| CmpFile {
+                                                path: path.into(),
+                                                status: status.into(),
+                                            })
+                                            .collect::<Vec<CmpFile>>(),
+                                    ),
+                                )));
                             }
                             Err(e) => app.global::<Cmp>().set_error(e.into()),
                         }
@@ -345,7 +370,6 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             }
         });
     }
-
 }
 
 /// Repinta os três modelos do painel a partir do CACHE — sem rede, no event loop.
@@ -372,9 +396,12 @@ pub(crate) fn preenche_painel(app: &AppWindow) {
         .into(),
     };
     let pendentes: Vec<_> = todas.iter().filter(|r| r.estado != Estado::Concluida).collect();
-    let g: Vec<NotifItem> = pendentes.iter().filter(|r| r.escopo == "global").map(|r| linha(r)).collect();
-    let p: Vec<NotifItem> = pendentes.iter().filter(|r| r.escopo == "personal").map(|r| linha(r)).collect();
-    let h: Vec<NotifItem> = todas.iter().filter(|r| r.estado == Estado::Concluida).map(linha).collect();
+    let g: Vec<NotifItem> =
+        pendentes.iter().filter(|r| r.escopo == "global").map(|r| linha(r)).collect();
+    let p: Vec<NotifItem> =
+        pendentes.iter().filter(|r| r.escopo == "personal").map(|r| linha(r)).collect();
+    let h: Vec<NotifItem> =
+        todas.iter().filter(|r| r.estado == Estado::Concluida).map(linha).collect();
     let n = app.global::<Notif>();
     n.set_total(pendentes.len() as i32);
     n.set_loading(false);

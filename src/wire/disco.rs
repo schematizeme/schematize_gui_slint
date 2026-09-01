@@ -89,7 +89,10 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let Some(app) = weak.upgrade() else { return };
             let p = (app.global::<Dsk>().get_page() - 1).max(0);
             app.global::<Dsk>().set_page(p);
-            set_rows(&app.global::<Dsk>().get_rows(), discorows::page_rows(&trava(&a), &trava(&i), p));
+            set_rows(
+                &app.global::<Dsk>().get_rows(),
+                discorows::page_rows(&trava(&a), &trava(&i), p),
+            );
         });
     }
     {
@@ -102,7 +105,10 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                 return;
             }
             app.global::<Dsk>().set_page(p);
-            set_rows(&app.global::<Dsk>().get_rows(), discorows::page_rows(&trava(&a), &trava(&i), p));
+            set_rows(
+                &app.global::<Dsk>().get_rows(),
+                discorows::page_rows(&trava(&a), &trava(&i), p),
+            );
         });
     }
 
@@ -211,7 +217,12 @@ fn reaplica(app: &AppWindow, achados: &Mutex<Vec<Achado>>, idxs: &Mutex<Vec<usiz
 }
 
 /// Apaga um achado em thread e tira a linha da lista (sem re-varrer o disco inteiro).
-fn apaga_achado(app: &AppWindow, idx: usize, achados: &Arc<Mutex<Vec<Achado>>>, idxs: &Arc<Mutex<Vec<usize>>>) {
+fn apaga_achado(
+    app: &AppWindow,
+    idx: usize,
+    achados: &Arc<Mutex<Vec<Achado>>>,
+    idxs: &Arc<Mutex<Vec<usize>>>,
+) {
     let Some(alvo) = trava(achados).get(idx).cloned() else { return };
     app.global::<Dsk>().set_banner(
         format!("{} {}…", tor("gui.disk_deleting", "apagando"), alvo.caminho.display()).into(),

@@ -18,7 +18,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // overdev). Cada login troca por um flag NOVO e levanta o antigo, encerrando
     // qualquer thread remanescente; Cancelar/Sair levantam o flag corrente.
     // Só dados `Send` (String/PathBuf/Arc) cruzam a fronteira.
-    let acc_stop: Rc<RefCell<Arc<AtomicBool>>> = Rc::new(RefCell::new(Arc::new(AtomicBool::new(false))));
+    let acc_stop: Rc<RefCell<Arc<AtomicBool>>> =
+        Rc::new(RefCell::new(Arc::new(AtomicBool::new(false))));
     // Estado inicial: reflete a sessão persistida em disco.
     app.global::<Acc>().set_logged_in(account::is_logged_in());
     app.global::<Acc>().set_sub(account::account_sub().unwrap_or_default().into());
@@ -46,7 +47,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                             if let Some(app) = weak.upgrade() {
                                 app.global::<Acc>().set_polling(false);
                                 app.global::<Acc>().set_status(
-                                    format!("{} {e}", tor("gui.acc_start_error", "Falha ao iniciar o login:")).into(),
+                                    format!(
+                                        "{} {e}",
+                                        tor("gui.acc_start_error", "Falha ao iniciar o login:")
+                                    )
+                                    .into(),
                                 );
                             }
                         });
@@ -61,8 +66,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                             let _ = slint::invoke_from_event_loop(move || {
                                 if let Some(app) = weak.upgrade() {
                                     app.global::<Acc>().set_user_code(user_code.into());
-                                    app.global::<Acc>().set_verification_uri(verification_uri.into());
-                                    app.global::<Acc>().set_verification_uri_complete(verification_complete.into());
+                                    app.global::<Acc>()
+                                        .set_verification_uri(verification_uri.into());
+                                    app.global::<Acc>().set_verification_uri_complete(
+                                        verification_complete.into(),
+                                    );
                                     app.global::<Acc>().set_status(SharedString::new());
                                     app.global::<Acc>().set_modal_open(true);
                                 }
@@ -82,7 +90,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                         app.global::<Acc>().set_modal_open(false);
                                         app.global::<Acc>().set_polling(false);
                                         app.global::<Acc>().set_status(
-                                            tor("gui.acc_expired", "O código expirou. Tente novamente.").into(),
+                                            tor(
+                                                "gui.acc_expired",
+                                                "O código expirou. Tente novamente.",
+                                            )
+                                            .into(),
                                         );
                                     }
                                 });
@@ -107,7 +119,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                             app.global::<Acc>().set_modal_open(false);
                                             app.global::<Acc>().set_polling(false);
                                             app.global::<Acc>().set_status(
-                                                tor("gui.acc_denied", "Acesso negado. Tente novamente.").into(),
+                                                tor(
+                                                    "gui.acc_denied",
+                                                    "Acesso negado. Tente novamente.",
+                                                )
+                                                .into(),
                                             );
                                         }
                                     });
@@ -120,7 +136,11 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                             app.global::<Acc>().set_modal_open(false);
                                             app.global::<Acc>().set_polling(false);
                                             app.global::<Acc>().set_status(
-                                                tor("gui.acc_expired", "O código expirou. Tente novamente.").into(),
+                                                tor(
+                                                    "gui.acc_expired",
+                                                    "O código expirou. Tente novamente.",
+                                                )
+                                                .into(),
                                             );
                                         }
                                     });
@@ -138,13 +158,21 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                                                 None => {
                                                     app.global::<Acc>().set_logged_in(true);
                                                     app.global::<Acc>().set_sub(sub.into());
-                                                    app.global::<Acc>().set_status(SharedString::new());
+                                                    app.global::<Acc>()
+                                                        .set_status(SharedString::new());
                                                     // recomputa o badge do sino (notificações do
                                                     // servidor aparecem quando logado).
                                                     app.global::<Notif>().invoke_refresh();
                                                 }
                                                 Some(e) => app.global::<Acc>().set_status(
-                                                    format!("{} {e}", tor("gui.acc_save_error", "Falha ao salvar a sessão:")).into(),
+                                                    format!(
+                                                        "{} {e}",
+                                                        tor(
+                                                            "gui.acc_save_error",
+                                                            "Falha ao salvar a sessão:"
+                                                        )
+                                                    )
+                                                    .into(),
                                                 ),
                                             }
                                         }
@@ -207,5 +235,4 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             }
         });
     }
-
 }

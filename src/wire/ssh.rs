@@ -96,7 +96,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             match sshkeys::generate(&name, kind, comment_opt, pass_opt, false) {
                 Ok(info) => {
                     app.global::<Ssh>().set_gen_error(false);
-                    app.global::<Ssh>().set_gen_status(format!("{} · {}", info.name, info.fingerprint).into());
+                    app.global::<Ssh>()
+                        .set_gen_status(format!("{} · {}", info.name, info.fingerprint).into());
                     // PROVA da chave: bits · fingerprint · tipo (ssh-keygen -l). Confere a força.
                     let proof = sshkeys::proof_line(&info.name).unwrap_or_default();
                     app.global::<Ssh>().set_gen_proof(proof.into());
@@ -188,5 +189,4 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             }
         });
     }
-
 }

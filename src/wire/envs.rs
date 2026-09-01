@@ -143,5 +143,4 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
         });
     }
-
 }

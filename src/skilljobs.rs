@@ -6,7 +6,12 @@ use crate::prelude::*;
 // ---------------------------------------------------------------------------
 // thread→UI: posta a atualização de versões (installed + latest) de uma linha.
 // ---------------------------------------------------------------------------
-pub(crate) fn post_versions(weak: Weak<AppWindow>, idx: usize, installed: Option<String>, latest: Option<String>) {
+pub(crate) fn post_versions(
+    weak: Weak<AppWindow>,
+    idx: usize,
+    installed: Option<String>,
+    latest: Option<String>,
+) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
             let rows = app.global::<Sk>().get_rows();
@@ -42,7 +47,12 @@ pub(crate) fn post_row_busy(weak: Weak<AppWindow>, idx: usize, label: String) {
 /// thread→UI: resultado de uma operação numa linha. Instalar → instalada=latest
 /// (o release baixado É o latest) e estado "current"; remover → não instalada.
 /// Erro → mantém e mostra o rótulo em warn.
-pub(crate) fn post_row_result(weak: Weak<AppWindow>, idx: usize, install: bool, res: Result<String, String>) {
+pub(crate) fn post_row_result(
+    weak: Weak<AppWindow>,
+    idx: usize,
+    install: bool,
+    res: Result<String, String>,
+) {
     let _ = slint::invoke_from_event_loop(move || {
         if let Some(app) = weak.upgrade() {
             let rows = app.global::<Sk>().get_rows();
@@ -200,7 +210,7 @@ pub(crate) fn run_batch(weak: Weak<AppWindow>, ops: Vec<(usize, bool, Item)>) {
 /// carrega só o visual). Preenchido ao abrir; lido no confirmar.
 #[derive(Default, Clone)]
 pub(crate) struct ModalState {
-    pub(crate) skill_idx: usize,   // linha da skill sendo instalada
-    pub(crate) rec_slug: String,   // slug da recomendada a oferecer ("" = nenhuma)
-    pub(crate) env_lang: String,   // linguagem do environment a oferecer ("" = nenhum)
+    pub(crate) skill_idx: usize, // linha da skill sendo instalada
+    pub(crate) rec_slug: String, // slug da recomendada a oferecer ("" = nenhuma)
+    pub(crate) env_lang: String, // linguagem do environment a oferecer ("" = nenhum)
 }
