@@ -4378,7 +4378,7 @@ dependencies = [
 
 [[package]]
 name = "schematize-gui-slint"
-version = "0.8.3"
+version = "0.8.5"
 dependencies = [
  "chrono",
  "i-slint-backend-winit",
@@ -6623,3 +6623,7 @@ dependencies = [
  "syn 3.0.3",
  "winnow",
 ]
+
+[[patch.unused]]
+name = "schematize"
+version = "0.55.10"
