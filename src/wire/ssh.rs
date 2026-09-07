@@ -114,6 +114,66 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             }
         });
     }
+    // IMPORTAR uma chave que já existe. Contrapartida do `generate`: um cria, o outro adota.
+    // NUNCA sobrescreve (force=false) — na GUI não há como confirmar sem virar modal, e
+    // apagar a chave errada em silêncio é irreversível. Quem precisa disso usa a CLI.
+    {
+        let weak = app.as_weak();
+        let m = ssh_model.clone();
+        app.global::<Ssh>().on_import(move || {
+            let Some(app) = weak.upgrade() else { return };
+            let file = app.global::<Ssh>().get_imp_file().to_string();
+            let name = app.global::<Ssh>().get_imp_name().to_string();
+            let pass = app.global::<Ssh>().get_imp_passphrase().to_string();
+            let comment = app.global::<Ssh>().get_imp_comment().to_string();
+
+            // `~` não é expandido por ninguém quando o caminho vem de um campo de texto:
+            // quem cola "~/backup/chave" está falando do próprio home, e receber
+            // "não achei o arquivo" por causa de um til é o tipo de aspereza que o piso
+            // "prever macacos" proíbe.
+            let expandido = match file.strip_prefix("~/") {
+                Some(resto) => schematize::util::home().join(resto),
+                None => std::path::PathBuf::from(&file),
+            };
+
+            // Sem nome explícito, herda o do arquivo — mesma regra da CLI.
+            let nome = if name.trim().is_empty() {
+                match expandido.file_stem().and_then(|s| s.to_str()) {
+                    Some(n) => n.to_string(),
+                    None => {
+                        app.global::<Ssh>().set_imp_error(true);
+                        app.global::<Ssh>()
+                            .set_imp_status("não consegui deduzir o nome — preencha o campo".into());
+                        return;
+                    }
+                }
+            } else {
+                name.trim().to_string()
+            };
+
+            let pass_opt = if pass.is_empty() { None } else { Some(pass.as_str()) };
+            let comment_opt = if comment.trim().is_empty() { None } else { Some(comment.as_str()) };
+            match sshkeys::import(&expandido, &nome, pass_opt, comment_opt, false) {
+                Ok(info) => {
+                    app.global::<Ssh>().set_imp_error(false);
+                    app.global::<Ssh>()
+                        .set_imp_status(format!("{} · {}", info.name, info.fingerprint).into());
+                    // Limpa o formulário — sobretudo a passphrase, que não fica na tela.
+                    app.global::<Ssh>().set_imp_file(SharedString::new());
+                    app.global::<Ssh>().set_imp_name(SharedString::new());
+                    app.global::<Ssh>().set_imp_passphrase(SharedString::new());
+                    app.global::<Ssh>().set_imp_comment(SharedString::new());
+                    m.set_vec(build_ssh_rows());
+                }
+                Err(e) => {
+                    app.global::<Ssh>().set_imp_error(true);
+                    app.global::<Ssh>().set_imp_status(e.into());
+                    // A passphrase FICA: o erro mais comum é ter esquecido de preenchê-la, e
+                    // apagar o que a pessoa digitou certo pra ela redigitar é hostil.
+                }
+            }
+        });
+    }
     // copiar a PÚBLICA (export_public + clipboard). NUNCA toca a privada.
     {
         let m = ssh_model.clone();

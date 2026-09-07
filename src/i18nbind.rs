@@ -217,6 +217,13 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_ssh_kind(tor("gui.ssh_kind", "Tipo").into());
     l.set_ssh_comment(tor("gui.ssh_comment", "Comentário").into());
     l.set_ssh_passphrase(tor("gui.ssh_passphrase", "Passphrase (opcional)").into());
+    l.set_ssh_import(tor("gui.ssh_import", "Importar chave existente").into());
+    l.set_ssh_import_file(tor("gui.ssh_import_file", "Arquivo da chave privada").into());
+    l.set_ssh_import_hint(tor(
+        "gui.ssh_import_hint",
+        "Aponte para a chave PRIVADA (não o .pub). Ela é copiada para ~/.ssh em 600 e \
+         continua com a passphrase que já tinha.",
+    ).into());
     l.set_ssh_copy_pub(tor("gui.ssh_copy_pub", "Copiar pública").into());
     l.set_ssh_copied(tor("gui.ssh_copied", "copiado").into());
     l.set_ssh_remove(tor("gui.ssh_remove", "Remover").into());

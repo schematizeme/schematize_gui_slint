@@ -370,7 +370,15 @@ export global Ssh {
     in-out property <bool> confirm-open: false;      // modal de confirmação de remoção
     in-out property <string> confirm-name;
     in-out property <string> confirm-msg;
+    // --- importar chave JÁ existente (outra máquina, backup, cofre) ---
+    in-out property <string> imp-file;               // caminho da PRIVADA na origem
+    in-out property <string> imp-name;               // vazio = herda o nome do arquivo
+    in-out property <string> imp-passphrase;         // só p/ LER a chave; ela segue cifrada
+    in-out property <string> imp-comment;
+    in-out property <string> imp-status;
+    in-out property <bool> imp-error: false;
     callback generate();
+    callback import();
     callback export-bw(int);     // exportar a chave da linha i p/ o Bitwarden (thread)
     callback copy(int);          // copiar pública da linha i
     callback remove-request(int);// abrir confirmação de remoção da linha i

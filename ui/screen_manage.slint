@@ -136,6 +136,75 @@ export component ManageScreen inherits VerticalLayout {
                         }
                     }
                     Rectangle { height: 1px; background: Theme.border; }
+
+                    // ---- formulário IMPORTAR (chave que já existe) ----
+                    // Contrapartida do "gerar": quem já tem chave de outra máquina, de um
+                    // backup ou de um cofre não precisa copiar à mão e acertar permissão na
+                    // unha. Sem seletor de arquivo nativo de propósito — a GUI egui/`rfd` saiu
+                    // na v0.39.0 e não voltou; aqui se cola o caminho.
+                    Text { text: L.ssh-import; font-size: 14px; font-weight: 800; color: Theme.text; }
+                    Text { text: L.ssh-import-hint; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+                    VerticalLayout {
+                        spacing: 6px;
+                        Text { text: L.ssh-import-file; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
+                        LineEdit {
+                            width: 420px;
+                            placeholder-text: "~/backup/id_ed25519";
+                            text: Ssh.imp-file;
+                            edited(s) => { Ssh.imp-file = s; }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        VerticalLayout {
+                            spacing: 6px;
+                            Text { text: L.ssh-name; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 200px;
+                                text: Ssh.imp-name;
+                                edited(s) => { Ssh.imp-name = s; }
+                            }
+                        }
+                        VerticalLayout {
+                            spacing: 6px;
+                            Text { text: L.ssh-passphrase; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 200px;
+                                input-type: password;
+                                text: Ssh.imp-passphrase;
+                                edited(s) => { Ssh.imp-passphrase = s; }
+                            }
+                        }
+                        VerticalLayout {
+                            spacing: 6px;
+                            Text { text: L.ssh-comment; font-size: 13px; font-weight: 700; color: Theme.text-dim; }
+                            LineEdit {
+                                width: 200px;
+                                text: Ssh.imp-comment;
+                                edited(s) => { Ssh.imp-comment = s; }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        Btn {
+                            label: L.ssh-import; small: true;
+                            enabled: Ssh.imp-file != "";
+                            clicked => { Ssh.import(); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            if Ssh.imp-status != "": Text {
+                                text: Ssh.imp-status;
+                                font-size: 12.5px; font-weight: 600;
+                                color: Ssh.imp-error ? Theme.warn : Theme.good;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
                     // ---- lista de chaves ----
                     Text { text: L.ssh-keys-title; font-size: 14px; font-weight: 800; color: Theme.text; }
                     // Exportar p/ Bitwarden — nota de segurança + resultado da última exportação.
