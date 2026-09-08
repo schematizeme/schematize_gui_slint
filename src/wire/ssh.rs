@@ -142,8 +142,9 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     Some(n) => n.to_string(),
                     None => {
                         app.global::<Ssh>().set_imp_error(true);
-                        app.global::<Ssh>()
-                            .set_imp_status("não consegui deduzir o nome — preencha o campo".into());
+                        app.global::<Ssh>().set_imp_status(
+                            "não consegui deduzir o nome — preencha o campo".into(),
+                        );
                         return;
                     }
                 }

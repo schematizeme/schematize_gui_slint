@@ -37,6 +37,7 @@ pub(crate) fn env_row(le: &environments::LangEnv) -> EnvRow {
 /// Título traduzido da seção de uma categoria ("language" | "tool").
 pub(crate) fn env_section_title(category: &str) -> String {
     match category {
+        "app" => tor("gui.env_apps_title", "Apps da casa"),
         "tool" => tor("gui.env_tools_title", "Ferramentas de dev"),
         _ => tor("gui.env_langs_title", "Linguagens"),
     }
@@ -60,9 +61,68 @@ pub(crate) fn build_env_rows_from(status: &[environments::LangEnv]) -> Vec<EnvRo
         .collect()
 }
 
-/// Constrói o modelo inteiro da aba Environments a partir de `environments::status()`.
+/// Constrói o modelo inteiro da aba Environments: runtimes, ferramentas e os APPS DA CASA.
+///
+/// **Por que os apps entram AQUI, e não num card novo na home (ADR-0014 D7):** esta aba já é
+/// a tela do Mercado, e o card "Mercado" da home já a abre. Os três apps são exatamente o que
+/// o market instala — o ADR-0012 chama isso de "uma lista só", e foi ele que reconheceu que
+/// `env` (linguagens) e `apps` (apps da casa) eram o mesmo produto partido em dois comandos.
+///
+/// A alternativa era um 13º card na home. A grade de lá é **3×4 exatamente cheia**, e
+/// `ui/screen_home.slint` registra por quê: *"linhas com contagens diferentes davam cards de
+/// larguras diferentes entre si… era o que deixava a tela torta"*. Pôr os apps onde eles já
+/// pertencem custa esta função; mexer na grade custaria a regra que existe porque já foi
+/// quebrada uma vez.
 pub(crate) fn build_env_rows() -> Vec<EnvRow> {
-    build_env_rows_from(&environments::status())
+    let mut linhas = build_env_rows_from(&environments::status());
+    linhas.extend(build_app_rows());
+    linhas
+}
+
+/// **O quê:** uma linha por app da casa (deployer, optimizer, market), com estado e versão.
+///
+/// **Onde:** [`build_env_rows`], como terceira seção da aba.
+///
+/// **O terceiro estado importa:** um binário que está lá e não responde (`Quebrado`) é
+/// problema diferente de um que não existe. Dizer "não instalado" sobre o primeiro mandaria a
+/// pessoa reinstalar o que já tem, e esconderia a causa real (permissão, lib faltando,
+/// arquitetura errada).
+pub(crate) fn build_app_rows() -> Vec<EnvRow> {
+    use deployerlink::Estado;
+    deployerlink::EXTERNOS
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            let (installed, status_label) = match deployerlink::descobrir_app(a.bin) {
+                Estado::Instalado { versao, .. } => {
+                    (true, tf("env.installed_via", &[("method", &versao)]))
+                }
+                Estado::Quebrado { .. } => {
+                    (false, tor("gui.app_broken", "quebrado — não responde"))
+                }
+                Estado::Ausente => (false, t("env.not_installed")),
+            };
+            EnvRow {
+                lang: a.bin.into(),
+                display: a.bin.into(),
+                category: "app".into(),
+                install_hint: a.sobre.into(),
+                // A PRIMEIRA linha abre a seção; as outras não repetem o título.
+                section_title: if i == 0 {
+                    env_section_title("app").into()
+                } else {
+                    SharedString::new()
+                },
+                // App da casa não tem "método": ele compila do fonte, e só. A lista vazia é o
+                // que faz a UI não desenhar chip de método nesta seção.
+                methods: ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))),
+                method_sel: SharedString::new(),
+                installed,
+                status_label: status_label.into(),
+                op_label: SharedString::new(),
+            }
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +156,41 @@ pub(crate) fn build_lang_items(current: &str) -> Vec<LangItem> {
             current: *code == current,
         })
         .collect()
+}
+
+/// **O quê:** instala um app da casa abrindo um TERMINAL com `schematize-market install`.
+/// Devolve o rótulo transitório para a linha.
+///
+/// **Onde:** o botão "instalar" da seção de apps na aba do Mercado.
+///
+/// ## Por que TERMINAL, e não uma barra de progresso dentro da janela
+///
+/// O ADR-0014 (D7) pediu "botão que instala", e instalar um app da casa **compila do fonte
+/// por minutos** — pode pedir sudo para as libs de build, e o `cargo` fala o tempo todo.
+/// Fazer isso dentro do event loop travaria a janela; fazer numa thread com barra de
+/// progresso exigiria reimplementar, em Slint, o que um terminal já faz melhor: mostrar a
+/// saída ao vivo, aceitar `Ctrl-C`, e deixar o erro na tela para ser lido e copiado.
+///
+/// É o mesmo caminho que esta aba já usa para instalar linguagem, e pela mesma razão. O
+/// progresso, o cancelamento e a mensagem de erro acionável vêm de graça — e são de verdade,
+/// não uma aproximação desenhada.
+///
+/// **Sem `-y`:** o market mostra o que vai fazer e PEDE confirmação ali dentro. Consentimento
+/// honesto vale mais aqui do que um clique a menos, porque o que se consente é minutos de CPU
+/// e, às vezes, a senha do sudo.
+pub(crate) fn run_app_install(bin: &str) -> String {
+    let inner = format!(
+        "echo '── schematize-market install {bin} ──'; echo; \
+         schematize-market install {bin}; \
+         echo; read -n1 -s -r -p '…'",
+    );
+    if launch_terminal(&inner) {
+        t("gui.env_terminal_opened")
+    } else {
+        // Sem terminal a janela não some com o problema: ela entrega o comando para a pessoa
+        // rodar onde quiser. É o mesmo contrato do caminho de linguagem.
+        tf("gui.env_no_terminal", &[("cmd", &format!("schematize-market install {bin}"))])
+    }
 }
 
 /// Monta o comando do terminal p/ `schematize env <action> <lang> --method <m>`.

@@ -32,6 +32,14 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         app.global::<Cfg>().on_install(move |idx| {
             let i = idx as usize;
             if let Some(mut r) = env_model.row_data(i) {
+                // App da casa vai por OUTRO caminho: quem o instala é o
+                // `schematize-market` (ADR-0013), não o `schematize env`.
+                if r.category == "app" {
+                    let label = crate::envrows::run_app_install(r.lang.as_ref());
+                    r.op_label = label.into();
+                    env_model.set_row_data(i, r);
+                    return;
+                }
                 // Linguagem exige método escolhido; ferramenta ("tool") não tem seletor.
                 if r.category != "tool" && r.method_sel.is_empty() {
                     return;

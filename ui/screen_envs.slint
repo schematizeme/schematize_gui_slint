@@ -106,8 +106,14 @@ export component EnvsScreen inherits VerticalLayout {
                                     vertical-alignment: center;
                                 }
                             }
-                            // linha 2 — LINGUAGEM: seletor de método (chips) + ações
-                            if erow.category != "tool": HorizontalLayout {
+                            // linha 2 — LINGUAGEM: seletor de método (chips) + ações.
+                            //
+                            // A condição é `== "language"`, e não `!= "tool"`. Com a negação,
+                            // a seção de APPS DA CASA (category "app") caía aqui: como app não
+                            // tem método, a linha diria "não há método disponível" e o botão
+                            // de instalar ficaria DESABILITADO — um app instalável que a UI
+                            // apresenta como impossível.
+                            if erow.category == "language": HorizontalLayout {
                                 spacing: 8px;
                                 VerticalLayout {
                                     alignment: center;
@@ -152,6 +158,37 @@ export component EnvsScreen inherits VerticalLayout {
                                         small: true;
                                         enabled: erow.installed;
                                         clicked => { Cfg.remove(ei); }
+                                    }
+                                }
+                            }
+                            // linha 2 — APP DA CASA: sem seletor de método e SEM remover.
+                            //
+                            // O botão de remover não existe aqui de propósito, e a ausência
+                            // espelha o que o próprio market responde: app da casa não se
+                            // desinstala por um comando genérico — cada um tem o seu, que sabe
+                            // da entrada de desktop, do ícone e do estado em `~`. Apagar só o
+                            // binário daqui deixaria o ícone órfão no menu, e um ícone que
+                            // abre nada é pior que um app instalado.
+                            if erow.category == "app": HorizontalLayout {
+                                spacing: 8px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: erow.install-hint;
+                                        font-size: 12.5px;
+                                        color: Theme.text-dim;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                                Rectangle {}
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn {
+                                        label: L.act-install;
+                                        primary: true;
+                                        small: true;
+                                        enabled: !erow.installed;
+                                        clicked => { Cfg.install(ei); }
                                     }
                                 }
                             }

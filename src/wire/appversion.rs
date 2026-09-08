@@ -148,8 +148,7 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                     gestorboot::Outcome::Instalado(_) | gestorboot::Outcome::JaTinha => {
                         app.global::<App>().set_gestor_missing(false);
                         app.global::<App>().set_gestor_status(
-                            tor("gui.gestor_installed", "Gestor de atualizações instalado.")
-                                .into(),
+                            tor("gui.gestor_installed", "Gestor de atualizações instalado.").into(),
                         );
                     }
                     // Adiado/Falhou: mantém o prompt visível pra tentativa manual.
