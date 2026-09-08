@@ -500,10 +500,10 @@ export global App {
     in-out property <string> version;                  // "schematize v0.25.1" (montado no Rust)
     in-out property <bool> checking: false;        // checagem de update em andamento
     in-out property <string> update-status;        // linha de resultado ("atualizado" / erro)
-    in-out property <bool> updater-missing: false;     // o schematize-updater NÃO está instalado
-    in-out property <bool> updater-installing: false;  // instalação do updater em andamento
-    in-out property <string> updater-status;           // resultado da instalação do updater
-    callback install-updater();                        // baixa+instala o schematize-updater
+    in-out property <bool> gestor-missing: false;     // o schematize-market (gestor) NÃO está instalado
+    in-out property <bool> gestor-installing: false;  // instalação do gestor em andamento
+    in-out property <string> gestor-status;           // resultado da instalação do gestor
+    callback install-gestor();                        // baixa+instala o schematize-market
     in-out property <bool> has-update: false;      // há versão nova?
     in-out property <bool> updating: false;        // self-update em andamento
     in-out property <bool> update-done: false;     // update concluído → sugerir reiniciar

@@ -12,7 +12,7 @@ use crate::prelude::*;
 /// o tipo cru é ilegível na assinatura e o lint reclamava com razão.
 type ComparacaoDeSkill = Result<(String, String, Vec<(String, String)>, String), String>;
 use crate::wire::{set_rows, Ctx};
-use schematize::updaterboot;
+use schematize::gestorboot;
 
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
@@ -90,30 +90,31 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
         });
     }
 
-    // Gestor de atualizações (schematize-updater): checa na ABERTURA se está instalado; se faltar,
-    // a UI mostra o prompt "instalar". Cobre instalação limpa E update — sem o updater, o update
-    // central não roda. O botão baixa o binário do updater (ensure_updater) numa thread.
+    // Gestor de atualizações (`schematize-market`, ADR-0013): checa na ABERTURA se está
+    // instalado; se faltar, a UI mostra o prompt "instalar". Cobre instalação limpa E update —
+    // sem o gestor, o update central não roda. O botão baixa o binário (ensure_gestor) numa
+    // thread. Até o ADR-0013 o gestor era o `schematize-updater`, absorvido pelo market.
     {
         let weak = app.as_weak();
-        app.global::<App>().on_install_updater(move || {
+        app.global::<App>().on_install_gestor(move || {
             let Some(app) = weak.upgrade() else { return };
-            if app.global::<App>().get_updater_installing() {
+            if app.global::<App>().get_gestor_installing() {
                 return;
             }
-            app.global::<App>().set_updater_installing(true);
-            app.global::<App>().set_updater_status(SharedString::new());
+            app.global::<App>().set_gestor_installing(true);
+            app.global::<App>().set_gestor_status(SharedString::new());
             let weak = weak.clone();
             std::thread::spawn(move || {
-                let res = selfupdate::ensure_updater();
+                let res = selfupdate::ensure_gestor();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
-                        app.global::<App>().set_updater_installing(false);
+                        app.global::<App>().set_gestor_installing(false);
                         match res {
                             Ok(_p) => {
-                                app.global::<App>().set_updater_missing(false);
-                                app.global::<App>().set_updater_status(
+                                app.global::<App>().set_gestor_missing(false);
+                                app.global::<App>().set_gestor_status(
                                     tor(
-                                        "gui.updater_installed",
+                                        "gui.gestor_installed",
                                         "Gestor de atualizações instalado.",
                                     )
                                     .into(),
@@ -121,38 +122,38 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                             }
                             Err(e) => app
                                 .global::<App>()
-                                .set_updater_status(tf("err.prefix", &[("e", &e)]).into()),
+                                .set_gestor_status(tf("err.prefix", &[("e", &e)]).into()),
                         }
                     }
                 });
             });
         });
     }
-    // Estado inicial do prompt: o updater está presente?
-    app.global::<App>().set_updater_missing(!updaterboot::present());
+    // Estado inicial do prompt: o gestor está presente?
+    app.global::<App>().set_gestor_missing(!gestorboot::present());
     // ...e se FALTAR, instala SOZINHO em segundo plano. O botão continua ali (pra
     // retentar na mão), mas ninguém deveria precisar dele: quem instalou o app não
     // tem de saber que existe um gestor de atualizações separado — se ele não está
     // na máquina, o update degrada pro fluxo interno e vira "cliquei e não
     // aconteceu nada". Presente = só um stat (sem rede); ausente = uma tentativa,
-    // limitada por carimbo em disco (ver `updaterboot`), pra máquina offline não
+    // limitada por carimbo em disco (ver `gestorboot`), pra máquina offline não
     // bater no GitHub a cada abertura.
-    if !updaterboot::present() {
+    if !gestorboot::present() {
         let weak = app.as_weak();
         std::thread::spawn(move || {
-            let outcome = updaterboot::ensure_now();
+            let outcome = gestorboot::ensure_now();
             let _ = slint::invoke_from_event_loop(move || {
                 let Some(app) = weak.upgrade() else { return };
                 match outcome {
-                    updaterboot::Outcome::Instalado(_) | updaterboot::Outcome::JaTinha => {
-                        app.global::<App>().set_updater_missing(false);
-                        app.global::<App>().set_updater_status(
-                            tor("gui.updater_installed", "Gestor de atualizações instalado.")
+                    gestorboot::Outcome::Instalado(_) | gestorboot::Outcome::JaTinha => {
+                        app.global::<App>().set_gestor_missing(false);
+                        app.global::<App>().set_gestor_status(
+                            tor("gui.gestor_installed", "Gestor de atualizações instalado.")
                                 .into(),
                         );
                     }
                     // Adiado/Falhou: mantém o prompt visível pra tentativa manual.
-                    _ => app.global::<App>().set_updater_missing(true),
+                    _ => app.global::<App>().set_gestor_missing(true),
                 }
             });
         });

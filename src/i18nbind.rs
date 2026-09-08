@@ -308,8 +308,8 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         tor("gui.app_restart_hint", "Atualização concluída — reinicie o app.").into(),
     );
     l.set_app_restart(tor("gui.app_restart", "Reiniciar").into());
-    l.set_updater_missing_msg(tor("gui.updater_missing", "O gestor de atualizações (schematize-updater) não está instalado — ele cuida de instalar/atualizar o app.").into());
-    l.set_updater_install_btn(tor("gui.updater_install", "Instalar gestor de atualizações").into());
+    l.set_gestor_missing_msg(tor("gui.gestor_missing", "O gestor de atualizações (schematize-market) não está instalado — ele cuida de instalar/atualizar o app.").into());
+    l.set_gestor_install_btn(tor("gui.gestor_install", "Instalar gestor de atualizações").into());
     // Sininho de notificações.
     l.set_notif_title(tor("gui.notif_title", "Notificações").into());
     l.set_notif_empty(tor("gui.notif_empty", "Sem notificações").into());
