@@ -178,18 +178,36 @@ pub(crate) fn build_lang_items(current: &str) -> Vec<LangItem> {
 /// **Sem `-y`:** o market mostra o que vai fazer e PEDE confirmação ali dentro. Consentimento
 /// honesto vale mais aqui do que um clique a menos, porque o que se consente é minutos de CPU
 /// e, às vezes, a senha do sudo.
-pub(crate) fn run_app_install(bin: &str) -> String {
-    let inner = format!(
-        "echo '── schematize-market install {bin} ──'; echo; \
-         schematize-market install {bin}; \
+/// **O quê:** monta o comando de terminal que instala um app da casa. PURA (testável).
+///
+/// **Onde:** [`run_app_install`].
+///
+/// **Por que é função separada, como a `env_terminal_inner` ao lado:** enquanto este comando
+/// era um `format!` embutido no meio do disparo do terminal, ele não tinha teste — e foi
+/// justamente ali que o nome puro do gestor sobreviveu, enquanto o caminho de linguagem, que
+/// JÁ era puro e testado, resolvia o binário direito. A assimetria entre os dois era a forma
+/// do bug.
+pub(crate) fn app_install_inner(gestor: &str, bin: &str) -> String {
+    format!(
+        "echo '── {gestor} install {bin} ──'; echo; \
+         {gestor} install {bin}; \
          echo; read -n1 -s -r -p '…'",
-    );
+    )
+}
+
+pub(crate) fn run_app_install(bin: &str) -> String {
+    // O gestor é resolvido, NUNCA escrito com o nome puro. A janela aberta pelo lançador do
+    // desktop tem PATH mínimo (sem `~/.cargo/bin`), e o terminal que ela abre herda esse PATH:
+    // com o nome puro o usuário via `schematize-market: comando não encontrado` sobre um
+    // gestor que estava instalado. Ver `sysenv::bin_irmao`.
+    let gestor = market_bin();
+    let inner = app_install_inner(&gestor, bin);
     if launch_terminal(&inner) {
         t("gui.env_terminal_opened")
     } else {
         // Sem terminal a janela não some com o problema: ela entrega o comando para a pessoa
         // rodar onde quiser. É o mesmo contrato do caminho de linguagem.
-        tf("gui.env_no_terminal", &[("cmd", &format!("schematize-market install {bin}"))])
+        tf("gui.env_no_terminal", &[("cmd", &format!("{gestor} install {bin}"))])
     }
 }
 
@@ -227,5 +245,48 @@ pub(crate) fn run_env_action(action: &str, lang: &str, method: &str) -> String {
             if method.is_empty() { String::new() } else { format!(" --method {method}") };
         let cmd = format!("{bin} env {action} {lang}{method_arg}");
         tf("gui.env_no_terminal", &[("cmd", &cmd)])
+    }
+}
+
+#[cfg(test)]
+mod tests_gestor {
+    use super::*;
+
+    /// **O buraco que isto fecha.** O comando era montado com o nome PURO
+    /// (`schematize-market install <app>`). A janela aberta pelo lançador do desktop tem PATH
+    /// mínimo — sem `~/.cargo/bin` —, e o terminal que ela abre herda esse PATH. O usuário
+    /// clicava em instalar e recebia:
+    ///
+    /// ```text
+    /// /usr/bin/bash: linha 1: schematize-market: comando não encontrado
+    /// ```
+    ///
+    /// …sobre um gestor que ESTAVA instalado. Reproduzido com
+    /// `env -i PATH=/usr/bin:/bin bash -c 'schematize-market --version'`.
+    #[test]
+    fn o_comando_usa_o_caminho_resolvido_e_nao_o_nome_puro() {
+        let cmd = app_install_inner("/home/u/.cargo/bin/schematize-market", "schematize-deployer");
+        assert!(cmd.contains("/home/u/.cargo/bin/schematize-market install schematize-deployer"));
+        // Self-check do próprio teste: com o nome puro, a asserção acima falharia.
+        let ruim = app_install_inner("schematize-market", "schematize-deployer");
+        assert!(!ruim.contains("/home/u/.cargo/bin/"), "o self-check parou de valer");
+    }
+
+    /// O eco que a pessoa lê no topo do terminal mostra o MESMO comando que vai rodar. Se ele
+    /// dissesse o nome puro e executasse o caminho, a mensagem de erro que ela copiasse para
+    /// pedir ajuda seria sobre um comando que ninguém rodou.
+    #[test]
+    fn o_eco_e_o_comando_executado_sao_o_mesmo() {
+        let g = "/opt/x/schematize-market";
+        let cmd = app_install_inner(g, "schematize-optimizer");
+        assert_eq!(cmd.matches(&format!("{g} install schematize-optimizer")).count(), 2, "{cmd}");
+    }
+
+    /// `market_bin()` nunca devolve vazio — devolveria um comando que começa com um espaço e
+    /// tentaria executar o argumento como programa.
+    #[test]
+    fn market_bin_nunca_e_vazio() {
+        assert!(!market_bin().is_empty());
+        assert!(market_bin().contains("schematize-market"));
     }
 }

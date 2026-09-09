@@ -101,12 +101,32 @@ pub(crate) fn open_in_vscode(root: &Path) {
 /// nada, sem dizer por quê.
 pub(crate) const CLI_BINS: [&str; 2] = ["schematize", "overflow"];
 
-/// Localiza o binário do CLI pra montar o comando do terminal: primeiro um irmão do
-/// executável atual (instalação da casa põe os dois lado a lado), senão o do PATH.
-pub(crate) fn schematize_bin() -> String {
+/// Nomes do binário do GESTOR. Um só hoje — a constante existe para que o dia em que houver
+/// um nome legado, ele entre aqui e **todos** os chamadores herdem, em vez de um só.
+pub(crate) const MARKET_BINS: [&str; 1] = ["schematize-market"];
+
+/// **O quê:** localiza um binário irmão para montar comando de terminal — primeiro ao lado do
+/// executável atual, senão no `$PATH`, senão devolve o nome canônico.
+///
+/// **Onde:** [`schematize_bin`] e [`market_bin`].
+///
+/// ## Por que o "ao lado" vem PRIMEIRO, e por que esta função é uma só
+///
+/// A janela aberta pelo lançador do desktop recebe um **PATH mínimo** — sem `~/.cargo/bin`,
+/// que é onde a instalação da casa põe tudo. Um comando montado com o nome puro morre ali com
+/// `command not found`, e o terminal que a GUI abre HERDA esse PATH, então o erro chega ao
+/// usuário como uma linha crua do bash em vez de algo acionável.
+///
+/// Foi o que aconteceu: `run_app_install` cravava `schematize-market install <app>` com o nome
+/// puro, enquanto o caminho de LINGUAGEM, ao lado, já resolvia o binário. A correção de então
+/// foi pontual num dos dois — e o outro seguiu quebrado até alguém clicar nele.
+///
+/// Por isso a resolução é UMA função e não duas parecidas: com duas, consertar uma continua
+/// deixando a outra para trás, que é exatamente a forma deste bug.
+fn bin_irmao(nomes: &[&str]) -> String {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            for nome in CLI_BINS {
+            for nome in nomes {
                 let cand = dir.join(nome);
                 if cand.is_file() {
                     return cand.to_string_lossy().into_owned();
@@ -114,9 +134,21 @@ pub(crate) fn schematize_bin() -> String {
             }
         }
     }
-    // Nada ao lado: escolhe pelo PATH, canônico primeiro. Sem nada, devolve o canônico —
-    // o erro que o usuário vê passa a ser "schematize: not found", que é acionável.
-    CLI_BINS.iter().find(|n| which_bin(n)).unwrap_or(&CLI_BINS[0]).to_string()
+    // Nada ao lado: escolhe pelo PATH, canônico primeiro. Sem nada, devolve o canônico — o
+    // erro que o usuário vê passa a ser "<nome>: not found", que ao menos nomeia o que falta.
+    nomes.iter().find(|n| which_bin(n)).unwrap_or(&nomes[0]).to_string()
+}
+
+/// Localiza o binário do CLI pra montar o comando do terminal: primeiro um irmão do
+/// executável atual (instalação da casa põe os dois lado a lado), senão o do PATH.
+pub(crate) fn schematize_bin() -> String {
+    bin_irmao(&CLI_BINS)
+}
+
+/// Localiza o binário do GESTOR (`schematize-market`) pra montar o comando do terminal.
+/// Mesma regra do [`schematize_bin`], e de propósito: os dois são instalados lado a lado.
+pub(crate) fn market_bin() -> String {
+    bin_irmao(&MARKET_BINS)
 }
 
 /// Um binário existe no PATH?
