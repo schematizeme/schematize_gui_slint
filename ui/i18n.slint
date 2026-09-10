@@ -33,6 +33,14 @@ export global L {
     in-out property <string> act-remove;   // "Desinstalar" por-linha
     // aba Environments
     in-out property <string> tab-environments;
+    // Aba MERCADO — o hub delega a janela do market (ADR-0012). As chaves `env-*` abaixo
+    // seguem em uso pelo MODAL do marketplace, que ainda oferece instalar o environment de
+    // uma linguagem junto com a skill.
+    in-out property <string> mercado-title;
+    in-out property <string> mercado-body;
+    in-out property <string> mercado-open;
+    in-out property <string> mercado-missing;
+    in-out property <string> mercado-install;
     in-out property <string> env-intro;      // texto-guia (mexe na máquina / roda em terminal)
     in-out property <string> env-method;      // "Método:"
     in-out property <string> env-no-methods;  // nenhum método disponível

@@ -109,11 +109,13 @@ fn main() -> Result<(), slint::PlatformError> {
     // Busca as notas do marketplace (1 request, thread) e preenche os badges por slug.
     kick_market_ratings(app.as_weak());
 
-    // ---- aba Environments: modelo + índices auxiliares p/ o modal ----
-    // Sonda a máquina UMA vez (local, rápido pra command -v). O refresh re-sonda.
+    // ---- índices auxiliares p/ o modal do marketplace ----
+    //
+    // A LISTA do mercado saiu daqui: ela é da janela do market agora (ADR-0012), e a aba
+    // "Mercado" apenas a abre. O que sobra é a sondagem que o MODAL usa — ele oferece instalar
+    // o environment de uma linguagem junto com a skill, e para desenhar os chips de método
+    // precisa saber quais existem nesta máquina, sem re-sondar a cada abertura.
     let env_status = environments::status();
-    let env_model = Rc::new(VecModel::from(build_env_rows_from(&env_status)));
-    app.global::<Cfg>().set_rows(ModelRc::from(env_model.clone()));
     // lang → métodos disponíveis (slugs), pra o modal montar os chips sem re-sondar.
     let env_methods: Rc<std::collections::HashMap<String, Vec<String>>> = Rc::new(
         env_status
@@ -229,7 +231,6 @@ fn main() -> Result<(), slint::PlatformError> {
         row_items,
         model,
         modal,
-        env_model,
         env_methods,
         env_langs,
         graph_state,

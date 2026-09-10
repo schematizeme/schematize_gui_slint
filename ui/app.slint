@@ -29,7 +29,7 @@ import { SettingsScreen } from "screen_settings.slint";
 import { DatabaseScreen } from "screen_database.slint";
 import { GraphScreen } from "screen_graph.slint";
 import { OverdevScreen } from "screen_overdev.slint";
-import { EnvsScreen } from "screen_envs.slint";
+import { MercadoScreen } from "screen_mercado.slint";
 import { SshScreen } from "screen_ssh.slint";
 import { VpsScreen } from "screen_vps.slint";
 import { SkillsScreen } from "screen_skills.slint";
@@ -400,11 +400,12 @@ export component AppWindow inherits Window {
         // colorido, e as seções Decisões/Plano/Perguntas colapsáveis).
         if root.screen == 2: OverdevScreen {  }
 
-        // ---- aba ENVIRONMENTS (2) — gestão dos runtimes de linguagem --
-        // Cada linha: linguagem, status, escolha de MÉTODO (chips) e botões
-        // Instalar/Desinstalar. As ações NÃO mexem na máquina de dentro da GUI:
-        // abrem um TERMINAL rodando `schematize env …` (plano + consentimento lá).
-        if root.screen == 1 && root.active-tab == 2: EnvsScreen {  }
+        // ---- aba MERCADO (2) — DELEGA a janela do market ---------------
+        // A lista de linguagens/ferramentas/apps saiu daqui: ela é do market, que tem app e
+        // janela próprios (ADR-0012). Enquanto esta aba a desenhava, existiam DUAS telas do
+        // mesmo produto — e duas telas do mesmo produto divergem. O que fica é o caminho até
+        // lá, e o que fazer quando a janela não está instalada.
+        if root.screen == 1 && root.active-tab == 2: MercadoScreen {  }
 
         // ---- aba GERENCIAR (3) — criar + editar skills ----------------
         // Dois modos (Criar / Editar). Criar: form (slug validado, nome, descrição)

@@ -101,9 +101,16 @@ pub(crate) fn open_in_vscode(root: &Path) {
 /// nada, sem dizer por quê.
 pub(crate) const CLI_BINS: [&str; 2] = ["schematize", "overflow"];
 
-/// Nomes do binário do GESTOR. Um só hoje — a constante existe para que o dia em que houver
-/// um nome legado, ele entre aqui e **todos** os chamadores herdem, em vez de um só.
-pub(crate) const MARKET_BINS: [&str; 1] = ["schematize-market"];
+// O `market_bin` (o binário HEADLESS do gestor) saiu daqui junto com a lista do mercado: era
+// só ela que o chamava, e a lista é da janela do market agora (ADR-0012). Quem precisa do
+// gestor headless é aquela janela, que o resolve com a mesma regra do lado de lá.
+
+/// Nome da JANELA do market — a que a aba do Mercado deste hub passa a abrir (ADR-0012).
+///
+/// O crate dela ainda se chama `schematize-updater-gui` por ser o endereço histórico; o
+/// binário é este. Nome de binário que não bate com o dono já deixou o update do deployer
+/// morto por um release inteiro, e nada dá erro nesse caso.
+pub(crate) const MARKET_GUI_BINS: [&str; 1] = ["schematize-market-gui"];
 
 /// **O quê:** localiza um binário irmão para montar comando de terminal — primeiro ao lado do
 /// executável atual, senão no `$PATH`, senão devolve o nome canônico.
@@ -145,10 +152,45 @@ pub(crate) fn schematize_bin() -> String {
     bin_irmao(&CLI_BINS)
 }
 
-/// Localiza o binário do GESTOR (`schematize-market`) pra montar o comando do terminal.
-/// Mesma regra do [`schematize_bin`], e de propósito: os dois são instalados lado a lado.
-pub(crate) fn market_bin() -> String {
-    bin_irmao(&MARKET_BINS)
+/// **O quê:** o caminho da JANELA do market, ou `None` se ela não estiver instalada.
+///
+/// **Onde:** a aba do Mercado, que a abre em vez de desenhar a própria tela.
+///
+/// **Por que `Option` e não a mesma regra do [`market_bin`].** Aquela devolve o nome canônico
+/// quando não acha nada, porque o destino dela é um comando de terminal, onde
+/// `schematize-market: not found` ao menos NOMEIA o que falta. Aqui o destino é um `spawn`
+/// silencioso: o processo não sobe, nada aparece, e a pessoa fica olhando um botão que não faz
+/// nada. Saber que ela não está instalada é o que permite a aba OFERECER instalá-la, em vez de
+/// fingir que o clique funcionou.
+pub(crate) fn market_gui_bin() -> Option<String> {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for nome in MARKET_GUI_BINS {
+                let cand = dir.join(nome);
+                if cand.is_file() {
+                    return Some(cand.to_string_lossy().into_owned());
+                }
+            }
+        }
+    }
+    MARKET_GUI_BINS.iter().find(|n| which_bin(n)).map(|n| (*n).to_string())
+}
+
+/// **O quê:** abre a janela do market, desacoplada deste processo. `false` se não deu.
+///
+/// **Onde:** o botão da aba do Mercado.
+///
+/// **`stdin`/`stdout`/`stderr` em `null` e sem `wait`:** a janela é outro app, não um filho
+/// deste. Herdar os descritores faria a saída dela se misturar à deste hub; esperar por ela
+/// travaria o event loop enquanto ela estivesse aberta.
+pub(crate) fn abrir_market_gui() -> bool {
+    let Some(bin) = market_gui_bin() else { return false };
+    std::process::Command::new(bin)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .is_ok()
 }
 
 /// Um binário existe no PATH?

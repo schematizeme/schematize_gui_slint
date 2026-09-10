@@ -36,7 +36,6 @@ pub(crate) struct Ctx {
     pub(crate) row_items: Rc<Vec<Option<Item>>>,
     pub(crate) model: Rc<VecModel<SkillRow>>,
     pub(crate) modal: Rc<RefCell<ModalState>>,
-    pub(crate) env_model: Rc<VecModel<EnvRow>>,
     pub(crate) env_methods: Rc<HashMap<String, Vec<String>>>,
     pub(crate) env_langs: Rc<HashSet<String>>,
     pub(crate) graph_state: Rc<RefCell<GraphState>>,

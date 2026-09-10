@@ -8,69 +8,70 @@
 use crate::prelude::*;
 use crate::wire::Ctx;
 
+/// O comando que instala a janela do Mercado. Uma constante, e não um `format!` espalhado: ele
+/// aparece em TRÊS lugares — o texto visível na tela, o eco no topo do terminal e o comando
+/// executado. Se os três divergirem, o erro que a pessoa copiar para pedir ajuda será sobre um
+/// comando que ninguém rodou.
+const COMANDO_INSTALAR_JANELA: &str =
+    "cargo install --git https://github.com/schematizeme/schematize_updater_gui_rs";
+
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     let row_items = cx.row_items.clone();
     let modal = cx.modal.clone();
-    let env_model = cx.env_model.clone();
-    // ==================== aba Environments ====================
+    // ==================== aba MERCADO ====================
+    //
+    // Esta aba DELEGA: ela abre a janela do market em vez de desenhar a lista (ADR-0012).
+    // Os quatro callbacks que havia aqui — escolher método, instalar, remover, recarregar —
+    // saíram junto com a tela. Quem os tem agora é a janela do market, que é de quem eles são.
 
-    // escolher o método (chip) de uma linha de environment.
+    // Estado inicial: a janela está instalada? A resposta é resolvida UMA vez, ao subir, e não
+    // a cada clique — e é ela que decide entre "abrir" e "instalar", em vez de um botão que
+    // tenta e falha em silêncio.
     {
-        let env_model = env_model.clone();
-        app.global::<Cfg>().on_pick_method(move |idx, method| {
-            let i = idx as usize;
-            if let Some(mut r) = env_model.row_data(i) {
-                r.method_sel = method;
-                env_model.set_row_data(i, r);
+        let gui = crate::sysenv::market_gui_bin();
+        let cfg = app.global::<Cfg>();
+        cfg.set_mercado_presente(gui.is_some());
+        // O comando fica VISÍVEL mesmo com o botão ali do lado: quem prefere o terminal não
+        // deveria ter de adivinhá-lo, e quem for pedir ajuda tem o que colar.
+        cfg.set_mercado_cmd(SharedString::from(COMANDO_INSTALAR_JANELA));
+    }
+
+    // Abrir a janela do market.
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_mercado_abrir(move || {
+            let Some(a) = weak.upgrade() else { return };
+            if crate::sysenv::abrir_market_gui() {
+                a.global::<Cfg>().set_mercado_msg(SharedString::new());
+                return;
             }
+            // Falhou o spawn de uma janela que ESTAVA lá: pode ter sido removida entre o
+            // arranque e o clique. A aba volta ao estado honesto em vez de insistir.
+            a.global::<Cfg>().set_mercado_presente(false);
+            a.global::<Cfg>().set_mercado_msg(SharedString::from(
+                "não consegui abrir a janela do Mercado — ela ainda está instalada?",
+            ));
         });
     }
-    // instalar o environment da linha → abre TERMINAL com `schematize env install`.
+
+    // Instalar a janela, num TERMINAL — compila do fonte por minutos, e é o mesmo caminho que
+    // o resto da casa usa para trabalho longo: progresso, `Ctrl-C` e erro copiável de verdade.
     {
-        let env_model = env_model.clone();
-        app.global::<Cfg>().on_install(move |idx| {
-            let i = idx as usize;
-            if let Some(mut r) = env_model.row_data(i) {
-                // App da casa vai por OUTRO caminho: quem o instala é o
-                // `schematize-market` (ADR-0013), não o `schematize env`.
-                if r.category == "app" {
-                    let label = crate::envrows::run_app_install(r.lang.as_ref());
-                    r.op_label = label.into();
-                    env_model.set_row_data(i, r);
-                    return;
-                }
-                // Linguagem exige método escolhido; ferramenta ("tool") não tem seletor.
-                if r.category != "tool" && r.method_sel.is_empty() {
-                    return;
-                }
-                let label = run_env_action("install", r.lang.as_ref(), r.method_sel.as_ref());
-                r.op_label = label.into();
-                env_model.set_row_data(i, r);
-            }
-        });
-    }
-    // desinstalar o environment da linha → abre TERMINAL com `schematize env remove`.
-    {
-        let env_model = env_model.clone();
-        app.global::<Cfg>().on_remove(move |idx| {
-            let i = idx as usize;
-            if let Some(mut r) = env_model.row_data(i) {
-                // Linguagem exige método; ferramenta não (o CLI ignora `--method`).
-                if r.category != "tool" && r.method_sel.is_empty() {
-                    return;
-                }
-                let label = run_env_action("remove", r.lang.as_ref(), r.method_sel.as_ref());
-                r.op_label = label.into();
-                env_model.set_row_data(i, r);
-            }
-        });
-    }
-    // recarregar o status (re-sonda a máquina). Síncrono (local/rápido; evita !Send).
-    {
-        let env_model = env_model.clone();
-        app.global::<Cfg>().on_refresh(move || {
-            env_model.set_vec(build_env_rows());
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_mercado_instalar(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let inner = format!(
+                "echo '── {COMANDO_INSTALAR_JANELA} ──'; echo; \
+                 {COMANDO_INSTALAR_JANELA}; \
+                 echo; read -n1 -s -r -p '…'"
+            );
+            let msg = if launch_terminal(&inner) {
+                t("gui.env_terminal_opened")
+            } else {
+                tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_JANELA)])
+            };
+            a.global::<Cfg>().set_mercado_msg(msg.into());
         });
     }
 
@@ -114,7 +115,6 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         let row_items = row_items.clone();
         let modal = modal.clone();
-        let env_model = env_model.clone();
         app.global::<Mp>().on_confirm(move || {
             let Some(app) = weak.upgrade() else { return };
             let st = modal.borrow().clone();
@@ -136,18 +136,14 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             app.global::<Mp>().set_open(false);
             run_batch(weak.clone(), ops);
             if do_env && !env_method.is_empty() {
+                // O environment ainda é instalado a partir daqui: o modal do marketplace
+                // oferece instalar a linguagem junto com a skill, e isso não é a lista do
+                // mercado — é um passo do fluxo de instalar skill.
                 let label = run_env_action("install", &st.env_lang, &env_method);
-                app.global::<Sk>().set_status(SharedString::from(label.clone()));
-                // reflete a msg no card correspondente da aba Environments.
-                for i in 0..env_model.row_count() {
-                    if let Some(mut r) = env_model.row_data(i) {
-                        if r.lang == st.env_lang {
-                            r.op_label = label.clone().into();
-                            env_model.set_row_data(i, r);
-                            break;
-                        }
-                    }
-                }
+                // A mensagem vai para a barra de status das skills, e só. Antes ela era
+                // refletida também no card da aba Environments; aquela aba deixou de desenhar
+                // a lista (ADR-0012), então não há mais card onde refletir.
+                app.global::<Sk>().set_status(SharedString::from(label));
             }
         });
     }

@@ -1,0 +1,125 @@
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { Btn } from "widgets.slint";
+import { Cfg } from "state.slint";
+
+// Aba MERCADO — este hub DELEGA a janela do market, em vez de desenhar a própria lista.
+//
+// ## Por que a lista saiu daqui (ADR-0012)
+//
+// O market é um app à parte, com o próprio ícone e a própria janela. Enquanto esta aba
+// desenhava a lista, existiam DUAS telas do mesmo produto: uma aqui, lendo o crate do market
+// no mesmo processo, e outra na janela dele. Duas telas do mesmo produto divergem — e este
+// projeto já pagou 9.827 linhas por exatamente esse tipo de duplicação.
+//
+// O que fica aqui é o caminho até lá. O que era desenhado agora é desenhado por quem é dono.
+//
+// ## Janela ausente NÃO é botão que não faz nada
+//
+// Se ela não estiver instalada, esta tela diz isso e oferece instalar — porque um botão que
+// não faz nada e não explica é o que o §37.48 chama de bug do software, não erro de quem
+// clicou.
+export component MercadoScreen inherits VerticalLayout {
+    alignment: center;
+    Rectangle {
+        height: 100%;
+        background: Theme.bg;
+        VerticalLayout {
+            alignment: center;
+            padding: 40px;
+            spacing: 18px;
+            HorizontalLayout {
+                alignment: center;
+                Text {
+                    text: L.mercado-title;
+                    font-size: 22px;
+                    font-weight: 800;
+                    color: Theme.text;
+                    horizontal-alignment: center;
+                }
+            }
+            HorizontalLayout {
+                alignment: center;
+                Rectangle {
+                    max-width: 520px;
+                    VerticalLayout {
+                        Text {
+                            text: L.mercado-body;
+                            font-size: 13px;
+                            color: Theme.text-dim;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+
+            // A janela ESTÁ instalada: um botão, e ele abre.
+            if Cfg.mercado-presente: HorizontalLayout {
+                alignment: center;
+                spacing: 10px;
+                Btn {
+                    label: L.mercado-open;
+                    primary: true;
+                    clicked => { Cfg.mercado-abrir(); }
+                }
+            }
+
+            // A janela NÃO está instalada: diz o que falta, e oferece resolver. O comando
+            // fica visível porque quem prefere o terminal não deveria ter de adivinhá-lo.
+            if !Cfg.mercado-presente: VerticalLayout {
+                spacing: 12px;
+                HorizontalLayout {
+                    alignment: center;
+                    Text {
+                        text: L.mercado-missing;
+                        font-size: 13px;
+                        color: Theme.warn;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+                HorizontalLayout {
+                    alignment: center;
+                    Btn {
+                        label: L.mercado-install;
+                        primary: true;
+                        clicked => { Cfg.mercado-instalar(); }
+                    }
+                }
+                HorizontalLayout {
+                    alignment: center;
+                    Rectangle {
+                        max-width: 560px;
+                        background: Theme.surface;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        VerticalLayout {
+                            padding: 10px;
+                            Text {
+                                text: Cfg.mercado-cmd;
+                                font-size: 12px;
+                                font-family: "monospace";
+                                color: Theme.text-dim;
+                                horizontal-alignment: center;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if Cfg.mercado-msg != "": HorizontalLayout {
+                alignment: center;
+                Text {
+                    text: Cfg.mercado-msg;
+                    font-size: 12px;
+                    color: Theme.text-dim;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}

@@ -61,6 +61,14 @@ export global Mp {
 // Environments (runtimes de linguagem) com seu modal de diretórios.
 export global Cfg {
     in-out property <bool> modal-open: false;
+    // Aba MERCADO — este hub DELEGA a janela do market (ADR-0012), em vez de desenhar a lista.
+    // `mercado-presente` é resolvido no Rust ao subir; sem ele a aba mostraria um botão que
+    // não faz nada, que é pior que dizer o que falta.
+    in-out property <bool> mercado-presente: false;
+    in-out property <string> mercado-cmd;   // o comando de instalação, visível
+    in-out property <string> mercado-msg;   // o que aconteceu com o último clique
+    callback mercado-abrir();
+    callback mercado-instalar();
     in-out property <[EnvRow]> rows;
     in-out property <[LangItem]> langs;
     in-out property <string> lang-code;   // código do idioma atual

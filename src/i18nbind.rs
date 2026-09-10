@@ -56,6 +56,11 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_act_remove(t("gui.uninstall").into());
     // aba Environments
     l.set_tab_environments(t("gui.tab_environments").into());
+    l.set_mercado_title(t("gui.mercado_title").into());
+    l.set_mercado_body(t("gui.mercado_body").into());
+    l.set_mercado_open(t("gui.mercado_open").into());
+    l.set_mercado_missing(t("gui.mercado_missing").into());
+    l.set_mercado_install(t("gui.mercado_install").into());
     l.set_env_intro(t("gui.env_intro").into());
     l.set_env_method(t("gui.env_method").into());
     l.set_env_no_methods(t("gui.env_no_methods").into());
