@@ -152,6 +152,30 @@ pub(crate) fn schematize_bin() -> String {
     bin_irmao(&CLI_BINS)
 }
 
+/// **O quê:** o caminho do binário do MARKET, ou `None` se ele não estiver instalado.
+///
+/// **Onde:** [`crate::marketlink::ler`], que pergunta ao market quais métodos de instalação
+/// existem nesta máquina.
+///
+/// **`Option`, e não o nome canônico como o `bin_irmao` devolve**, pela mesma razão do
+/// [`market_gui_bin`]: o destino aqui é um `Command::new`, não um comando de terminal. Sem o
+/// market, o que se quer é degradar em silêncio (o modal não oferece o environment) — e não
+/// tentar executar um nome que não existe para descobrir isso pelo erro.
+pub(crate) fn market_bin_opcional() -> Option<String> {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let c = dir.join("schematize-market");
+            if c.is_file() {
+                return Some(c.to_string_lossy().into_owned());
+            }
+        }
+    }
+    if which_bin("schematize-market") {
+        return Some("schematize-market".to_string());
+    }
+    None
+}
+
 /// **O quê:** o caminho da JANELA do market, ou `None` se ela não estiver instalada.
 ///
 /// **Onde:** a aba do Mercado, que a abre em vez de desenhar a própria tela.

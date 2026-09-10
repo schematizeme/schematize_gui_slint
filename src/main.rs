@@ -23,6 +23,7 @@ slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/
 // módulos abaixo. `prelude` centraliza os imports comuns (inclusive os tipos que o
 // `include_modules!()` acima gera).
 mod lockpin; // guarda: o Cargo.lock tem que pinar um commit do CLI, não um caminho local
+mod marketlink; // a ponte para o market: quais métodos de instalação existem aqui
 mod prelude;
 
 mod checklist; // paginação PURA do checklist (o que segura o custo de render)
@@ -111,32 +112,20 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // ---- índices auxiliares p/ o modal do marketplace ----
     //
-    // A LISTA do mercado saiu daqui: ela é da janela do market agora (ADR-0012), e a aba
-    // "Mercado" apenas a abre. O que sobra é a sondagem que o MODAL usa — ele oferece instalar
-    // o environment de uma linguagem junto com a skill, e para desenhar os chips de método
-    // precisa saber quais existem nesta máquina, sem re-sondar a cada abertura.
-    let env_status = environments::status();
-    // lang → métodos disponíveis (slugs), pra o modal montar os chips sem re-sondar.
-    let env_methods: Rc<std::collections::HashMap<String, Vec<String>>> = Rc::new(
-        env_status
-            .iter()
-            .map(|le| {
-                (
-                    le.lang.to_string(),
-                    le.methods_available.iter().map(|m| m.slug().to_string()).collect(),
-                )
-            })
-            .collect(),
-    );
-    // conjunto das 7 linguagens que TÊM environment (pra decidir a oferta no modal).
-    // Só categoria "language" — ferramentas (claude/code/codex) não entram na oferta.
-    let env_langs: Rc<std::collections::HashSet<String>> = Rc::new(
-        env_status
-            .iter()
-            .filter(|le| le.category == "language")
-            .map(|le| le.lang.to_string())
-            .collect(),
-    );
+    // A LISTA do mercado saiu daqui: ela é da janela do market (ADR-0012), e a aba "Mercado"
+    // apenas a abre. O MÓDULO `environments` saiu junto: ele era uma cópia do que vive no
+    // market, e as duas já haviam divergido — o market ganhou o caminho de repo de fornecedor
+    // (o que consertou o `exit 104` do `csharp`/zypper) e esta cópia ficou com a versão que
+    // RECUSAVA e mandava a pessoa adicionar o repo à mão.
+    //
+    // O que sobrou é esta pergunta, e ela agora é feita ao DONO: o modal oferece instalar o
+    // environment de uma linguagem junto com a skill, e para desenhar os chips de método
+    // precisa saber quais existem nesta máquina. Sem market instalado vem vazio, e o modal
+    // simplesmente não oferece — a skill instala do mesmo jeito (piso 10).
+    let envs = marketlink::ler();
+    let env_methods = Rc::new(envs.metodos);
+    let env_langs = Rc::new(envs.linguagens);
+
     // estado do modal de instalação (lado Rust).
     let modal = Rc::new(RefCell::new(ModalState::default()));
 
