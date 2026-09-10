@@ -13,9 +13,7 @@ import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { L } from "i18n.slint";
 import {
-    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, SshRow,
-    VpsRow, VpsLogRow, VpsVerbRow,
-    LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
     DbTableRow, DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow,
 } from "types.slint";
 import {
@@ -24,22 +22,17 @@ import {
 } from "widgets.slint";
 import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
 import { HomeScreen } from "screen_home.slint";
-import { ManageScreen } from "screen_manage.slint";
 import { SettingsScreen } from "screen_settings.slint";
 import { DatabaseScreen } from "screen_database.slint";
 import { GraphScreen } from "screen_graph.slint";
 import { OverdevScreen } from "screen_overdev.slint";
-import { MercadoScreen } from "screen_mercado.slint";
-import { SshScreen } from "screen_ssh.slint";
-import { VpsScreen } from "screen_vps.slint";
+import { TelaDelegada } from "screen_delegado.slint";
 import { SkillsScreen } from "screen_skills.slint";
 import { DiscoScreen } from "screen_disco.slint";
 import { GitScreen } from "screen_git.slint";
 import { InstallModal } from "modal_install.slint";
 import { DevDirsModal } from "modal_devdirs.slint";
 import { RunConfirmModal } from "modal_runconfirm.slint";
-import { SshConfirmModal } from "modal_sshconfirm.slint";
-import { VpsConfirmModal, VpsTrustModal } from "modal_vpsconfirm.slint";
 import { SnapConfirmModal } from "modal_snapconfirm.slint";
 import { SnapViewModal } from "modal_snapview.slint";
 import { NotifModal } from "modal_notif.slint";
@@ -57,8 +50,8 @@ export { L } from "i18n.slint";
 export { Theme } from "theme.slint";
 // Estado de tela por área (globals). Reexportado porque o Rust acessa via
 // `app.global::<Od>()` — só o que sai do arquivo de entrada vira API gerada.
-import { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Vps, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
-export { Sk, Mp, Cfg, Mg, Od, G, Db, Ssh, Vps, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Db, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
+export { Sk, Mp, Cfg, Mg, Od, G, Db, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
 
 export component AppWindow inherits Window {
     title: L.window-title;
@@ -161,7 +154,6 @@ export component AppWindow inherits Window {
         // repo, em thread). Disco NÃO: medir GB de árvore é caro e não pode disparar
         // sozinho — a tela abre pedindo "Varrer".
         if (root.screen == 8) { Gh.refresh(); }
-        if (root.screen == 9) { Vps.refresh(); }
     }
 
     VerticalLayout {
@@ -317,7 +309,25 @@ export component AppWindow inherits Window {
         // ---- TELA SSH (4) — chaves SSH da máquina --------------------
         // Lista as chaves (só metadados PÚBLICOS), gera novos pares e copia a
         // pública / remove um par. A PRIVADA nunca é exposta (no máx. o caminho).
-        if root.screen == 4: ManageScreen {  }
+        // ---- tela CHAVES SSH (4) — DELEGA a janela do deployer -------
+        //
+        // O nome do arquivo dizia "Gerenciar" e o conteúdo era a tela de chaves SSH: gerar,
+        // importar, exportar, com FORMULÁRIO DE PASSPHRASE. É esse formulário que torna a
+        // delegação mais que arrumação: um campo de senha numa janela põe o segredo na memória
+        // do processo sem necessidade nenhuma, e o `ssh-keygen` já sabe lê-la sem eco. A janela
+        // do deployer não tem campo de entrada nenhum, e há teste do lado de lá que reprova um.
+        if root.screen == 4: TelaDelegada {
+            titulo: L.deployer-title;
+            corpo: L.deployer-body;
+            rotulo-abrir: L.deployer-open-keys;
+            rotulo-ausente: L.deployer-missing;
+            rotulo-instalar: L.deployer-install;
+            presente: Cfg.deployer-presente;
+            cmd: Cfg.deployer-cmd;
+            msg: Cfg.deployer-msg;
+            abrir => { Cfg.deployer-abrir-chaves(); }
+            instalar => { Cfg.deployer-instalar(); }
+        }
 
         // ---- TELA CONFIGURAÇÕES (5) ---------------------------------
         // Idioma (troca ao vivo), tema, autostart do agente, hooks do overdev,
@@ -343,7 +353,23 @@ export component AppWindow inherits Window {
         // vermelho quando não há fronteira no servidor), execução auditada, trilha
         // append-only e o catálogo de verbos. Toda I/O em thread — um host fora do ar
         // não pode congelar a janela.
-        if root.screen == 9: VpsScreen {  }
+        // ---- tela HOSTS (9) — DELEGA a janela do deployer -------------
+        // A lista de hosts, a política por host e a sessão SSH saíram daqui: são do deployer,
+        // que tem app e janela próprios (ADR-0010/0012). Uma sessão SSH é interativa — tem
+        // TTY e Ctrl-C — e nunca coube numa janela Slint; o que havia aqui abria um terminal
+        // de qualquer forma, com uma tela inteira de manutenção em volta.
+        if root.screen == 9: TelaDelegada {
+            titulo: L.deployer-title;
+            corpo: L.deployer-body;
+            rotulo-abrir: L.deployer-open-hosts;
+            rotulo-ausente: L.deployer-missing;
+            rotulo-instalar: L.deployer-install;
+            presente: Cfg.deployer-presente;
+            cmd: Cfg.deployer-cmd;
+            msg: Cfg.deployer-msg;
+            abrir => { Cfg.deployer-abrir-hosts(); }
+            instalar => { Cfg.deployer-instalar(); }
+        }
 
         // ---- TELA GIT (8) — contas, o que falta enviar, repositórios -------
         // Contas cadastradas (sem segredo: só o NOME da chave), qual identidade
@@ -405,13 +431,40 @@ export component AppWindow inherits Window {
         // janela próprios (ADR-0012). Enquanto esta aba a desenhava, existiam DUAS telas do
         // mesmo produto — e duas telas do mesmo produto divergem. O que fica é o caminho até
         // lá, e o que fazer quando a janela não está instalada.
-        if root.screen == 1 && root.active-tab == 2: MercadoScreen {  }
+        if root.screen == 1 && root.active-tab == 2: TelaDelegada {
+            titulo: L.mercado-title;
+            corpo: L.mercado-body;
+            rotulo-abrir: L.mercado-open;
+            rotulo-ausente: L.mercado-missing;
+            rotulo-instalar: L.mercado-install;
+            presente: Cfg.mercado-presente;
+            cmd: Cfg.mercado-cmd;
+            msg: Cfg.mercado-msg;
+            abrir => { Cfg.mercado-abrir(); }
+            instalar => { Cfg.mercado-instalar(); }
+        }
 
         // ---- aba GERENCIAR (3) — criar + editar skills ----------------
         // Dois modos (Criar / Editar). Criar: form (slug validado, nome, descrição)
         // → skilledit::scaffold. Editar: dropdown das skills instaladas → lista de
         // arquivos → editor de texto → skilledit::write_file (aplica em ~/.claude/skills).
-        if root.screen == 1 && root.active-tab == 3: SshScreen {  }
+        // ---- aba CHAVES SSH (3) — DELEGA a janela do deployer ---------
+        // Gerar, importar e exportar chave são do deployer. E há um motivo a mais para a tela
+        // não morar aqui: gerar e importar pedem PASSPHRASE, e um campo de senha numa janela
+        // põe o segredo na memória do processo sem necessidade — o `ssh-keygen` já sabe lê-la
+        // sem eco. A janela do deployer não tem campo de entrada nenhum, e há teste para isso.
+        if root.screen == 1 && root.active-tab == 3: TelaDelegada {
+            titulo: L.deployer-title;
+            corpo: L.deployer-body;
+            rotulo-abrir: L.deployer-open-keys;
+            rotulo-ausente: L.deployer-missing;
+            rotulo-instalar: L.deployer-install;
+            presente: Cfg.deployer-presente;
+            cmd: Cfg.deployer-cmd;
+            msg: Cfg.deployer-msg;
+            abrir => { Cfg.deployer-abrir-chaves(); }
+            instalar => { Cfg.deployer-instalar(); }
+        }
 
         // ---- páginas Instaladas (0) e Marketplace (1) -----------------
         if root.screen == 1 && root.active-tab <= 1: SkillsScreen { active-tab <=> root.active-tab; }
@@ -438,10 +491,7 @@ export component AppWindow inherits Window {
     if Od.confirm-open: RunConfirmModal { }
 
     // ---- MODAL de confirmação de remoção de chave SSH -------------------
-    if Ssh.confirm-open: SshConfirmModal { }
     // O gate HUMANO de produção e o TOFU explícito da host key.
-    if Vps.confirm-open: VpsConfirmModal { }
-    if Vps.trust-open: VpsTrustModal { }
 
     // ---- MODAL de confirmação de RESTAURAR snapshot ---------------------
     if Od.snap-confirm-open: SnapConfirmModal { }

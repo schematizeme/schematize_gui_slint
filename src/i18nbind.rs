@@ -61,6 +61,12 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_mercado_open(t("gui.mercado_open").into());
     l.set_mercado_missing(t("gui.mercado_missing").into());
     l.set_mercado_install(t("gui.mercado_install").into());
+    l.set_deployer_title(t("gui.deployer_title").into());
+    l.set_deployer_body(t("gui.deployer_body").into());
+    l.set_deployer_open_keys(t("gui.deployer_open_keys").into());
+    l.set_deployer_open_hosts(t("gui.deployer_open_hosts").into());
+    l.set_deployer_missing(t("gui.deployer_missing").into());
+    l.set_deployer_install(t("gui.deployer_install").into());
     l.set_env_intro(t("gui.env_intro").into());
     l.set_env_method(t("gui.env_method").into());
     l.set_env_no_methods(t("gui.env_no_methods").into());

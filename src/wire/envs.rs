@@ -15,6 +15,11 @@ use crate::wire::Ctx;
 const COMANDO_INSTALAR_JANELA: &str =
     "cargo install --git https://github.com/schematizeme/schematize_updater_gui_rs";
 
+/// O comando que instala a janela do Deployer. Mesma razão da constante acima: ele aparece no
+/// texto visível, no eco do terminal e no comando executado, e três literais divergem.
+const COMANDO_INSTALAR_DEPLOYER: &str =
+    "cargo install --git https://github.com/schematizeme/schematize_deployer_gui_rs";
+
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     let row_items = cx.row_items.clone();
@@ -42,7 +47,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         let weak = app.as_weak();
         app.global::<Cfg>().on_mercado_abrir(move || {
             let Some(a) = weak.upgrade() else { return };
-            if crate::sysenv::abrir_market_gui() {
+            if crate::sysenv::abrir_gui(crate::sysenv::market_gui_bin(), None) {
                 a.global::<Cfg>().set_mercado_msg(SharedString::new());
                 return;
             }
@@ -72,6 +77,64 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_JANELA)])
             };
             a.global::<Cfg>().set_mercado_msg(msg.into());
+        });
+    }
+
+    // ==================== telas DELEGADAS ao deployer ====================
+    //
+    // Chaves SSH e Hosts eram TELAS deste hub, alimentadas pelos módulos `sshkeys`/`vps` do
+    // crate. Elas foram embora junto com os módulos: o deployer é um app à parte desde o
+    // ADR-0010, e tem a própria janela com as três telas (chaves, hosts, cofre).
+    //
+    // E havia um motivo a mais para a de CHAVES não morar aqui: ela tinha FORMULÁRIO DE
+    // PASSPHRASE. Um campo de senha numa janela põe o segredo na memória do processo sem
+    // necessidade nenhuma — o `ssh-keygen` já sabe lê-la sem eco. A janela do deployer não tem
+    // campo de entrada nenhum, e há teste do lado de lá que reprova um.
+    {
+        let cfg = app.global::<Cfg>();
+        cfg.set_deployer_presente(crate::sysenv::deployer_gui_bin().is_some());
+        cfg.set_deployer_cmd(SharedString::from(COMANDO_INSTALAR_DEPLOYER));
+    }
+
+    // Duas aberturas para a MESMA janela, em abas diferentes: quem clicou em "Chaves SSH" não
+    // deveria cair em Hosts e ter de clicar de novo.
+    for (abrir_chaves, aba) in [(true, "--chaves"), (false, "--hosts")] {
+        let weak = app.as_weak();
+        let acao = move || {
+            let Some(a) = weak.upgrade() else { return };
+            if crate::sysenv::abrir_gui(crate::sysenv::deployer_gui_bin(), Some(aba)) {
+                a.global::<Cfg>().set_deployer_msg(SharedString::new());
+                return;
+            }
+            // Falhou o spawn de uma janela que ESTAVA lá: pode ter sido removida entre o
+            // arranque e o clique. A tela volta ao estado honesto em vez de insistir.
+            a.global::<Cfg>().set_deployer_presente(false);
+            a.global::<Cfg>().set_deployer_msg(SharedString::from(
+                "não consegui abrir a janela do Deployer — ela ainda está instalada?",
+            ));
+        };
+        if abrir_chaves {
+            app.global::<Cfg>().on_deployer_abrir_chaves(acao);
+        } else {
+            app.global::<Cfg>().on_deployer_abrir_hosts(acao);
+        }
+    }
+
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_deployer_instalar(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let inner = format!(
+                "echo '── {COMANDO_INSTALAR_DEPLOYER} ──'; echo; \
+                 {COMANDO_INSTALAR_DEPLOYER}; \
+                 echo; read -n1 -s -r -p '…'"
+            );
+            let msg = if launch_terminal(&inner) {
+                t("gui.env_terminal_opened")
+            } else {
+                tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_DEPLOYER)])
+            };
+            a.global::<Cfg>().set_deployer_msg(msg.into());
         });
     }
 

@@ -248,8 +248,6 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::caixa::wire(&app, &cx);
     wire::disco::wire(&app, &cx);
     wire::git::wire(&app, &cx);
-    wire::ssh::wire(&app, &cx);
-    wire::vps::wire(&app, &cx);
     wire::settings::wire(&app, &cx);
     wire::appversion::wire(&app, &cx);
     wire::account::wire(&app, &cx);

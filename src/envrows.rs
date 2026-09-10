@@ -4,25 +4,6 @@
 use crate::prelude::*;
 
 // ---------------------------------------------------------------------------
-// SSH — modelo da tela de chaves a partir de `sshkeys::list()` (só metadados
-// PÚBLICOS; a privada nunca é lida/exposta). Igual ao padrão dos demais modelos.
-// ---------------------------------------------------------------------------
-pub(crate) fn build_ssh_rows() -> Vec<SshRow> {
-    sshkeys::list()
-        .into_iter()
-        .map(|k| SshRow {
-            name: k.name.into(),
-            kind: k.kind.into(),
-            comment: k.comment.into(),
-            fingerprint: k.fingerprint.into(),
-            public_path: k.public_path.into(),
-            op_label: SharedString::new(),
-            op_error: false,
-        })
-        .collect()
-}
-
-// ---------------------------------------------------------------------------
 // Idiomas p/ o seletor de Configurações (código + nome nativo + marca do atual).
 // ---------------------------------------------------------------------------
 pub(crate) fn build_lang_items(current: &str) -> Vec<LangItem> {

@@ -1,25 +1,42 @@
 import { Theme } from "theme.slint";
-import { L } from "i18n.slint";
 import { Btn } from "widgets.slint";
-import { Cfg } from "state.slint";
 
-// Aba MERCADO — este hub DELEGA a janela do market, em vez de desenhar a própria lista.
+// TELA DELEGADA — este hub aponta para a janela do app dono, em vez de desenhar a tela dele.
 //
-// ## Por que a lista saiu daqui (ADR-0012)
+// ## Por que existe um componente, e não uma tela por app (ADR-0012)
 //
-// O market é um app à parte, com o próprio ícone e a própria janela. Enquanto esta aba
-// desenhava a lista, existiam DUAS telas do mesmo produto: uma aqui, lendo o crate do market
-// no mesmo processo, e outra na janela dele. Duas telas do mesmo produto divergem — e este
-// projeto já pagou 9.827 linhas por exatamente esse tipo de duplicação.
+// O market e o deployer são apps à parte, com ícone e janela próprios. Enquanto este hub
+// desenhava as telas deles, existiam DUAS telas do mesmo produto: uma aqui, lendo o crate do
+// app no mesmo processo, e outra na janela dele. Duas telas do mesmo produto divergem — e este
+// projeto já pagou por isso: as duas cópias de `environments/` haviam divergido, e a do hub
+// ficou com a versão que RECUSAVA instalar o .NET no openSUSE enquanto a do market já sabia
+// adicionar o repo do fornecedor.
 //
-// O que fica aqui é o caminho até lá. O que era desenhado agora é desenhado por quem é dono.
+// São TRÊS delegações — Mercado, Chaves SSH e Hosts — e um componente só. Com três telas
+// parecidas, um conserto numa delas deixa as outras duas para trás, que é a forma exata do bug
+// que este repo já teve no `run_app_install`.
 //
 // ## Janela ausente NÃO é botão que não faz nada
 //
-// Se ela não estiver instalada, esta tela diz isso e oferece instalar — porque um botão que
-// não faz nada e não explica é o que o §37.48 chama de bug do software, não erro de quem
-// clicou.
-export component MercadoScreen inherits VerticalLayout {
+// Se ela não estiver instalada, a tela diz isso e oferece instalar — porque um botão que não
+// faz nada e não explica é o que o §37.48 chama de bug do software, não erro de quem clicou.
+export component TelaDelegada inherits VerticalLayout {
+    in property <string> titulo;
+    in property <string> corpo;
+    in property <string> rotulo-abrir;
+    in property <string> rotulo-ausente;
+    in property <string> rotulo-instalar;
+    // A janela do app dono está instalada? Resolvido no Rust ao subir — sem isto a tela
+    // mostraria um botão que tenta abrir o que não existe e falha em silêncio.
+    in property <bool> presente: false;
+    // O comando de instalação, VISÍVEL: quem prefere o terminal não deveria ter de adivinhá-lo,
+    // e quem for pedir ajuda tem o que colar.
+    in property <string> cmd;
+    // O que aconteceu com o último clique.
+    in property <string> msg;
+    callback abrir();
+    callback instalar();
+
     alignment: center;
     Rectangle {
         height: 100%;
@@ -31,7 +48,7 @@ export component MercadoScreen inherits VerticalLayout {
             HorizontalLayout {
                 alignment: center;
                 Text {
-                    text: L.mercado-title;
+                    text: root.titulo;
                     font-size: 22px;
                     font-weight: 800;
                     color: Theme.text;
@@ -44,7 +61,7 @@ export component MercadoScreen inherits VerticalLayout {
                     max-width: 520px;
                     VerticalLayout {
                         Text {
-                            text: L.mercado-body;
+                            text: root.corpo;
                             font-size: 13px;
                             color: Theme.text-dim;
                             horizontal-alignment: center;
@@ -54,25 +71,21 @@ export component MercadoScreen inherits VerticalLayout {
                 }
             }
 
-            // A janela ESTÁ instalada: um botão, e ele abre.
-            if Cfg.mercado-presente: HorizontalLayout {
+            if root.presente: HorizontalLayout {
                 alignment: center;
-                spacing: 10px;
                 Btn {
-                    label: L.mercado-open;
+                    label: root.rotulo-abrir;
                     primary: true;
-                    clicked => { Cfg.mercado-abrir(); }
+                    clicked => { root.abrir(); }
                 }
             }
 
-            // A janela NÃO está instalada: diz o que falta, e oferece resolver. O comando
-            // fica visível porque quem prefere o terminal não deveria ter de adivinhá-lo.
-            if !Cfg.mercado-presente: VerticalLayout {
+            if !root.presente: VerticalLayout {
                 spacing: 12px;
                 HorizontalLayout {
                     alignment: center;
                     Text {
-                        text: L.mercado-missing;
+                        text: root.rotulo-ausente;
                         font-size: 13px;
                         color: Theme.warn;
                         horizontal-alignment: center;
@@ -82,9 +95,9 @@ export component MercadoScreen inherits VerticalLayout {
                 HorizontalLayout {
                     alignment: center;
                     Btn {
-                        label: L.mercado-install;
+                        label: root.rotulo-instalar;
                         primary: true;
-                        clicked => { Cfg.mercado-instalar(); }
+                        clicked => { root.instalar(); }
                     }
                 }
                 HorizontalLayout {
@@ -98,7 +111,7 @@ export component MercadoScreen inherits VerticalLayout {
                         VerticalLayout {
                             padding: 10px;
                             Text {
-                                text: Cfg.mercado-cmd;
+                                text: root.cmd;
                                 font-size: 12px;
                                 font-family: "monospace";
                                 color: Theme.text-dim;
@@ -110,10 +123,10 @@ export component MercadoScreen inherits VerticalLayout {
                 }
             }
 
-            if Cfg.mercado-msg != "": HorizontalLayout {
+            if root.msg != "": HorizontalLayout {
                 alignment: center;
                 Text {
-                    text: Cfg.mercado-msg;
+                    text: root.msg;
                     font-size: 12px;
                     color: Theme.text-dim;
                     horizontal-alignment: center;

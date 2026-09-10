@@ -112,6 +112,12 @@ pub(crate) const CLI_BINS: [&str; 2] = ["schematize", "overflow"];
 /// morto por um release inteiro, e nada dá erro nesse caso.
 pub(crate) const MARKET_GUI_BINS: [&str; 1] = ["schematize-market-gui"];
 
+/// Nome da JANELA do deployer — a que as telas de Chaves SSH e de Hosts passam a abrir.
+///
+/// O deployer é um app à parte desde o ADR-0010, e as telas dele saíram deste hub junto com os
+/// módulos `sshkeys`/`vps`/`mcp` que as alimentavam. O que fica aqui é o caminho até lá.
+pub(crate) const DEPLOYER_GUI_BINS: [&str; 1] = ["schematize-deployer-gui"];
+
 /// **O quê:** localiza um binário irmão para montar comando de terminal — primeiro ao lado do
 /// executável atual, senão no `$PATH`, senão devolve o nome canônico.
 ///
@@ -176,20 +182,24 @@ pub(crate) fn market_bin_opcional() -> Option<String> {
     None
 }
 
-/// **O quê:** o caminho da JANELA do market, ou `None` se ela não estiver instalada.
+/// **O quê:** o caminho ABSOLUTO da janela de um app, ou `None` se ela não estiver instalada.
 ///
-/// **Onde:** a aba do Mercado, que a abre em vez de desenhar a própria tela.
+/// **Onde:** as três telas delegadas — Mercado, Chaves SSH e Hosts.
 ///
-/// **Por que `Option` e não a mesma regra do [`market_bin`].** Aquela devolve o nome canônico
+/// **Por que `Option` e não a mesma regra do [`bin_irmao`].** Aquela devolve o nome canônico
 /// quando não acha nada, porque o destino dela é um comando de terminal, onde
 /// `schematize-market: not found` ao menos NOMEIA o que falta. Aqui o destino é um `spawn`
 /// silencioso: o processo não sobe, nada aparece, e a pessoa fica olhando um botão que não faz
-/// nada. Saber que ela não está instalada é o que permite a aba OFERECER instalá-la, em vez de
-/// fingir que o clique funcionou.
-pub(crate) fn market_gui_bin() -> Option<String> {
+/// nada. Saber que ela não está instalada é o que permite a tela OFERECER instalá-la, em vez
+/// de fingir que o clique funcionou.
+///
+/// **Por que UMA função para as duas janelas:** com duas parecidas, um conserto numa deixa a
+/// outra para trás — a forma exata do bug que este repo já teve no `run_app_install`, onde o
+/// caminho de app cravava o nome puro do gestor enquanto o de linguagem, ao lado, resolvia.
+fn gui_de_app(nomes: &[&str]) -> Option<String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            for nome in MARKET_GUI_BINS {
+            for nome in nomes {
                 let cand = dir.join(nome);
                 if cand.is_file() {
                     return Some(cand.to_string_lossy().into_owned());
@@ -197,20 +207,35 @@ pub(crate) fn market_gui_bin() -> Option<String> {
             }
         }
     }
-    MARKET_GUI_BINS.iter().find(|n| which_bin(n)).map(|n| (*n).to_string())
+    nomes.iter().find(|n| which_bin(n)).map(|n| (*n).to_string())
 }
 
-/// **O quê:** abre a janela do market, desacoplada deste processo. `false` se não deu.
+/// **O quê:** o caminho da janela do MARKET. **Onde:** a aba do Mercado.
+pub(crate) fn market_gui_bin() -> Option<String> {
+    gui_de_app(&MARKET_GUI_BINS)
+}
+
+/// **O quê:** o caminho da janela do DEPLOYER. **Onde:** as telas de Chaves SSH e de Hosts.
+pub(crate) fn deployer_gui_bin() -> Option<String> {
+    gui_de_app(&DEPLOYER_GUI_BINS)
+}
+
+/// **O quê:** abre a janela de um app, desacoplada deste processo. `false` se não deu.
 ///
-/// **Onde:** o botão da aba do Mercado.
+/// **Onde:** os botões das três telas delegadas. `aba` é a flag que faz a janela abrir onde a
+/// pessoa pediu — sem ela, quem clica em "Chaves SSH" cai na primeira aba da janela e tem de
+/// clicar de novo, um clique a mais para chegar onde já tinha pedido para ir.
 ///
 /// **`stdin`/`stdout`/`stderr` em `null` e sem `wait`:** a janela é outro app, não um filho
 /// deste. Herdar os descritores faria a saída dela se misturar à deste hub; esperar por ela
-/// travaria o event loop enquanto ela estivesse aberta.
-pub(crate) fn abrir_market_gui() -> bool {
-    let Some(bin) = market_gui_bin() else { return false };
-    std::process::Command::new(bin)
-        .stdin(std::process::Stdio::null())
+/// travaria o event loop enquanto estivesse aberta.
+pub(crate) fn abrir_gui(bin: Option<String>, aba: Option<&str>) -> bool {
+    let Some(bin) = bin else { return false };
+    let mut cmd = std::process::Command::new(bin);
+    if let Some(a) = aba {
+        cmd.arg(a);
+    }
+    cmd.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
