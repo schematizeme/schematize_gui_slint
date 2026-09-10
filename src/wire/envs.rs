@@ -98,26 +98,21 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
 
     // Duas aberturas para a MESMA janela, em abas diferentes: quem clicou em "Chaves SSH" não
     // deveria cair em Hosts e ter de clicar de novo.
-    for (abrir_chaves, aba) in [(true, "--chaves"), (false, "--hosts")] {
+    {
         let weak = app.as_weak();
-        let acao = move || {
-            let Some(a) = weak.upgrade() else { return };
-            if crate::sysenv::abrir_gui(crate::sysenv::deployer_gui_bin(), Some(aba)) {
-                a.global::<Cfg>().set_deployer_msg(SharedString::new());
-                return;
+        app.global::<Cfg>().on_deployer_abrir_chaves(move || {
+            if let Some(a) = weak.upgrade() {
+                abrir_deployer(&a, "--chaves");
             }
-            // Falhou o spawn de uma janela que ESTAVA lá: pode ter sido removida entre o
-            // arranque e o clique. A tela volta ao estado honesto em vez de insistir.
-            a.global::<Cfg>().set_deployer_presente(false);
-            a.global::<Cfg>().set_deployer_msg(SharedString::from(
-                "não consegui abrir a janela do Deployer — ela ainda está instalada?",
-            ));
-        };
-        if abrir_chaves {
-            app.global::<Cfg>().on_deployer_abrir_chaves(acao);
-        } else {
-            app.global::<Cfg>().on_deployer_abrir_hosts(acao);
-        }
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_deployer_abrir_hosts(move || {
+            if let Some(a) = weak.upgrade() {
+                abrir_deployer(&a, "--hosts");
+            }
+        });
     }
 
     {
@@ -210,4 +205,33 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
         });
     }
+}
+
+/// **O quê:** abre a janela do Deployer na aba pedida, e conta à tela o que aconteceu.
+///
+/// **Onde:** os botões das telas de Chaves SSH e de Hosts.
+///
+/// **Por que é uma FUNÇÃO e não o corpo do callback.** Duas razões, e a segunda é a que
+/// decidiu:
+///
+/// 1. Os dois callbacks fazem a mesma coisa com uma flag diferente, e duas cópias de um
+///    tratamento de erro são duas cópias que divergem.
+/// 2. **O índice de funcionalidades não enxerga corpo de closure.** Enquanto isto era um
+///    `move || { … }`, a aresta `schematize_gui_slint -> schematize_deployer_gui_rs` — a
+///    dependência mais nova do hub — simplesmente não aparecia no grafo global. Um grafo que
+///    omite a dependência mais nova é um grafo que se consulta e engana, e o propósito dele é
+///    justamente responder "quem chama quem" antes de alguém mexer.
+///
+/// **O `false` do spawn não é ignorado.** Se a janela ESTAVA lá e não abriu, ela pode ter sido
+/// removida entre o arranque e o clique — a tela volta ao estado honesto (oferecendo instalar)
+/// em vez de insistir num botão que não funciona.
+fn abrir_deployer(app: &AppWindow, aba: &str) {
+    if crate::sysenv::abrir_gui(crate::sysenv::deployer_gui_bin(), Some(aba)) {
+        app.global::<Cfg>().set_deployer_msg(SharedString::new());
+        return;
+    }
+    app.global::<Cfg>().set_deployer_presente(false);
+    app.global::<Cfg>().set_deployer_msg(SharedString::from(
+        "não consegui abrir a janela do Deployer — ela ainda está instalada?",
+    ));
 }
