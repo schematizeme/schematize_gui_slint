@@ -206,6 +206,7 @@ fn main() -> Result<(), slint::PlatformError> {
             );
             // grafo compartilha o projeto restaurado.
             graph_mark_dirty(&graph_loaded); // grafo carrega só quando a aba Grafo abrir
+
             // A FILA DE QUIZ do projeto restaurado. Sem esta chamada o painel nasce vazio e
             // só se enche no primeiro `quiz-refresh` — e uma pergunta que existe mas não
             // aparece até alguém clicar em atualizar é a mesma falha que o
