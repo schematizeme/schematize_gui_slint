@@ -40,6 +40,7 @@ mod odhistory; // histórico do overdev (snapshots + commits), paginado
 mod odload; // carga do estado do overdev + editor acoplado
 mod odmonitor; // monitor leve do .schematize/overdev/ (thread -> UI)
 mod odproj; // projetos, caminhos e parse do CHECKLIST 2-níveis
+mod quizmodel; // parser PURO da fila de quiz do overdev
 mod repulsion; // repulsão do grafo em grade espacial (era O(n²)/quadro)
 mod skilljobs; // trabalho de skills fora do event loop (rede/IO em thread)
 mod skillrows; // linhas e paginação da lista de skills
@@ -205,11 +206,19 @@ fn main() -> Result<(), slint::PlatformError> {
             );
             // grafo compartilha o projeto restaurado.
             graph_mark_dirty(&graph_loaded); // grafo carrega só quando a aba Grafo abrir
+            // A FILA DE QUIZ do projeto restaurado. Sem esta chamada o painel nasce vazio e
+            // só se enche no primeiro `quiz-refresh` — e uma pergunta que existe mas não
+            // aparece até alguém clicar em atualizar é a mesma falha que o
+            // `PERGUNTAS-OVERDEV.txt` já tinha: o lugar existe, e ninguém olha.
+            wire::quiz::recarregar(&app, Some(&abs));
             if arg_project.is_some() {
                 app.set_screen(2); // veio de --project → abre na aba Overdev
             }
         }
-        None => load_overdev_into(&app, &od_cl, None),
+        None => {
+            load_overdev_into(&app, &od_cl, None);
+            wire::quiz::recarregar(&app, None);
+        }
     }
 
     // ---- FIAÇÃO: registra os callbacks de cada recorte da UI ----
@@ -242,6 +251,7 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::envs::wire(&app, &cx);
     wire::manage::wire(&app, &cx);
     wire::overdev::wire(&app, &cx);
+    wire::quiz::wire(&app, &cx);
     wire::odhistory::wire(&app, &cx);
     wire::graph::wire(&app, &cx);
     wire::database::wire(&app, &cx);

@@ -292,3 +292,40 @@ export struct GitRepoRow {
     atualizado: string,
 }
 
+
+// Uma OPÇÃO clicável de um quiz do overdev.
+//
+// O `id` é o que a resposta grava; o `rotulo` é o texto do botão. Nunca se responde pelo
+// rótulo: rótulo muda de redação, e uma resposta gravada não pode mudar de significado porque
+// alguém melhorou uma frase.
+export struct QuizOpcao {
+    id: string,
+    rotulo: string,
+    detalhe: string,       // o que escolher isto significa; "" é aceitável em opção óbvia
+    sugerida: bool,        // o agente RECOMENDA esta. Destaque, NUNCA pré-seleção.
+    marcada: bool,         // o usuário marcou (só em `multipla`)
+}
+
+// Uma pergunta do overdev na tela.
+//
+// **Onde:** a aba Overdev (`screen_overdev.slint`), alimentada por `wire/quiz.rs` a partir de
+// `schematize overdev questions --json`.
+//
+// **Por que `kind` é string e não enum:** ela vem do JSON do CLI, e o conjunto é fechado LÁ —
+// um `kind` desconhecido já é recusado na leitura. Repetir o enum aqui criaria dois lugares
+// para adicionar uma variante, e o esquecido desenharia pergunta sem botão.
+export struct QuizItem {
+    id: string,
+    titulo: string,
+    contexto: string,      // por que o agente perguntou, e o que muda em cada caminho
+    kind: string,          // aprovar | escolha | multipla | sim_nao_outro | livre
+    opcoes: [QuizOpcao],
+    destrava: string,      // o que esta resposta libera, por extenso (não por número)
+    // Estado. Os três são exclusivos, e o do meio existe por pedido explícito do usuário:
+    // respondida NÃO é liberada até a máquina revisar.
+    aberta: bool,
+    aguarda_revisao: bool,
+    resposta_texto: string,   // a resposta em linguagem de gente ("Tela própria")
+    respondida_em: string,    // hora LOCAL de quando foi respondida ("24/09 20:59")
+    revisao: string,          // o que a máquina concluiu ao ler
+}

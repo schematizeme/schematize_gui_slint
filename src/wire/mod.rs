@@ -23,6 +23,7 @@ pub(crate) mod graph;
 pub(crate) mod manage;
 pub(crate) mod odhistory;
 pub(crate) mod overdev;
+pub(crate) mod quiz;
 pub(crate) mod settings;
 pub(crate) mod skills;
 

@@ -12,6 +12,7 @@ import {
 import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
 import { Sk, Mp, Cfg, Mg, Od, G, Db, Notif, Cmp, Acc, App } from "state.slint";
 import { InboxPanel } from "panel_inbox.slint";
+import { QuizPanel } from "quiz.slint";
 
 // Tela OVERDEV (2) — objetivo, progresso, checklist FATIADO, editor acoplado,
 // tarefas/notas, monitor do run e o histórico (snapshots + commits).
@@ -137,6 +138,13 @@ export component OverdevScreen inherits VerticalLayout {
                         Btn { label: L.open-browser; small: true; clicked => { Od.open-browser(); } }
                         Btn { label: L.od-open-terminal; small: true; clicked => { Od.open-terminal(); } }
                     }
+                    // ---- QUIZ: as perguntas que esperam você, logo abaixo do progresso ----
+                    //
+                    // Aqui e não no fim da tela: o que espera uma PESSOA tem de estar onde ela
+                    // olha primeiro. Enterrado depois do checklist e do histórico, um card com
+                    // uma pergunta aberta viraria exatamente o que o `PERGUNTAS-OVERDEV.txt`
+                    // já era — um lugar onde a pergunta fica e ninguém vê.
+                    QuizPanel {}
                     // ---- Fase 4: overdev em terminal externo + MONITOR leve ----
                     // O `claude` roda num terminal do sistema (processo próprio, RAM dele,
                     // fora do app). Aqui é só o botão de disparo + um monitor que relê o

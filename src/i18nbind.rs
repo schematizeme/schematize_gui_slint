@@ -588,4 +588,27 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         "gui.home_vps_desc",
         "Servidores registrados, deploy auditado e o que cada host aceita — sem chave no contexto.",
     ).into());
+    // O QUIZ do overdev. `tor` e não `t` porque as chaves são novas: se um lib antigo
+    // estiver linkado, a UI mostra o fallback em vez do nome da chave cru na tela.
+    l.set_quiz_title(tor("gui.quiz_title", "Perguntas").into());
+    l.set_quiz_esperando_voce(tor("gui.quiz_esperando_voce", "esperando você").into());
+    l.set_quiz_revisar(tor("gui.quiz_revisar", "a revisar pela máquina").into());
+    l.set_quiz_vazio(tor("gui.quiz_vazio", "Nenhuma pergunta na fila.").into());
+    l.set_quiz_sugerida(tor("gui.quiz_sugerida", "sugerida").into());
+    l.set_quiz_destrava(tor("gui.quiz_destrava", "Destrava:").into());
+    l.set_quiz_confirmar(tor("gui.quiz_confirmar", "Confirmar").into());
+    l.set_quiz_enviar(tor("gui.quiz_enviar", "Enviar").into());
+    l.set_quiz_outro(tor("gui.quiz_outro", "outro…").into());
+    l.set_quiz_resposta(tor("gui.quiz_resposta", "sua resposta…").into());
+    l.set_quiz_feito(tor("gui.quiz_feito", "Marcar feito").into());
+    l.set_quiz_recusar(tor("gui.quiz_recusar", "Recusar").into());
+    l.set_quiz_respondeu(tor("gui.quiz_respondeu", "Você respondeu:").into());
+    l.set_quiz_aguarda_revisao(
+        tor(
+            "gui.quiz_aguarda_revisao",
+            "A máquina ainda não revisou esta resposta — o item vinculado segue bloqueado.",
+        )
+        .into(),
+    );
+    l.set_quiz_revisao(tor("gui.quiz_revisao", "Revisão da máquina:").into());
 }

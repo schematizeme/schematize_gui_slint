@@ -1,0 +1,290 @@
+import { LineEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { Btn, Check } from "widgets.slint";
+import { QuizItem, QuizOpcao } from "types.slint";
+import { Od } from "state.slint";
+
+// PAINEL DE QUIZ do overdev — a fila de perguntas que se responde CLICANDO.
+//
+// **Por que não é modal, e isso foi pedido com estas palavras:** *"assim como ocorre nos quiz
+// que interrompem a fila de dev, mas SEM interromper"*. O `ResolveModal` bloqueia a tela porque
+// o conteúdo dele É o texto que a pessoa digita; aqui a resposta é um clique, e bloquear seria
+// trocar um problema (pergunta que se perde) por outro (não poder olhar mais nada até responder).
+// Os cards moram na aba, ao lado do run, que continua andando.
+//
+// **Por que cada `kind` desenha um controle diferente:** um campo de texto onde caberiam dois
+// botões é exatamente como um "ou" virou "sim". A forma da pergunta na tela É a guarda.
+
+// Um botão de opção, com o detalhe embaixo e o destaque de sugestão.
+component OpcaoBtn inherits Rectangle {
+    in property <QuizOpcao> op;
+    in property <string> qid;
+    callback escolhida();
+    height: linha.preferred-height + 16px;
+    border-radius: 8px;
+    border-width: op.sugerida ? 2px : 1px;
+    // A sugestão do agente é DESTAQUE, nunca pré-seleção: resposta que a pessoa não deu não é
+    // resposta dela. A borda mais grossa diz "eu recomendo"; o clique continua sendo dela.
+    border-color: op.sugerida ? Theme.accent : Theme.border;
+    background: toca.has-hover ? Theme.surface.darker(0.06) : Theme.surface;
+    toca := TouchArea {
+        clicked => { root.escolhida(); }
+    }
+    linha := VerticalLayout {
+        padding: 8px;
+        spacing: 2px;
+        HorizontalLayout {
+            spacing: 6px;
+            Text {
+                text: op.rotulo;
+                font-size: 13px;
+                font-weight: 700;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+            if op.sugerida: Text {
+                text: L.quiz-sugerida;
+                font-size: 11px;
+                font-weight: 700;
+                color: Theme.accent;
+            }
+            Rectangle {}
+        }
+        if op.detalhe != "": Text {
+            text: op.detalhe;
+            font-size: 11.5px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+    }
+}
+
+// Um card de pergunta.
+component QuizCard inherits Rectangle {
+    in property <QuizItem> q;
+    border-radius: 12px;
+    border-width: 1px;
+    // Aberta = precisa de você (âmbar). Aguardando revisão = a bola está com a máquina (accent).
+    // Revisada = fechada (borda neutra). Três estados, três cores — porque juntar os dois
+    // últimos esconderia exatamente o estado que o usuário pediu para existir.
+    border-color: q.aberta ? Theme.warn : (q.aguarda-revisao ? Theme.accent : Theme.border);
+    background: Theme.surface;
+    height: corpo.preferred-height;
+    corpo := VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+
+        Text {
+            text: q.titulo;
+            font-size: 13.5px;
+            font-weight: 800;
+            color: Theme.text;
+            wrap: word-wrap;
+        }
+
+        // O CONTEXTO — pedido explícito ("o contexto para melhor ambientação"). A pessoa volta
+        // horas depois e precisa reconstruir o assunto sem reler o run inteiro.
+        if q.contexto != "": Text {
+            text: q.contexto;
+            font-size: 11.5px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+
+        // O que a resposta DESTRAVA, por extenso e não por número — "E3" não diz nada a quem
+        // não está com o checklist aberto do lado.
+        if q.destrava != "": Text {
+            text: L.quiz-destrava + " " + q.destrava;
+            font-size: 11px;
+            font-weight: 600;
+            color: Theme.accent;
+            wrap: word-wrap;
+        }
+
+        // ---------------- ABERTA: os controles, um por kind ----------------
+        if q.aberta && (q.kind == "escolha" || q.kind == "aprovar" || q.kind == "sim_nao_outro"):
+        VerticalLayout {
+            spacing: 6px;
+            for op in q.opcoes: OpcaoBtn {
+                op: op;
+                qid: q.id;
+                escolhida => { Od.quiz-responder(q.id, op.id); }
+            }
+        }
+
+        // `multipla`: marca sem enviar, e confirma. Enviar a cada clique tornaria impossível
+        // escolher dois — o primeiro clique já teria fechado a pergunta.
+        if q.aberta && q.kind == "multipla": VerticalLayout {
+            spacing: 6px;
+            for op in q.opcoes: HorizontalLayout {
+                spacing: 8px;
+                Check {
+                    checked: op.marcada;
+                    toggled => { Od.quiz-marcar(q.id, op.id); }
+                }
+                VerticalLayout {
+                    spacing: 1px;
+                    Text { text: op.rotulo; font-size: 13px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+                    if op.detalhe != "": Text { text: op.detalhe; font-size: 11px; color: Theme.text-dim; wrap: word-wrap; }
+                }
+                Rectangle {}
+            }
+            HorizontalLayout {
+                Rectangle {}
+                Btn {
+                    label: L.quiz-confirmar;
+                    small: true;
+                    clicked => { Od.quiz-confirmar-multipla(q.id); }
+                }
+            }
+        }
+
+        // O "outro" do sim_nao_outro, e o `livre` inteiro. É o único lugar em que o texto é
+        // legítimo — e o CLI recusa texto nos kinds de clique, então isto não é só convenção.
+        if q.aberta && (q.kind == "sim_nao_outro" || q.kind == "livre"): HorizontalLayout {
+            spacing: 6px;
+            LineEdit {
+                placeholder-text: q.kind == "livre" ? L.quiz-resposta : L.quiz-outro;
+                text <=> Od.quiz-outro-input;
+                accepted => { Od.quiz-responder-texto(q.id, Od.quiz-outro-input); }
+            }
+            Btn {
+                label: L.quiz-enviar;
+                small: true;
+                clicked => { Od.quiz-responder-texto(q.id, Od.quiz-outro-input); }
+            }
+        }
+
+        // As duas ações que o usuário pediu ao lado das respostas. "Recusar" CANCELA o item de
+        // máquina vinculado em vez de fingir que foi feito — mentir no progresso seria trocar
+        // um problema por outro.
+        if q.aberta: HorizontalLayout {
+            spacing: 8px;
+            Rectangle {}
+            Btn { label: L.quiz-feito; small: true; clicked => { Od.quiz-marcar-feito(q.id); } }
+            Btn { label: L.quiz-recusar; small: true; clicked => { Od.quiz-recusar(q.id); } }
+        }
+
+        // ---------------- RESPONDIDA ----------------
+        if !q.aberta: VerticalLayout {
+            spacing: 3px;
+            Text {
+                text: L.quiz-respondeu + " " + q.resposta-texto;
+                font-size: 12.5px;
+                font-weight: 700;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+            // QUANDO foi respondida — pedido explícito, e é o que faz o card virar histórico em
+            // vez de sumir. Card que some apaga a rastreabilidade.
+            if q.respondida-em != "": Text {
+                text: q.respondida-em;
+                font-size: 11px;
+                color: Theme.text-dim;
+            }
+            if q.aguarda-revisao: Text {
+                text: L.quiz-aguarda-revisao;
+                font-size: 11.5px;
+                font-weight: 700;
+                color: Theme.accent;
+                wrap: word-wrap;
+            }
+            if q.revisao != "": Text {
+                text: L.quiz-revisao + " " + q.revisao;
+                font-size: 11.5px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
+// O painel: cabeçalho próprio + corpo com os cards.
+//
+// **Não usa o `Collapse` compartilhado** porque ele renderiza só um `body: string` — os três
+// outros usos dele (Decisões / Plano / Perguntas) mostram texto. Mudá-lo para aceitar filhos
+// mexeria nos três; um cabeçalho de 20 linhas aqui não mexe em nada.
+export component QuizPanel inherits VerticalLayout {
+    // Aberto quando há algo para a PESSOA fazer. Um painel que abre sempre empurra o resto da
+    // tela para baixo sem motivo; um que nunca abre esconde a pergunta.
+    property <bool> aberto: Od.quiz-abertas > 0;
+    spacing: 6px;
+
+    Rectangle {
+        height: 32px;
+        border-radius: 7px;
+        background: hta.has-hover ? Theme.surface-2 : transparent;
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+            Text {
+                text: root.aberto ? "▾" : "▸";
+                font-size: 12px;
+                color: Theme.text-dim;
+                vertical-alignment: center;
+            }
+            Text {
+                text: L.quiz-title;
+                font-size: 13.5px;
+                font-weight: 700;
+                color: Theme.text;
+                vertical-alignment: center;
+            }
+            // Duas contagens separadas, porque são duas filas de espera diferentes: uma espera
+            // VOCÊ, a outra espera a MÁQUINA. Somá-las diria "3 pendências" sem dizer de quem.
+            if Od.quiz-abertas > 0: Text {
+                text: "\{Od.quiz-abertas} " + L.quiz-esperando-voce;
+                font-size: 12px;
+                font-weight: 700;
+                color: Theme.warn;
+                vertical-alignment: center;
+            }
+            if Od.quiz-revisar > 0: Text {
+                text: "\{Od.quiz-revisar} " + L.quiz-revisar;
+                font-size: 12px;
+                font-weight: 700;
+                color: Theme.accent;
+                vertical-alignment: center;
+            }
+            // ERRO NO CABEÇALHO, e não só dentro do painel.
+            //
+            // Descoberto ao abrir a janela de verdade: a fila falhou ao ler (o `schematize`
+            // instalado era anterior ao subcomando), o painel ficou fechado — e a pessoa viu
+            // "Perguntas" sem contagem nenhuma, indistinguível de "não há pergunta". Erro
+            // escondido atrás de um painel colapsado é o mesmo defeito do
+            // `PERGUNTAS-OVERDEV.txt`: o lugar existe e ninguém olha.
+            if Od.quiz-erro: Text {
+                text: "⚠";
+                font-size: 13px;
+                font-weight: 800;
+                color: Theme.warn;
+                vertical-alignment: center;
+            }
+            Rectangle {}
+        }
+        hta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.aberto = !root.aberto; }
+        }
+    }
+
+    if root.aberto: VerticalLayout {
+        spacing: 8px;
+        if Od.quiz-status != "": Text {
+            text: Od.quiz-status;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: Od.quiz-erro ? Theme.warn : Theme.good;
+            wrap: word-wrap;
+        }
+        if Od.quiz.length == 0: Text {
+            text: L.quiz-vazio;
+            font-size: 12px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+        for q in Od.quiz: QuizCard { q: q; }
+    }
+}
