@@ -247,8 +247,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     );
     l.set_ssh_keys_title(tor("gui.ssh_keys_title", "Suas chaves").into());
     // SSH — entropia (do lib, por tipo) + prova + Bitwarden. Chaves NOVAS via `tor`.
-    l.set_ssh_entropy_ed25519(sshkeys::entropy_note(sshkeys::KeyKind::Ed25519).into());
-    l.set_ssh_entropy_rsa(sshkeys::entropy_note(sshkeys::KeyKind::Rsa4096).into());
     l.set_ssh_kind_hint(tor(
         "gui.ssh_kind_hint",
         "ed25519 é o default forte da casa; use RSA só para hosts legados — e nunca abaixo de 4096 bits.",

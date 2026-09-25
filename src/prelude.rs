@@ -18,8 +18,8 @@ pub(crate) use schematize::registry::{self, Item};
 pub(crate) use schematize::skillsproj;
 pub(crate) use schematize::{
     account, autostart, config, database, debugreport, githist, links, market, notifications,
-    overdev, overdevdb, panel, projects, selfupdate, settings, skilledit, skills, sshkeys, upgrade,
-    usage, util,
+    overdev, overdevdb, panel, projects, selfupdate, settings, skilledit, skills, upgrade, usage,
+    util,
 };
 pub(crate) use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 pub(crate) use std::cell::RefCell;
