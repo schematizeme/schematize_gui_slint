@@ -118,6 +118,13 @@ pub(crate) const MARKET_GUI_BINS: [&str; 1] = ["schematize-market-gui"];
 /// módulos `sshkeys`/`vps`/`mcp` que as alimentavam. O que fica aqui é o caminho até lá.
 pub(crate) const DEPLOYER_GUI_BINS: [&str; 1] = ["schematize-deployer-gui"];
 
+/// Nome da JANELA do database — a que a tela de Banco de dados passa a abrir.
+///
+/// O `schematize-database` é um app à parte desde o ADR-0018 (E1 da extradição), e a janela
+/// dele mora no MESMO repo do CLI dele (ADR-0020). Por isso o nome tem o sufixo `-gui` e não
+/// um repo próprio por trás: os dois binários saem do mesmo commit.
+pub(crate) const DATABASE_GUI_BINS: [&str; 1] = ["schematize-database-gui"];
+
 /// **O quê:** localiza um binário irmão para montar comando de terminal — primeiro ao lado do
 /// executável atual, senão no `$PATH`, senão devolve o nome canônico.
 ///
@@ -218,6 +225,11 @@ pub(crate) fn market_gui_bin() -> Option<String> {
 /// **O quê:** o caminho da janela do DEPLOYER. **Onde:** as telas de Chaves SSH e de Hosts.
 pub(crate) fn deployer_gui_bin() -> Option<String> {
     gui_de_app(&DEPLOYER_GUI_BINS)
+}
+
+/// **O quê:** o caminho da janela do DATABASE. **Onde:** a tela de Banco de dados.
+pub(crate) fn database_gui_bin() -> Option<String> {
+    gui_de_app(&DATABASE_GUI_BINS)
 }
 
 /// **O quê:** abre a janela de um app, desacoplada deste processo. `false` se não deu.

@@ -1,5 +1,5 @@
 import {
-    SkillRow, EnvRow, LangItem, ProjItem, OverItem, SnapRow, CommitRow, GraphNode, GraphEdge, DbTableRow, NotifItem, CmpFile, SkillAction,
+    SkillRow, EnvRow, LangItem, ProjItem, OverItem, SnapRow, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction,
     DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow, QuizItem, QuizOpcao,
     } from "types.slint";
 
@@ -59,8 +59,9 @@ export global Mp {
 // Environments (runtimes de linguagem) com seu modal de diretórios.
 export global Cfg {
     in-out property <bool> modal-open: false;
-    // AS TRÊS DELEGAÇÕES (ADR-0012) — este hub aponta para a janela do app dono em vez de
-    // desenhar a tela dele: Mercado → market, Chaves SSH e Hosts → deployer.
+    // AS QUATRO DELEGAÇÕES (ADR-0012, ADR-0018) — este hub aponta para a janela do app dono em vez de
+    // desenhar a tela dele: Mercado -> market, Chaves SSH e Hosts -> deployer, Banco de dados ->
+    // database.
     //
     // `*-presente` é resolvido no Rust ao subir; sem ele a tela mostraria um botão que tenta
     // abrir o que não existe e falha em silêncio — pior que dizer o que falta.
@@ -78,6 +79,12 @@ export global Cfg {
     callback deployer-abrir-chaves();
     callback deployer-abrir-hosts();
     callback deployer-instalar();
+
+    in-out property <bool> database-presente: false;
+    in-out property <string> database-cmd;
+    in-out property <string> database-msg;
+    callback database-abrir();
+    callback database-instalar();
     in-out property <[EnvRow]> rows;
     in-out property <[LangItem]> langs;
     in-out property <string> lang-code;   // código do idioma atual
@@ -338,63 +345,15 @@ export global G {
 
 // DATABASE BUILDER — schema carregado, formulários de tabela/coluna/FK, geração
 // de SQL/migration e o grafo do schema.
-export global Db {
-    in-out property <int> view: 0;
-    in-out property <bool> has-schema: false;
-    in-out property <string> status;                // banner de status (ok/info)
-    in-out property <string> error;                 // banner de erro ("" = nenhum)
-    in-out property <bool> busy: false;             // introspecção Postgres em andamento
-    in-out property <string> sqlite-path;           // caminho do arquivo SQLite (picker)
-    in-out property <string> pg-conn;               // connection string Postgres
-    in-out property <[DbTableRow]> tables;
-    in-out property <[string]> table-names;             // nomes das tabelas (dropdown do editor)
-    in-out property <string> new-table;             // nome da nova tabela
-    in-out property <string> sel-table;             // tabela alvo (coluna/FK)
-    in-out property <string> new-col;               // nome da coluna
-    in-out property <string> new-col-type: "TEXT";  // tipo da coluna
-    in-out property <bool> new-col-pk: false;
-    in-out property <bool> new-col-unique: false;
-    in-out property <bool> new-col-nullable: false;
-    in-out property <string> fk-col;                // FK: coluna local
-    in-out property <string> fk-reftable;           // FK: tabela referenciada
-    in-out property <string> fk-refcol;             // FK: coluna referenciada
-    in-out property <bool> gen-open: false;
-    in-out property <string> gen-title;
-    in-out property <string> gen-content;
-    in-out property <string> ai-desc;               // descrição do domínio
-    in-out property <string> ai-status;             // banner do disparo no terminal
-    callback pick-sqlite();                          // picker nativo → db-sqlite-path
-    callback introspect-sqlite();                    // introspect_sqlite(path) → schema
-    callback introspect-postgres();                  // introspect_postgres(conn) em thread
-    callback load-json();                            // picker → serde → schema
-    callback save-json();                            // picker → serde → arquivo
-    callback add-table();                            // append tabela vazia
-    callback add-column();                           // append coluna à tabela alvo
-    callback add-fk();                               // append FK à tabela alvo
-    callback pick-table(string);                     // escolhe a tabela alvo do editor
-    callback gen-sql();                              // to_sql → visor
-    callback gen-migration();                        // to_migration → visor
-    callback gen-save();                             // salva o conteúdo do visor num arquivo
-    callback show-graph();                           // (re)constrói o grafo do schema atual
-    callback ai-generate();                          // dispara a skill schematize-database num terminal
-    in-out property <[GraphNode]> graph-nodes;
-    in-out property <[GraphEdge]> graph-edges;
-    in-out property <float> g-scale: 1.0;
-    in-out property <float> g-ox: 0;
-    in-out property <float> g-oy: 0;
-    in-out property <bool> g-has-graph: false;
-    in-out property <int> g-node-count: 0;
-    in-out property <bool> g-has-sel: false;
-    in-out property <string> g-sel-id;
-    in-out property <string> g-sel-desc;
-    callback graph-press(float, float);
-    callback graph-move(float, float);
-    callback graph-release();
-    callback graph-scroll(float, float, float);
-    callback graph-canvas-resized(float, float);
-    callback graph-fit();
-    callback graph-clear-sel();
-}
+// O global `Db` foi embora com a tela (E1 M5 da extradição, ADR-0018).
+//
+// Ele tinha 27 propriedades e 20 callbacks — conectar, introspectar, editar tabela, coluna e FK,
+// gerar SQL, gerar migration, salvar, e um grafo inteiro com pan/zoom/seleção. Tudo isso é do
+// `schematize-database`, que tem app e janela próprios. Enquanto morava aqui, existiam DUAS
+// telas do mesmo produto — e este projeto já pagou por isso uma vez, quando as duas cópias de
+// `environments/` divergiram e a do hub recusava instalar o .NET que a do market já sabia.
+//
+// O que fica é o caminho até lá: `Cfg.database-*`, acima.
 
 
 

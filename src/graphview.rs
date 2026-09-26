@@ -222,11 +222,12 @@ pub(crate) fn graph_kick(
 }
 
 /// Índice da tela do Grafo (o `screen` do `.slint`: 0 Home · 1 Mercado · 2 Overdev
-/// · 3 Grafo · 6 Database). Constante nomeada porque a física depende dela.
+/// · 3 Grafo). Constante nomeada porque a física depende dela.
+///
+/// **O `DB_SCREEN` que ficava ao lado saiu com a tela** (E1 M5 da extradição): o grafo do
+/// schema era o SEGUNDO grafo desta janela, com a mesma física e estado à parte, e foi embora
+/// junto com o resto do banco. O que sobra é este — o do índice do projeto.
 pub(crate) const GRAPH_SCREEN: i32 = 3;
-
-/// Índice da tela do Database builder (o grafo do schema vive lá).
-pub(crate) const DB_SCREEN: i32 = 6;
 
 /// Marca o grafo como PENDENTE de carga (troca/recarga de projeto).
 ///

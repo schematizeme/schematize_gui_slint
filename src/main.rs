@@ -28,7 +28,6 @@ mod prelude;
 
 mod checklist; // paginação PURA do checklist (o que segura o custo de render)
 mod checklistview; // ligação do checklist fatiado com as propriedades da UI
-mod dbbuilder; // Database builder: linhas de schema + grafo do schema
 mod discorows; // linhas/paginação da tela Disco (o Rust é dono da lista inteira)
 mod envrows; // linhas de Environments/SSH/idiomas + ações em terminal
 mod fmt; // formatação de valores pra UI (puro)
@@ -50,7 +49,6 @@ mod wire; // FIAÇÃO da janela: um módulo por recorte da UI (ver wire/mod.rs)
 
 use crate::prelude::*;
 use checklistview::ChecklistView;
-use dbbuilder::*;
 use envrows::*;
 use fmt::*;
 use graphstate::*;
@@ -63,6 +61,33 @@ use odproj::*;
 use skilljobs::*;
 use skillrows::*;
 use sysenv::*;
+
+/// **O quê:** o número da tela pedida em `--tela <nome>`, ou `None` se ninguém pediu.
+///
+/// **Onde:** [`main`], ao subir. Função PURA — os testes passam o vetor de argumentos.
+///
+/// **Os nomes são os da INTERFACE, não os do código.** Quem digita a flag vê "Banco de dados"
+/// na tela, não `screen == 6`. Expor o número cravaria um detalhe do `.slint` numa interface
+/// pública, e ele mudaria calado no dia em que uma tela entrasse no meio.
+///
+/// **Nome desconhecido devolve `None`, e não a tela 0.** Cair na Home seria a janela obedecendo
+/// a um comando que ninguém entendeu, e quem digitou errado não saberia disso — acharia que a
+/// tela pedida é a Home. Sem entender, ela abre onde abriria de qualquer forma.
+fn tela_pedida(args: &[String]) -> Option<i32> {
+    let i = args.iter().position(|a| a == "--tela")?;
+    match args.get(i + 1)?.as_str() {
+        "home" => Some(0),
+        "skills" | "mercado" => Some(1),
+        "overdev" => Some(2),
+        "grafo" => Some(3),
+        "config" | "settings" => Some(5),
+        "banco" | "database" => Some(6),
+        "disco" => Some(7),
+        "git" => Some(8),
+        "hosts" => Some(9),
+        _ => None,
+    }
+}
 
 fn main() -> Result<(), slint::PlatformError> {
     // `--version`/`-V` ANTES de qualquer coisa: sem isto o binário ABRIA A JANELA quando
@@ -188,6 +213,17 @@ fn main() -> Result<(), slint::PlatformError> {
         }
         found.map(PathBuf::from).filter(|p| p.is_dir())
     };
+    // `--tela <nome>`: abre DIRETO numa tela, pelo NOME e não pelo número.
+    //
+    // O hub já sabia fazer isso para uma tela só, e só de um jeito: `--project` cravava a aba
+    // Overdev. Quem quisesse qualquer outra tinha de clicar. Isto generaliza, e o destino é o
+    // mesmo do `--aba` da janela do database: um lançador, um `.desktop` ou o ops abrir a tela
+    // certa sem depender de alguém navegar.
+    //
+    // **Pelo nome, e não pelo número**, porque o número é detalhe interno do `.slint`: um
+    // `--tela 6` viraria mentira no dia em que uma tela entrasse no meio, e ninguém notaria.
+    let arg_tela = tela_pedida(&std::env::args().skip(1).collect::<Vec<_>>());
+
     let initial = arg_project
         .clone()
         .or_else(|| config::recent_projects().into_iter().next().map(PathBuf::from));
@@ -220,6 +256,12 @@ fn main() -> Result<(), slint::PlatformError> {
             load_overdev_into(&app, &od_cl, None);
             wire::quiz::recarregar(&app, None);
         }
+    }
+    // DEPOIS do bloco acima, e de propósito: quem escreveu `--tela` disse o que quer com mais
+    // precisão do que o `--project`, que cai na Overdev por default. Antes, o default o
+    // sobrescreveria — e a flag mais específica perderia para a mais genérica.
+    if let Some(n) = arg_tela {
+        app.set_screen(n);
     }
 
     // ---- FIAÇÃO: registra os callbacks de cada recorte da UI ----
@@ -255,7 +297,6 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::quiz::wire(&app, &cx);
     wire::odhistory::wire(&app, &cx);
     wire::graph::wire(&app, &cx);
-    wire::database::wire(&app, &cx);
     wire::caixa::wire(&app, &cx);
     wire::disco::wire(&app, &cx);
     wire::git::wire(&app, &cx);
@@ -343,5 +384,62 @@ não é item
         assert_eq!(overdev_file_path(root, "CHECKLIST.md"), od.join("CHECKLIST.md"));
         // tentativa de path traversal é reduzida ao basename.
         assert_eq!(overdev_file_path(root, "../../etc/passwd"), od.join("passwd"));
+    }
+
+    fn v(a: &[&str]) -> Vec<String> {
+        a.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// **`--tela` abre pelo NOME, e o nome é o da interface.**
+    ///
+    /// Quem digita a flag vê "Banco de dados" na tela, não `screen == 6`. Expor o número
+    /// cravaria um detalhe do `.slint` numa interface pública, e ele mudaria calado no dia em
+    /// que uma tela entrasse no meio.
+    #[test]
+    fn a_tela_pedida_abre_pelo_nome() {
+        assert_eq!(tela_pedida(&v(&["--tela", "banco"])), Some(6));
+        assert_eq!(tela_pedida(&v(&["--tela", "database"])), Some(6), "o apelido em inglês vale");
+        assert_eq!(tela_pedida(&v(&["--tela", "overdev"])), Some(2));
+        assert_eq!(tela_pedida(&v(&["--tela", "home"])), Some(0));
+        // A ordem não importa: a flag pode vir depois do projeto.
+        assert_eq!(tela_pedida(&v(&["/tmp/proj", "--tela", "grafo"])), Some(3));
+    }
+
+    /// **Nome desconhecido devolve `None`, e não a tela 0.**
+    ///
+    /// Cair na Home seria a janela obedecendo a um comando que ninguém entendeu, e quem digitou
+    /// errado acharia que a tela pedida É a Home. E `--tela` no fim da linha não pode panicar
+    /// antes de a janela aparecer (§37.48: invocação não prevista é bug do software).
+    #[test]
+    fn nome_desconhecido_nao_abre_tela_inventada() {
+        assert_eq!(tela_pedida(&v(&["--tela", "turbinada"])), None);
+        assert_eq!(tela_pedida(&v(&["--tela"])), None, "flag no fim da linha");
+        assert_eq!(tela_pedida(&v(&[])), None);
+        assert_eq!(tela_pedida(&v(&["--project", "/tmp"])), None);
+    }
+
+    /// **Todo número devolvido é uma tela que EXISTE no `.slint`.**
+    ///
+    /// Este teste lê o `app.slint` e cobra que cada destino tenha um `root.screen == N` lá. Sem
+    /// ele, um `--tela` apontando para um número sem tela abriria a janela em BRANCO — e nada
+    /// reprovaria, porque o Rust compila e o Slint não sabe que o número veio de uma flag.
+    #[test]
+    fn todo_destino_existe_no_slint() {
+        let ui = include_str!("../ui/app.slint");
+        for nome in [
+            "home", "skills", "mercado", "overdev", "grafo", "config", "banco", "disco", "git",
+            "hosts",
+        ] {
+            let n =
+                tela_pedida(&v(&["--tela", nome])).unwrap_or_else(|| panic!("{nome} não mapeia"));
+            assert!(
+                ui.contains(&format!("root.screen == {n}")),
+                "`--tela {nome}` aponta para a tela {n}, que não existe no app.slint — a janela \
+                 abriria em BRANCO"
+            );
+        }
+        // Self-check: o varredor precisa saber reprovar. A tela 99 não existe, e se esta
+        // asserção parar de valer é porque a busca no `.slint` deixou de medir alguma coisa.
+        assert!(!ui.contains("root.screen == 99"), "o self-check parou de valer");
     }
 }

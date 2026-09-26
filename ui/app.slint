@@ -13,8 +13,7 @@ import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { L } from "i18n.slint";
 import {
-    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DbColumn, DbFkRow, DbIndexRow,
-    DbTableRow, DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow,
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow,
 } from "types.slint";
 import {
     VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
@@ -23,7 +22,6 @@ import {
 import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
 import { HomeScreen } from "screen_home.slint";
 import { SettingsScreen } from "screen_settings.slint";
-import { DatabaseScreen } from "screen_database.slint";
 import { GraphScreen } from "screen_graph.slint";
 import { OverdevScreen } from "screen_overdev.slint";
 import { TelaDelegada } from "screen_delegado.slint";
@@ -38,7 +36,6 @@ import { SnapViewModal } from "modal_snapview.slint";
 import { NotifModal } from "modal_notif.slint";
 import { AccountModal } from "modal_account.slint";
 import { CompareModal } from "modal_compare.slint";
-import { DbGenModal } from "modal_dbgen.slint";
 import { DiscoConfirmModal } from "modal_discoconfirm.slint";
 import { ResolveModal } from "modal_resolve.slint";
 import { LangModal } from "modal_lang.slint";
@@ -50,8 +47,8 @@ export { L } from "i18n.slint";
 export { Theme } from "theme.slint";
 // Estado de tela por área (globals). Reexportado porque o Rust acessa via
 // `app.global::<Od>()` — só o que sai do arquivo de entrada vira API gerada.
-import { Sk, Mp, Cfg, Mg, Od, G, Db, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
-export { Sk, Mp, Cfg, Mg, Od, G, Db, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
+export { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
 
 export component AppWindow inherits Window {
     title: L.window-title;
@@ -334,12 +331,23 @@ export component AppWindow inherits Window {
         // e atalho pro modal de diretórios de dev / projetos fixados.
         if root.screen == 5: SettingsScreen {  }
 
-        // ---- TELA DATABASE BUILDER (6) ------------------------------
-        // 4 capacidades: (1) conectar+ler (introspecção SQLite/Postgres),
-        // (2) visualizar/editar o schema (+ carregar/salvar schema.json),
-        // (3) gerar SQL/migration (visor) + gerar por descrição (IA no terminal),
-        // (4) grafo do schema (tabela=nó, FK=aresta) no MESMO GraphCanvas.
-        if root.screen == 6: DatabaseScreen {  }
+        // ---- tela BANCO DE DADOS (6) — DELEGA a janela do database ----
+        // As quatro capacidades que esta tela tinha — conectar e introspectar, editar o schema,
+        // gerar SQL/migration e desenhar o grafo — saíram daqui com o módulo que as alimentava.
+        // O `schematize-database` é app à parte desde o ADR-0018, e a janela dele mora no mesmo
+        // repo do CLI dele (ADR-0020), o que faz os dois binários saírem sempre do mesmo commit.
+        if root.screen == 6: TelaDelegada {
+            titulo: L.database-title;
+            corpo: L.database-body;
+            rotulo-abrir: L.database-open;
+            rotulo-ausente: L.database-missing;
+            rotulo-instalar: L.database-install;
+            presente: Cfg.database-presente;
+            cmd: Cfg.database-cmd;
+            msg: Cfg.database-msg;
+            abrir => { Cfg.database-abrir(); }
+            instalar => { Cfg.database-instalar(); }
+        }
 
         // ---- TELA DISCO (7) — o lixo recriável da máquina ------------------
         // Inventário agrupado POR DISCO (a pergunta real é "o que está enchendo
@@ -517,7 +525,6 @@ export component AppWindow inherits Window {
 
     // ---- VISOR read-only do SQL/migration gerado (Database builder) -----
     // Mostra o resultado de to_sql/to_migration num TextEdit mono + botão de salvar.
-    if Db.gen-open: DbGenModal { }
 
     // ---- CONFIRMAÇÃO de apagar (Disco / poda do Docker) -----------------
     if Dsk.confirm-open: DiscoConfirmModal { }

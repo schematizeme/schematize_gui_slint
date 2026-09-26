@@ -183,36 +183,16 @@ export struct CmpFile {
     status: string,
 }
 
-// ---- Database builder (tela 6) ----------------------------------------------
-// Uma COLUNA de uma tabela do schema (espelha database::Column). Flags decidem
-// os marcadores PK/UK/NULL na visualização.
-export struct DbColumn {
-    name: string,
-    ty: string,
-    nullable: bool,
-    pk: bool,
-    unique: bool,
-}
-// Uma chave estrangeira (espelha database::Fk): coluna local → tabela.coluna ref.
-export struct DbFkRow {
-    column: string,
-    ref-table: string,
-    ref-column: string,
-}
-// Um índice (espelha database::Index): nome + colunas (já unidas em texto) + UNIQUE.
-export struct DbIndexRow {
-    name: string,
-    columns-text: string,
-    unique: bool,
-}
-// Uma TABELA do schema carregado — colunas, FKs e índices aninhados (modelos
-// próprios). Preenchida pelo Rust a partir de `database::Schema`.
-export struct DbTableRow {
-    name: string,
-    columns: [DbColumn],
-    fks: [DbFkRow],
-    indexes: [DbIndexRow],
-}
+// ---- Database (tela 6): os QUATRO structs saíram com a tela -----------------
+//
+// `DbColumn`, `DbFkRow`, `DbIndexRow` e `DbTableRow` espelhavam o `database::Schema` do crate.
+// Eles foram embora junto com a tela e com o módulo (E1 M5 da extradição, ADR-0018): quem
+// desenha schema agora é a janela do `schematize-database`, e ela lê o `--json` do binário
+// dele em vez de compartilhar struct com ninguém.
+//
+// Tipo de UI que espelha struct de domínio é a costura que prende os dois: enquanto existia,
+// mexer no `database::Schema` obrigava a mexer aqui, e o hub compilava o crate do banco só
+// para desenhar uma tabela.
 
 // Rótulos estáticos da UI — ponto único de injeção de i18n vindo do Rust.
 

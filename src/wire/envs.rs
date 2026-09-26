@@ -20,6 +20,15 @@ const COMANDO_INSTALAR_JANELA: &str =
 const COMANDO_INSTALAR_DEPLOYER: &str =
     "cargo install --git https://github.com/schematizeme/schematize_deployer_gui_rs";
 
+/// O comando que instala a janela do Database. Mesma razão das constantes acima.
+///
+/// **Note o `--bins`, que as irmãs não têm.** A janela do database é o SEGUNDO binário do repo
+/// do CLI dele (ADR-0020), e um `cargo install` sem `--bins` recusa um pacote com mais de um
+/// binário pedindo que se escolha um. Sem esta flag, o botão abriria um terminal que falha com
+/// um erro do cargo sobre algo que a pessoa não pediu.
+const COMANDO_INSTALAR_DATABASE: &str =
+    "cargo install --git https://github.com/schematizeme/schematize_database_rs --bins";
+
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     let row_items = cx.row_items.clone();
@@ -130,6 +139,53 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_DEPLOYER)])
             };
             a.global::<Cfg>().set_deployer_msg(msg.into());
+        });
+    }
+
+    // ==================== tela DELEGADA ao database ====================
+    //
+    // A tela de Banco de dados era deste hub: introspecção, editor de schema, gerador de SQL e
+    // um grafo inteiro. Ela foi embora junto com o módulo `database` do crate (E1 da extradição,
+    // ADR-0018) — o `schematize-database` tem app e janela próprios.
+    {
+        let cfg = app.global::<Cfg>();
+        cfg.set_database_presente(crate::sysenv::database_gui_bin().is_some());
+        cfg.set_database_cmd(SharedString::from(COMANDO_INSTALAR_DATABASE));
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_database_abrir(move || {
+            let Some(a) = weak.upgrade() else { return };
+            // Sem flag de aba: a janela do database abre no Schema, que é de onde tudo parte.
+            // Quem quiser o SQL clica uma vez lá — e é honesto, porque não há como este hub
+            // saber qual das duas telas a pessoa queria.
+            if crate::sysenv::abrir_gui(crate::sysenv::database_gui_bin(), None) {
+                a.global::<Cfg>().set_database_msg(SharedString::new());
+                return;
+            }
+            // Estava lá ao subir e não abriu: pode ter sido removida no meio. A tela volta ao
+            // estado honesto em vez de insistir num botão que não funciona.
+            a.global::<Cfg>().set_database_presente(false);
+            a.global::<Cfg>().set_database_msg(SharedString::from(
+                "não consegui abrir a janela do Database — ela ainda está instalada?",
+            ));
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_database_instalar(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let inner = format!(
+                "echo '── {COMANDO_INSTALAR_DATABASE} ──'; echo; \
+                 {COMANDO_INSTALAR_DATABASE}; \
+                 echo; read -n1 -s -r -p '…'"
+            );
+            let msg = if launch_terminal(&inner) {
+                t("gui.env_terminal_opened")
+            } else {
+                tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_DATABASE)])
+            };
+            a.global::<Cfg>().set_database_msg(msg.into());
         });
     }
 

@@ -47,6 +47,13 @@ export global L {
     in-out property <string> deployer-open-hosts;
     in-out property <string> deployer-missing;
     in-out property <string> deployer-install;
+    // Delegação do BANCO DE DADOS (E1 da extradição, ADR-0018). Mesmas cinco frases das
+    // delegações irmãs, e pelo mesmo desenho: um componente só serve as quatro.
+    in-out property <string> database-title;
+    in-out property <string> database-body;
+    in-out property <string> database-open;
+    in-out property <string> database-missing;
+    in-out property <string> database-install;
     in-out property <string> env-intro;      // texto-guia (mexe na máquina / roda em terminal)
     in-out property <string> env-method;      // "Método:"
     in-out property <string> env-no-methods;  // nenhum método disponível
@@ -265,46 +272,6 @@ export global L {
     // ---- Database builder (tela 6) ----
     in-out property <string> home-database;            // card da Home "Banco de dados"
     in-out property <string> home-database-desc;
-    in-out property <string> db-title;                 // título da tela
-    in-out property <string> db-sub-connect;           // sub-aba "Conectar"
-    in-out property <string> db-sub-schema;            // sub-aba "Schema"
-    in-out property <string> db-sub-generate;          // sub-aba "Gerar"
-    in-out property <string> db-sub-graph;             // sub-aba "Grafo"
-    in-out property <string> db-sqlite-label;          // "Arquivo SQLite"
-    in-out property <string> db-pg-label;              // "Connection string Postgres"
-    in-out property <string> db-pick-file;             // "Escolher…"
-    in-out property <string> db-introspect;            // "Introspectar"
-    in-out property <string> db-load-json;             // "Carregar schema.json"
-    in-out property <string> db-save-json;             // "Salvar schema.json"
-    in-out property <string> db-no-schema;             // empty-state (nenhum schema)
-    in-out property <string> db-tables-title;          // "Tabelas"
-    in-out property <string> db-cols-label;            // "Colunas"
-    in-out property <string> db-fks-label;             // "Chaves estrangeiras"
-    in-out property <string> db-indexes-label;         // "Índices"
-    in-out property <string> db-editor-title;          // "Editar schema"
-    in-out property <string> db-add-table;             // "Adicionar tabela"
-    in-out property <string> db-table-name;            // "Nome da tabela"
-    in-out property <string> db-select-table;          // "Tabela alvo"
-    in-out property <string> db-add-column;            // "Adicionar coluna"
-    in-out property <string> db-col-name;              // "Nome da coluna"
-    in-out property <string> db-col-type;              // "Tipo"
-    in-out property <string> db-pk;                    // "PK"
-    in-out property <string> db-unique;                // "UNIQUE"
-    in-out property <string> db-nullable;              // "NULL"
-    in-out property <string> db-add-fk;                // "Adicionar FK"
-    in-out property <string> db-fk-col;                // "Coluna"
-    in-out property <string> db-fk-reftable;           // "Tabela ref."
-    in-out property <string> db-fk-refcol;             // "Coluna ref."
-    in-out property <string> db-gen-sql;               // "Gerar SQL"
-    in-out property <string> db-gen-migration;         // "Gerar migration"
-    in-out property <string> db-gen-save;              // "Salvar em arquivo…"
-    in-out property <string> db-ai-title;              // "Gerar por descrição (IA)"
-    in-out property <string> db-ai-hint;               // hint do campo de descrição
-    in-out property <string> db-ai-generate;           // "Gerar com IA"
-    in-out property <string> db-ai-note;               // "roda no terminal; carregue o schema.json quando terminar"
-    in-out property <string> db-ai-no-project;         // aviso: selecione um projeto
-    in-out property <string> db-view-graph;            // "Ver grafo"
-    in-out property <string> db-node-cols;             // texto do nó quando sem descrição
 
     // ---- Disco (tela 7) ----
     in-out property <string> home-disk;                 // card "Disco"

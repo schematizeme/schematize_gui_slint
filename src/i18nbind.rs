@@ -67,6 +67,11 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_deployer_open_hosts(t("gui.deployer_open_hosts").into());
     l.set_deployer_missing(t("gui.deployer_missing").into());
     l.set_deployer_install(t("gui.deployer_install").into());
+    l.set_database_title(t("gui.database_title").into());
+    l.set_database_body(t("gui.database_body").into());
+    l.set_database_open(t("gui.database_open").into());
+    l.set_database_missing(t("gui.database_missing").into());
+    l.set_database_install(t("gui.database_install").into());
     l.set_env_intro(t("gui.env_intro").into());
     l.set_env_method(t("gui.env_method").into());
     l.set_env_no_methods(t("gui.env_no_methods").into());
@@ -375,51 +380,11 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_home_database_desc(
         tor("gui.home_database_desc", "Leia, modele e gere o schema do seu banco.").into(),
     );
-    l.set_db_title(tor("gui.db_title", "Database builder").into());
-    l.set_db_sub_connect(tor("gui.db_sub_connect", "Conectar").into());
-    l.set_db_sub_schema(tor("gui.db_sub_schema", "Schema").into());
-    l.set_db_sub_generate(tor("gui.db_sub_generate", "Gerar").into());
-    l.set_db_sub_graph(tor("gui.db_sub_graph", "Grafo").into());
-    l.set_db_sqlite_label(tor("gui.db_sqlite_label", "Arquivo SQLite").into());
-    l.set_db_pg_label(tor("gui.db_pg_label", "Connection string Postgres").into());
-    l.set_db_pick_file(tor("gui.db_pick_file", "Escolher…").into());
-    l.set_db_introspect(tor("gui.db_introspect", "Introspectar").into());
-    l.set_db_load_json(tor("gui.db_load_json", "Carregar schema.json").into());
-    l.set_db_save_json(tor("gui.db_save_json", "Salvar schema.json").into());
-    l.set_db_no_schema(tor("gui.db_no_schema", "Nenhum schema carregado — introspecte um banco, carregue um schema.json ou adicione uma tabela.").into());
-    l.set_db_tables_title(tor("gui.db_tables_title", "Tabelas").into());
-    l.set_db_cols_label(tor("gui.db_cols_label", "Colunas").into());
-    l.set_db_fks_label(tor("gui.db_fks_label", "Chaves estrangeiras").into());
-    l.set_db_indexes_label(tor("gui.db_indexes_label", "Índices").into());
-    l.set_db_editor_title(tor("gui.db_editor_title", "Editar schema").into());
-    l.set_db_add_table(tor("gui.db_add_table", "Adicionar tabela").into());
-    l.set_db_table_name(tor("gui.db_table_name", "Nome da tabela").into());
-    l.set_db_select_table(tor("gui.db_select_table", "Tabela alvo").into());
-    l.set_db_add_column(tor("gui.db_add_column", "Adicionar coluna").into());
-    l.set_db_col_name(tor("gui.db_col_name", "Nome da coluna").into());
-    l.set_db_col_type(tor("gui.db_col_type", "Tipo").into());
-    l.set_db_pk(tor("gui.db_pk", "PK").into());
-    l.set_db_unique(tor("gui.db_unique", "UNIQUE").into());
-    l.set_db_nullable(tor("gui.db_nullable", "NULL").into());
-    l.set_db_add_fk(tor("gui.db_add_fk", "Adicionar FK").into());
-    l.set_db_fk_col(tor("gui.db_fk_col", "Coluna").into());
-    l.set_db_fk_reftable(tor("gui.db_fk_reftable", "Tabela ref.").into());
-    l.set_db_fk_refcol(tor("gui.db_fk_refcol", "Coluna ref.").into());
-    l.set_db_gen_sql(tor("gui.db_gen_sql", "Gerar SQL").into());
-    l.set_db_gen_migration(tor("gui.db_gen_migration", "Gerar migration").into());
-    l.set_db_gen_save(tor("gui.db_gen_save", "Salvar em arquivo…").into());
-    l.set_db_ai_title(tor("gui.db_ai_title", "Gerar por descrição (IA)").into());
-    l.set_db_ai_hint(tor("gui.db_ai_hint", "Descreva o domínio do sistema…").into());
-    l.set_db_ai_generate(tor("gui.db_ai_generate", "Gerar com IA").into());
-    l.set_db_ai_note(tor(
-        "gui.db_ai_note",
-        "Segue a skill schematize-database num terminal externo e emite schema.json + schema.sql + migration no <projeto>_archive/database/. Roda no terminal; carregue o schema.json quando terminar.",
-    ).into());
-    l.set_db_ai_no_project(
-        tor("gui.db_ai_no_project", "Selecione um projeto na tela Overdev/Grafo primeiro.").into(),
-    );
-    l.set_db_view_graph(tor("gui.db_view_graph", "Ver grafo").into());
-    l.set_db_node_cols(tor("gui.db_node_cols", "(sem colunas)").into());
+    // Os 40 rótulos do Database builder saíram daqui com a tela (E1 M5, ADR-0018).
+    //
+    // Eram `db_sub_connect`, `db_add_column`, `db_fk_refcol`, `db_gen_migration`… — o
+    // vocabulário inteiro de uma tela de modelagem, num hub que não modela mais nada. Quem
+    // desenha schema agora é a janela do `schematize-database`, e os rótulos dela moram lá.
 
     // ---- Disco (tela 7) ----
     l.set_home_disk(tor("gui.home_disk", "Disco").into());
@@ -609,4 +574,53 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         .into(),
     );
     l.set_quiz_revisao(tor("gui.quiz_revisao", "Revisão da máquina:").into());
+}
+
+#[cfg(test)]
+mod tests {
+    /// **TODA chave que esta ligação usa tem de EXISTIR no catálogo.**
+    ///
+    /// Este teste nasceu de um defeito visto na tela: a aba de Banco de dados abriu mostrando
+    /// `gui.database_title`, `gui.database_body` e `gui.database_missing` — as CHAVES, cruas,
+    /// como título e corpo. O motivo era mundano (o catálogo mora no crate irmão e as frases
+    /// novas ainda não tinham sido publicadas), e o que importa é o resto: **nada reprovava**.
+    /// O `t()` devolve a própria chave quando não acha a tradução, o Rust compila, o Slint
+    /// desenha, e quem vê é o usuário.
+    ///
+    /// Varre o fonte deste arquivo atrás de `t("…")` e cobra que nenhuma volte igual a si
+    /// mesma. É exaustivo por construção: chave nova entra aqui junto com a linha que a usa.
+    ///
+    /// **Só as do `t(`, e não as do `tor(`, e a diferença importa.** O `tor` recebe um texto de
+    /// reserva, então chave ausente ali nunca vira chave crua na tela — vira o PORTUGUÊS do
+    /// código em todos os 20 idiomas, calado. É um defeito mais brando e muito mais espalhado
+    /// (163 das 298 chaves `tor` não estão no catálogo hoje), e está registrado como dívida no
+    /// checklist do overdev. Misturar os dois aqui reprovaria 163 linhas de uma vez sem
+    /// separar o grave do brando.
+    #[test]
+    fn nenhuma_chave_chega_crua_na_tela() {
+        let fonte = include_str!("i18nbind.rs");
+        let producao = fonte.split("#[cfg(test)]").next().expect("há código antes dos testes");
+        let mut vistas = 0;
+        for trecho in producao.split("t(\"").skip(1) {
+            let Some(chave) = trecho.split('"').next() else { continue };
+            // Só as chaves literais: um `tf(` com argumento montado não passa por aqui.
+            if !chave.starts_with("gui.") {
+                continue;
+            }
+            vistas += 1;
+            assert_ne!(
+                crate::prelude::t(chave),
+                chave,
+                "`{chave}` não existe no catálogo — a tela mostraria a CHAVE ao usuário, e \
+                 nada mais reprovaria isso"
+            );
+        }
+        // Self-check: o varredor tem de ter ACHADO chaves. Um split que parasse de casar faria
+        // o laço rodar zero vezes e o teste passar sempre — guard que não pode falhar não mede.
+        //
+        // O piso é 70, e hoje há 73. Ele existe para pegar o varredor cego, não para congelar
+        // a contagem: subir a cada chave nova transformaria este teste num contador que reprova
+        // toda vez que alguém traduz alguma coisa.
+        assert!(vistas > 70, "só {vistas} chaves varridas — o varredor está cego");
+    }
 }
