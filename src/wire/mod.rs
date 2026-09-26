@@ -15,7 +15,6 @@ use crate::prelude::*;
 pub(crate) mod account;
 pub(crate) mod appversion;
 pub(crate) mod caixa;
-pub(crate) mod disco;
 pub(crate) mod envs;
 pub(crate) mod graph;
 pub(crate) mod manage;
@@ -48,7 +47,7 @@ pub(crate) struct Ctx {
     pub(crate) od_stop_flag: Arc<AtomicBool>,
     pub(crate) od_snaps_all: Rc<RefCell<Vec<overdevdb::SnapshotMeta>>>,
     pub(crate) od_snaps_model: Rc<VecModel<SnapRow>>,
-    pub(crate) od_commits_all: Rc<RefCell<Vec<githist::Commit>>>,
+    pub(crate) od_commits_all: Rc<RefCell<Vec<crate::gitlog::Commit>>>,
     pub(crate) od_commits_model: Rc<VecModel<CommitRow>>,
 }
 
@@ -65,11 +64,12 @@ pub(crate) fn set_rows<T: Clone + 'static>(m: &ModelRc<T>, v: Vec<T>) {
     }
 }
 
-/// Trava um `Mutex` de estado da UI ignorando envenenamento.
-///
-/// O que guardamos aqui são listas simples (achados, projetos): se uma thread
-/// entrou em pânico segurando a trava, o `Vec` continua íntegro — não há
-/// invariante pra proteger. Propagar o pânico só derrubaria a janela inteira.
-pub(crate) fn trava<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|p| p.into_inner())
-}
+// O `trava()` saiu com a tela de Disco (E3 M5): ela era a última que tinha estado em
+// `Mutex` — a varredura do disco roda em thread e devolvia a lista por ali. O que sobra neste
+// hub é estado de UI em `Rc<RefCell<…>>`, que vive só na thread da janela e não precisa de
+// trava nenhuma.
+//
+// Ele existia por uma razão boa (ignorar envenenamento, porque um `Vec` de achados não tem
+// invariante a proteger e propagar o pânico derrubaria a janela inteira). A razão morre junto
+// com o único chamador: um helper de concorrência num módulo que deixou de ter concorrência é
+// um convite a reintroduzi-la sem pensar.

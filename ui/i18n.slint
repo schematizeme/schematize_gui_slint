@@ -57,6 +57,12 @@ export global L {
     in-out property <string> git-open;
     in-out property <string> git-missing;
     in-out property <string> git-install;
+    // Delegação do DISCO ao optimizer (E3 da extradição).
+    in-out property <string> optimizer-title;
+    in-out property <string> optimizer-body;
+    in-out property <string> optimizer-open-disco;
+    in-out property <string> optimizer-missing;
+    in-out property <string> optimizer-install;
     in-out property <string> env-method;      // "Método:"
     in-out property <string> env-no-methods;  // nenhum método disponível
     // modal de instalação do Marketplace (dep opcional + environment opcional)
@@ -232,21 +238,6 @@ export global L {
     // ---- Disco (tela 7) ----
     in-out property <string> home-disk;                 // card "Disco"
     in-out property <string> home-disk-desc;
-    in-out property <string> disk-min-days;             // "Parado há"
-    in-out property <string> disk-any;                  // "qualquer"
-    in-out property <string> disk-scan;                 // "Varrer"
-    in-out property <string> disk-scanning;             // "varrendo…"
-    in-out property <string> disk-intro;                // o que a tela faz, antes da 1ª varredura
-    in-out property <string> disk-by-mount;             // "POR DISCO"
-    in-out property <string> disk-by-kind;              // "POR TIPO"
-    in-out property <string> disk-docker;               // "DOCKER"
-    in-out property <string> disk-largest;              // "MAIORES"
-    in-out property <string> disk-reclaimable;          // "recuperável:"
-    in-out property <string> disk-prune;                // "Podar"
-    in-out property <string> disk-prune-data;           // "Apagar volumes"
-    in-out property <string> disk-open;                 // "Abrir"
-    in-out property <string> disk-delete;               // "Apagar"
-    in-out property <string> disk-data-warning;         // volume é DADO, não build
 
     // ---- Git (tela 8) ----
     in-out property <string> home-git;                  // card "Git"

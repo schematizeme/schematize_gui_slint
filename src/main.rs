@@ -28,9 +28,9 @@ mod prelude;
 
 mod checklist; // paginação PURA do checklist (o que segura o custo de render)
 mod checklistview; // ligação do checklist fatiado com as propriedades da UI
-mod discorows; // linhas/paginação da tela Disco (o Rust é dono da lista inteira)
 mod envrows; // linhas de Environments/SSH/idiomas + ações em terminal
 mod fmt; // formatação de valores pra UI (puro)
+mod gitlog; // histórico de commits, lido do BINÁRIO do git (E2 da extradição)
 mod graphstate; // estado + passo da física do grafo
 mod graphview; // ponte do grafo com a UI (modelos, carga preguiçosa, timer)
 mod i18nbind; // catálogo i18n -> propriedades do `global L`
@@ -192,7 +192,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // modelos com a PÁGINA atual (paginação Rust-side).
     let od_snaps_all: Rc<RefCell<Vec<overdevdb::SnapshotMeta>>> = Rc::new(RefCell::new(Vec::new()));
     let od_snaps_model = Rc::new(VecModel::<SnapRow>::from(Vec::new()));
-    let od_commits_all: Rc<RefCell<Vec<githist::Commit>>> = Rc::new(RefCell::new(Vec::new()));
+    let od_commits_all: Rc<RefCell<Vec<crate::gitlog::Commit>>> = Rc::new(RefCell::new(Vec::new()));
     let od_commits_model = Rc::new(VecModel::<CommitRow>::from(Vec::new()));
     app.global::<Od>().set_snaps(ModelRc::from(od_snaps_model.clone()));
     app.global::<Od>().set_commits(ModelRc::from(od_commits_model.clone()));
@@ -297,7 +297,6 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::odhistory::wire(&app, &cx);
     wire::graph::wire(&app, &cx);
     wire::caixa::wire(&app, &cx);
-    wire::disco::wire(&app, &cx);
     wire::settings::wire(&app, &cx);
     wire::appversion::wire(&app, &cx);
     wire::account::wire(&app, &cx);

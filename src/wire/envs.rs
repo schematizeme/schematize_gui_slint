@@ -35,6 +35,15 @@ const COMANDO_INSTALAR_DATABASE: &str =
 const COMANDO_INSTALAR_GIT: &str =
     "cargo install --git https://github.com/schematizeme/schematize_git_rs --bins";
 
+/// O comando que instala a janela do Optimizer.
+///
+/// **Sem `--bins` aqui, e a assimetria é real:** a janela do optimizer tem REPO PRÓPRIO
+/// (`schematize_optimizer_gui_rs`), enquanto as do database e do git são o segundo binário do
+/// repo do CLI delas (ADR-0020). Copiar a flag sem olhar faria o cargo reclamar de uma
+/// ambiguidade que não existe neste repo.
+const COMANDO_INSTALAR_OPTIMIZER: &str =
+    "cargo install --git https://github.com/schematizeme/schematize_optimizer_gui_rs";
+
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     let row_items = cx.row_items.clone();
@@ -237,6 +246,50 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_GIT)])
             };
             a.global::<Cfg>().set_git_msg(msg.into());
+        });
+    }
+
+    // ==================== tela DELEGADA ao optimizer ====================
+    //
+    // O inventário do lixo recriável saiu daqui com o módulo que o alimentava (E3). A janela
+    // do optimizer já tinha Diagnóstico e Limites; agora tem cinco abas, e Disco é uma delas —
+    // que é onde ela sempre devia ter morado, porque quem MEDE a máquina é aquele app.
+    {
+        let cfg = app.global::<Cfg>();
+        cfg.set_optimizer_presente(crate::sysenv::optimizer_gui_bin().is_some());
+        cfg.set_optimizer_cmd(SharedString::from(COMANDO_INSTALAR_OPTIMIZER));
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_optimizer_abrir_disco(move || {
+            let Some(a) = weak.upgrade() else { return };
+            // COM flag de aba: quem clicou em "Disco" no hub não deveria cair no Diagnóstico
+            // e ter de achar a aba de novo. A janela aceita `--disco` desde a E3.
+            if crate::sysenv::abrir_gui(crate::sysenv::optimizer_gui_bin(), Some("--disco")) {
+                a.global::<Cfg>().set_optimizer_msg(SharedString::new());
+                return;
+            }
+            a.global::<Cfg>().set_optimizer_presente(false);
+            a.global::<Cfg>().set_optimizer_msg(SharedString::from(
+                "não consegui abrir a janela do Optimizer — ela ainda está instalada?",
+            ));
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_optimizer_instalar(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let inner = format!(
+                "echo '── {COMANDO_INSTALAR_OPTIMIZER} ──'; echo; \
+                 {COMANDO_INSTALAR_OPTIMIZER}; \
+                 echo; read -n1 -s -r -p '…'"
+            );
+            let msg = if launch_terminal(&inner) {
+                t("gui.env_terminal_opened")
+            } else {
+                tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_OPTIMIZER)])
+            };
+            a.global::<Cfg>().set_optimizer_msg(msg.into());
         });
     }
 

@@ -1,6 +1,6 @@
 import {
     SkillRow, EnvRow, LangItem, ProjItem, OverItem, SnapRow, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction,
-    DiscoTotal, DiscoRow, DockerRow, QuizItem, QuizOpcao,
+    QuizItem, QuizOpcao,
     } from "types.slint";
 
 // Estado de TELA da GUI, agrupado por área — um `global` por recorte.
@@ -91,6 +91,12 @@ export global Cfg {
     in-out property <string> git-msg;
     callback git-abrir();
     callback git-instalar();
+
+    in-out property <bool> optimizer-presente: false;
+    in-out property <string> optimizer-cmd;
+    in-out property <string> optimizer-msg;
+    callback optimizer-abrir-disco();
+    callback optimizer-instalar();
     in-out property <[EnvRow]> rows;
     in-out property <[LangItem]> langs;
     in-out property <string> lang-code;   // código do idioma atual
@@ -437,34 +443,13 @@ export global App {
 // mesmo motivo do checklist do overdev: repeater do Slint não é virtualizado;
 // (2) toda remoção passa por confirmação, e a poda de VOLUMES do Docker é a
 // única marcada `confirm-destructive` — volume é dado, não build.
-export global Dsk {
-    in-out property <[DiscoTotal]> mounts;     // por DISCO (a pergunta é "o que enche ESTE disco")
-    in-out property <[DiscoTotal]> kinds;      // por TIPO (quem é o culpado)
-    in-out property <[DiscoRow]> rows;         // PÁGINA atual dos maiores achados
-    in-out property <[DockerRow]> docker;      // categorias do docker + podas
-    in-out property <bool> docker-available: false;
-    in-out property <bool> scanning: false;    // varredura em thread
-    in-out property <bool> scanned: false;     // já varreu uma vez? (empty-state honesto)
-    in-out property <string> status;           // linha de resumo ("total recuperável: X")
-    in-out property <string> banner;           // resultado da última ação ("liberado X")
-    in-out property <bool> banner-error: false;
-    in-out property <int> min-days: 0;         // filtro: só o que está parado há N dias
-    in-out property <int> page: 0;
-    in-out property <int> total: 0;            // achados após o filtro (paginação)
-    in-out property <int> per-page: 40;
-    in-out property <bool> confirm-open: false;
-    in-out property <string> confirm-msg;
-    in-out property <bool> confirm-destructive: false;  // poda de volumes (dado, não build)
-    callback scan();                    // varre (thread) — nada acontece sem isto
-    callback set-min-days(int);          // troca o filtro e re-pagina
-    callback page-prev();
-    callback page-next();
-    callback open-folder(int);           // abre o pai do achado no gerenciador de arquivos
-    callback remove-request(int);        // pede confirmação de remoção do achado idx
-    callback docker-prune-request(string); // pede confirmação da poda (rótulo)
-    callback confirm-yes();
-    callback confirm-no();
-}
+// O global `Dsk` foi embora com a tela (E3 M5 da extradição).
+//
+// Inventário por disco e por tipo, achados, Docker, paginação, seleção e o modal de
+// confirmação: tudo isso é do `schematize-optimizer`, que MEDE a máquina e agora desenha
+// esses números na aba Disco da janela dele.
+//
+// O que fica é o caminho até lá: `Cfg.optimizer-*`, mais acima.
 
 // GIT — contas, o que ainda não saiu da máquina, e os repositórios do serviço.
 // O global `Gh` foi embora com a tela (E2 M5 da extradição, ADR-0019).

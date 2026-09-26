@@ -20,7 +20,7 @@ pub(crate) fn snap_rows_page(all: &[overdevdb::SnapshotMeta], page: i32) -> Vec<
 }
 
 /// Uma página do histórico de commits (Commit → CommitRow).
-pub(crate) fn commit_rows_page(all: &[githist::Commit], page: i32) -> Vec<CommitRow> {
+pub(crate) fn commit_rows_page(all: &[crate::gitlog::Commit], page: i32) -> Vec<CommitRow> {
     let start = (page.max(0) as usize) * PAGE;
     all.iter()
         .skip(start)
@@ -42,15 +42,18 @@ pub(crate) fn refresh_od_history(
     app: &AppWindow,
     snaps_all: &RefCell<Vec<overdevdb::SnapshotMeta>>,
     snaps_model: &VecModel<SnapRow>,
-    commits_all: &RefCell<Vec<githist::Commit>>,
+    commits_all: &RefCell<Vec<crate::gitlog::Commit>>,
     commits_model: &VecModel<CommitRow>,
     proj: Option<&Path>,
 ) {
     match proj {
         Some(p) => {
             let snaps = overdevdb::history(p, 50).unwrap_or_default();
-            let commits = githist::commits(p, 50);
-            app.global::<Od>().set_upstream_line(fmt_upstream(githist::upstream(p)).into());
+            // Dois documentos, duas perguntas: o snapshot vem do `overdevdb` local, o
+            // commit vem do BINÁRIO do git (a E2 tirou o `githist` deste crate). Sem o app
+            // instalado, a lista de commits sai vazia e os snapshots continuam na tela.
+            let (up, commits) = crate::gitlog::ler(p);
+            app.global::<Od>().set_upstream_line(fmt_upstream(up).into());
             app.global::<Od>().set_snap_total(snaps.len() as i32);
             app.global::<Od>().set_commit_total(commits.len() as i32);
             app.global::<Od>().set_snap_page(0);

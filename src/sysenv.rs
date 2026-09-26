@@ -128,6 +128,9 @@ pub(crate) const DATABASE_GUI_BINS: [&str; 1] = ["schematize-database-gui"];
 /// Nome da JANELA do git — a que a tela de Git passa a abrir (ADR-0019, ADR-0020).
 pub(crate) const GIT_GUI_BINS: [&str; 1] = ["schematize-git-gui"];
 
+/// Nome da JANELA do optimizer — a que a tela de Disco passa a abrir (E3 da extradição).
+pub(crate) const OPTIMIZER_GUI_BINS: [&str; 1] = ["schematize-optimizer-gui"];
+
 /// **O quê:** localiza um binário irmão para montar comando de terminal — primeiro ao lado do
 /// executável atual, senão no `$PATH`, senão devolve o nome canônico.
 ///
@@ -238,6 +241,23 @@ pub(crate) fn database_gui_bin() -> Option<String> {
 /// **O quê:** o caminho da janela do GIT. **Onde:** a tela de Git.
 pub(crate) fn git_gui_bin() -> Option<String> {
     gui_de_app(&GIT_GUI_BINS)
+}
+
+/// **O quê:** o caminho do binário HEADLESS do git, ou `None` se ele não está instalado.
+///
+/// **Onde:** [`crate::gitlog`], que lê o histórico de commits da aba Overdev.
+///
+/// **É `Option` e não o nome canônico**, ao contrário do [`bin_irmao`]: aqui o destino é um
+/// `spawn` silencioso cujo resultado alimenta uma lista secundária. Sem o app, a lista sai
+/// vazia e o resto da aba continua — que é o piso 10. Um nome que não resolve daria o mesmo
+/// resultado com um erro de "not found" no meio do caminho.
+pub(crate) fn git_bin() -> Option<String> {
+    gui_de_app(&["schematize-git"])
+}
+
+/// **O quê:** o caminho da janela do OPTIMIZER. **Onde:** a tela de Disco.
+pub(crate) fn optimizer_gui_bin() -> Option<String> {
+    gui_de_app(&OPTIMIZER_GUI_BINS)
 }
 
 /// **O quê:** abre a janela de um app, desacoplada deste processo. `false` se não deu.

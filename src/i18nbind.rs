@@ -74,6 +74,11 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_git_open(t("gui.git_open_window").into());
     l.set_git_missing(t("gui.git_missing").into());
     l.set_git_install(t("gui.git_install").into());
+    l.set_optimizer_title(t("gui.optimizer_title").into());
+    l.set_optimizer_body(t("gui.optimizer_body").into());
+    l.set_optimizer_open_disco(t("gui.optimizer_open_disco").into());
+    l.set_optimizer_missing(t("gui.optimizer_missing").into());
+    l.set_optimizer_install(t("gui.optimizer_install").into());
     l.set_env_method(t("gui.env_method").into());
     l.set_env_no_methods(t("gui.env_no_methods").into());
     // modal de instalação do Marketplace
@@ -315,27 +320,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_home_disk_desc(
         tor("gui.home_disk_desc", "O que está enchendo o disco e pode ser refeito.").into(),
     );
-    l.set_disk_min_days(tor("gui.disk_min_days", "Parado há").into());
-    l.set_disk_any(tor("gui.disk_any", "qualquer").into());
-    l.set_disk_scan(tor("gui.disk_scan", "Varrer").into());
-    l.set_disk_scanning(tor("gui.disk_scanning", "varrendo…").into());
-    l.set_disk_intro(tor(
-        "gui.disk_intro",
-        "Mede o lixo RECRIÁVEL dos seus diretórios de dev — artefato de build, cache de toolchain e camada de Docker — e agrupa por disco. Nada é medido nem apagado sem você pedir: comece por Varrer.",
-    ).into());
-    l.set_disk_by_mount(tor("gui.disk_by_mount", "POR DISCO").into());
-    l.set_disk_by_kind(tor("gui.disk_by_kind", "POR TIPO").into());
-    l.set_disk_docker(tor("gui.disk_docker", "DOCKER").into());
-    l.set_disk_largest(tor("gui.disk_largest", "MAIORES").into());
-    l.set_disk_reclaimable(tor("gui.disk_reclaimable", "recuperável:").into());
-    l.set_disk_prune(tor("gui.disk_prune", "Podar").into());
-    l.set_disk_prune_data(tor("gui.disk_prune_data", "Apagar volumes").into());
-    l.set_disk_open(tor("gui.disk_open", "Abrir").into());
-    l.set_disk_delete(tor("gui.disk_delete", "Apagar").into());
-    l.set_disk_data_warning(tor(
-        "gui.disk_data_warning",
-        "Volume do Docker é DADO, não build: banco de dev, upload de teste. Isto não se refaz compilando.",
-    ).into());
 
     // ---- Git (tela 8) ----
     l.set_home_git(tor("gui.home_git", "Git").into());

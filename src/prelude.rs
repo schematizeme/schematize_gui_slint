@@ -17,8 +17,8 @@ pub(crate) use schematize::i18n::{self, t, tf};
 pub(crate) use schematize::registry::{self, Item};
 pub(crate) use schematize::skillsproj;
 pub(crate) use schematize::{
-    account, autostart, config, debugreport, githist, links, market, notifications, overdev,
-    overdevdb, panel, projects, selfupdate, settings, skilledit, skills, upgrade, usage, util,
+    account, autostart, config, debugreport, links, market, notifications, overdev, overdevdb,
+    panel, projects, selfupdate, settings, skilledit, skills, upgrade, usage, util,
 };
 pub(crate) use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 pub(crate) use std::cell::RefCell;
@@ -32,5 +32,5 @@ pub(crate) use std::path::{Path, PathBuf};
 pub(crate) use std::process::Stdio;
 pub(crate) use std::rc::Rc;
 pub(crate) use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-pub(crate) use std::sync::{Arc, Mutex};
+pub(crate) use std::sync::Arc;
 pub(crate) use std::time::{Duration, Instant};

@@ -39,7 +39,7 @@ pub(crate) fn fmt_size(bytes: i64) -> String {
 }
 
 /// Linha de upstream (branch → remote · ↑ahead ↓behind); vazia se sem tracking.
-pub(crate) fn fmt_upstream(up: Option<githist::Upstream>) -> String {
+pub(crate) fn fmt_upstream(up: Option<crate::gitlog::Upstream>) -> String {
     match up {
         Some(u) => {
             let remote = u.remote.unwrap_or_else(|| "—".into());
