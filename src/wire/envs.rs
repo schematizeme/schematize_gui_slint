@@ -44,10 +44,13 @@ const COMANDO_INSTALAR_GIT: &str =
 const COMANDO_INSTALAR_OPTIMIZER: &str =
     "cargo install --git https://github.com/schematizeme/schematize_optimizer_gui_rs";
 
+/// O comando que instala a janela das Skills. Com `--bins`, como database e git: a janela é o
+/// SEGUNDO binário do repo do CLI dela (ADR-0020).
+const COMANDO_INSTALAR_SKILLS: &str =
+    "cargo install --git https://github.com/schematizeme/schematize_skills_rs --bins";
+
 /// Liga os callbacks deste recorte da UI.
-pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
-    let row_items = cx.row_items.clone();
-    let modal = cx.modal.clone();
+pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     // ==================== aba MERCADO ====================
     //
     // Esta aba DELEGA: ela abre a janela do market em vez de desenhar a lista (ADR-0012).
@@ -293,78 +296,53 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         });
     }
 
-    // ==================== modal de instalação (Marketplace) ====================
+    // ==================== aba DELEGADA às skills ====================
+    //
+    // Catálogo, instaladas e autoria saíram daqui (E5, ADR-0012 F4). Skill é conteúdo de
+    // TERCEIRO: quem aceita extensão de fora precisa de ciclo próprio de release.
+    {
+        let cfg = app.global::<Cfg>();
+        cfg.set_skills_presente(crate::sysenv::skills_gui_bin().is_some());
+        cfg.set_skills_cmd(SharedString::from(COMANDO_INSTALAR_SKILLS));
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_skills_abrir(move || {
+            let Some(a) = weak.upgrade() else { return };
+            if crate::sysenv::abrir_gui(crate::sysenv::skills_gui_bin(), None) {
+                a.global::<Cfg>().set_skills_msg(SharedString::new());
+                return;
+            }
+            a.global::<Cfg>().set_skills_presente(false);
+            a.global::<Cfg>().set_skills_msg(SharedString::from(
+                "não consegui abrir a janela das Skills — ela ainda está instalada?",
+            ));
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_skills_instalar(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let inner = format!(
+                "echo '── {COMANDO_INSTALAR_SKILLS} ──'; echo; \
+                 {COMANDO_INSTALAR_SKILLS}; \
+                 echo; read -n1 -s -r -p '…'"
+            );
+            let msg = if launch_terminal(&inner) {
+                t("gui.env_terminal_opened")
+            } else {
+                tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_SKILLS)])
+            };
+            a.global::<Cfg>().set_skills_msg(msg.into());
+        });
+    }
 
-    {
-        let weak = app.as_weak();
-        app.global::<Mp>().on_toggle_rec(move || {
-            if let Some(a) = weak.upgrade() {
-                a.global::<Mp>().set_rec_check(!a.global::<Mp>().get_rec_check());
-            }
-        });
-    }
-    {
-        let weak = app.as_weak();
-        app.global::<Mp>().on_toggle_env(move || {
-            if let Some(a) = weak.upgrade() {
-                a.global::<Mp>().set_env_check(!a.global::<Mp>().get_env_check());
-            }
-        });
-    }
-    {
-        let weak = app.as_weak();
-        app.global::<Mp>().on_pick_method(move |m| {
-            if let Some(a) = weak.upgrade() {
-                a.global::<Mp>().set_method_sel(m);
-            }
-        });
-    }
-    {
-        let weak = app.as_weak();
-        app.global::<Mp>().on_cancel(move || {
-            if let Some(a) = weak.upgrade() {
-                a.global::<Mp>().set_open(false);
-            }
-        });
-    }
-    // confirmar: instala a skill in-process (+ a base marcada, no MESMO lote paralelo)
-    // e, se marcado, dispara o environment num TERMINAL (fora do processo).
-    {
-        let weak = app.as_weak();
-        let row_items = row_items.clone();
-        let modal = modal.clone();
-        app.global::<Mp>().on_confirm(move || {
-            let Some(app) = weak.upgrade() else { return };
-            let st = modal.borrow().clone();
-            // lote in-process: a skill + (recomendada SÓ se o usuário marcou).
-            let mut ops: Vec<(usize, bool, Item)> = Vec::new();
-            if let Some(Some(it)) = row_items.get(st.skill_idx) {
-                ops.push((st.skill_idx, true, it.clone()));
-            }
-            if app.global::<Mp>().get_rec_check() && !st.rec_slug.is_empty() {
-                if let Some(ridx) = row_idx_of_slug(&row_items, &st.rec_slug) {
-                    if let Some(Some(rit)) = row_items.get(ridx) {
-                        ops.push((ridx, true, rit.clone()));
-                    }
-                }
-            }
-            // environment opcional → terminal (só se marcado + método escolhido).
-            let do_env = app.global::<Mp>().get_env_check() && !st.env_lang.is_empty();
-            let env_method = app.global::<Mp>().get_method_sel().to_string();
-            app.global::<Mp>().set_open(false);
-            run_batch(weak.clone(), ops);
-            if do_env && !env_method.is_empty() {
-                // O environment ainda é instalado a partir daqui: o modal do marketplace
-                // oferece instalar a linguagem junto com a skill, e isso não é a lista do
-                // mercado — é um passo do fluxo de instalar skill.
-                let label = run_env_action("install", &st.env_lang, &env_method);
-                // A mensagem vai para a barra de status das skills, e só. Antes ela era
-                // refletida também no card da aba Environments; aquela aba deixou de desenhar
-                // a lista (ADR-0012), então não há mais card onde refletir.
-                app.global::<Sk>().set_status(SharedString::from(label));
-            }
-        });
-    }
+    // O MODAL DE INSTALAÇÃO saiu com a tela (E5 da extradição).
+    //
+    // Ele oferecia instalar a skill, a recomendada e o environment da linguagem num passo só.
+    // As duas primeiras são do `schematize-skills`, que agora tem a janela delas; a terceira
+    // já era do market. O que ficava aqui era a COSTURA entre três donos — e costura num
+    // quarto lugar é onde a divergência nasce.
 }
 
 /// **O quê:** abre a janela do Deployer na aba pedida, e conta à tela o que aconteceu.

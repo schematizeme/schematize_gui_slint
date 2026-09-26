@@ -189,12 +189,15 @@ pub(crate) fn refresh_proj_models(
 /// Ações de skills instaladas (gui.json) → linhas do modelo Slint. Cada uma vira um botão na aba do
 /// projeto; Q.A./Pentest aparecem quando as skills schematize-engineering/pentest estão instaladas.
 pub(crate) fn skill_action_rows() -> Vec<SkillAction> {
-    schematize::guiactions::gui_actions()
+    // **Lido do BINÁRIO, e não do `gui.json` direto** (E5 da extradição). O formato é contrato
+    // com software de TERCEIRO, e um contrato com dois leitores é um conserto que só aparece
+    // metade — ver `crate::skillactions`.
+    crate::skillactions::ler()
         .into_iter()
         .map(|a| SkillAction {
-            label: a.label.into(),
-            command: a.command.into(),
-            needs_project: a.needs_project,
+            label: a.rotulo.into(),
+            command: a.comando.into(),
+            needs_project: a.precisa_projeto,
             skill: a.skill.into(),
         })
         .collect()

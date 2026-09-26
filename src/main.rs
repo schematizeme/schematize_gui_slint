@@ -23,7 +23,6 @@ slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/
 // módulos abaixo. `prelude` centraliza os imports comuns (inclusive os tipos que o
 // `include_modules!()` acima gera).
 mod lockpin; // guarda: o Cargo.lock tem que pinar um commit do CLI, não um caminho local
-mod marketlink; // a ponte para o market: quais métodos de instalação existem aqui
 mod prelude;
 
 mod checklist; // paginação PURA do checklist (o que segura o custo de render)
@@ -41,8 +40,7 @@ mod odmonitor; // monitor leve do .schematize/overdev/ (thread -> UI)
 mod odproj; // projetos, caminhos e parse do CHECKLIST 2-níveis
 mod quizmodel; // parser PURO da fila de quiz do overdev
 mod repulsion; // repulsão do grafo em grade espacial (era O(n²)/quadro)
-mod skilljobs; // trabalho de skills fora do event loop (rede/IO em thread)
-mod skillrows; // linhas e paginação da lista de skills
+mod skillactions; // os botões que as skills declaram, lidos do BINÁRIO (E5)
 mod spiral; // semente de posição dos nós do grafo (espiral áurea)
 mod sysenv; // integração com o sistema (processo, PATH, terminal, editor)
 mod wire; // FIAÇÃO da janela: um módulo por recorte da UI (ver wire/mod.rs)
@@ -58,8 +56,6 @@ use odhistory::*;
 use odload::*;
 use odmonitor::*;
 use odproj::*;
-use skilljobs::*;
-use skillrows::*;
 use sysenv::*;
 
 /// **O quê:** o número da tela pedida em `--tela <nome>`, ou `None` se ninguém pediu.
@@ -102,58 +98,25 @@ fn main() -> Result<(), slint::PlatformError> {
     detect_display_env();
     set_window_app_id();
 
-    let items = registry::catalog();
-    eprintln!("[catalog] {} skills (via schematize::registry::catalog)", items.len());
-    let (rows, row_items) = build_rows(&items);
-    let row_items = Rc::new(row_items);
-    let model = Rc::new(VecModel::from(rows));
-
     let app = AppWindow::new()?;
     install_i18n(&app);
     // Logo da janela (título/taskbar) — mesma marca do egui.
     // Ícone da janela DESENHADO em código (resiliente — sem depender de arquivo).
     app.set_app_icon(make_app_icon());
-    // Ações declaradas por skills instaladas (gui.json) → botões (Q.A., Pentest, …) na aba do projeto.
+    // Ações declaradas por skills instaladas → botões (Q.A., Pentest, …) na aba do projeto.
+    //
+    // **Isto NÃO saiu na E5, e é de propósito.** É o único ponto em que uma skill de TERCEIRO
+    // declara UI dentro desta janela; o contrato é dela com o hub, não com o app de skills.
+    // Movê-lo quebraria software de fora — ver `src/skillactions.rs`.
     app.global::<Od>()
         .set_skill_actions(ModelRc::from(Rc::new(VecModel::from(skill_action_rows()))));
     // Versão do app (Configurações) — ex.: "schematize v0.49.0".
     app.global::<App>().set_version(format!("schematize v{}", upgrade::app_version()).into());
-    app.global::<Sk>().set_rows(ModelRc::from(model.clone()));
-    update_status(&app);
-    recompute_headers(&app); // esconde cabeçalhos de página sem itens
-
-    // Página inicial: Instaladas (0). Se NADA estiver instalado, abre no
-    // Marketplace (1) — senão o usuário cai numa lista vazia.
-    if !model.iter().any(|r| !r.is_header && is_installed(&r)) {
-        app.set_active_tab(1);
-    }
-    // Recomputa a paginação para a aba inicial efetiva (o handler `changed active-tab`
-    // ainda não está ligado neste ponto — recomputa explicitamente).
-    recompute_pagination(&app);
-
-    // Resolve o latest de todas as skills assim que a janela sobe (não bloqueia).
-    kick_resolve_all(&app.as_weak(), &row_items);
-    // Busca as notas do marketplace (1 request, thread) e preenche os badges por slug.
-    kick_market_ratings(app.as_weak());
-
-    // ---- índices auxiliares p/ o modal do marketplace ----
+    // O CATÁLOGO, a paginação, as notas e o modal de instalação saíram daqui na E5.
     //
-    // A LISTA do mercado saiu daqui: ela é da janela do market (ADR-0012), e a aba "Mercado"
-    // apenas a abre. O MÓDULO `environments` saiu junto: ele era uma cópia do que vive no
-    // market, e as duas já haviam divergido — o market ganhou o caminho de repo de fornecedor
-    // (o que consertou o `exit 104` do `csharp`/zypper) e esta cópia ficou com a versão que
-    // RECUSAVA e mandava a pessoa adicionar o repo à mão.
-    //
-    // O que sobrou é esta pergunta, e ela agora é feita ao DONO: o modal oferece instalar o
-    // environment de uma linguagem junto com a skill, e para desenhar os chips de método
-    // precisa saber quais existem nesta máquina. Sem market instalado vem vazio, e o modal
-    // simplesmente não oferece — a skill instala do mesmo jeito (piso 10).
-    let envs = marketlink::ler();
-    let env_methods = Rc::new(envs.metodos);
-    let env_langs = Rc::new(envs.linguagens);
-
-    // estado do modal de instalação (lado Rust).
-    let modal = Rc::new(RefCell::new(ModalState::default()));
+    // Este arquivo montava a lista inteira de skills ao subir — leitura de catálogo, resolução
+    // de versão por rede e badges de nota — antes de a janela aparecer. Quem faz isso agora é o
+    // `schematize-skills`, na janela dele, e este hub só aponta o caminho.
 
     // ==================== aba Grafo ====================
     // Estado (dono da física + transformação), dois VecModel (nós/arestas) e o
@@ -269,11 +232,6 @@ fn main() -> Result<(), slint::PlatformError> {
     // módulo clona (Rc/Arc, barato) só o que usa. Fiação DEPOIS do estado inicial,
     // pra nenhum callback disparar antes de a janela estar consistente.
     let cx = wire::Ctx {
-        row_items,
-        model,
-        modal,
-        env_methods,
-        env_langs,
         graph_state,
         graph_nodes,
         graph_edges,
@@ -290,9 +248,7 @@ fn main() -> Result<(), slint::PlatformError> {
         od_commits_all,
         od_commits_model,
     };
-    wire::skills::wire(&app, &cx);
     wire::envs::wire(&app, &cx);
-    wire::manage::wire(&app, &cx);
     wire::overdev::wire(&app, &cx);
     wire::quiz::wire(&app, &cx);
     wire::odhistory::wire(&app, &cx);
@@ -301,7 +257,6 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::settings::wire(&app, &cx);
     wire::appversion::wire(&app, &cx);
     wire::notificacoes::wire(&app, &cx);
-    wire::comparar::wire(&app, &cx);
     wire::account::wire(&app, &cx);
 
     app.run()
@@ -313,6 +268,10 @@ mod tests {
 
     /// Cria um `.overdev/CHECKLIST.md` temporário e ÚNICO (testes rodam em paralelo).
     fn scratch(checklist: &str) -> std::path::PathBuf {
+        // Importado AQUI e não no prelude: depois da E5, o único uso de `AtomicUsize` neste
+        // crate é este contador de teste, e um `pub(crate) use` que só os testes consomem é
+        // import morto no build de produção — o `-D warnings` o pega, com razão.
+        use std::sync::atomic::AtomicUsize;
         static SEQ: AtomicUsize = AtomicUsize::new(0);
         let uniq = SEQ.fetch_add(1, Ordering::SeqCst);
         let base =

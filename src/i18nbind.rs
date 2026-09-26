@@ -25,32 +25,11 @@ pub(crate) fn tor(key: &str, fallback: &str) -> String {
 pub(crate) fn install_i18n(app: &AppWindow) {
     let l = app.global::<L>();
     l.set_window_title("schematize".into());
-    l.set_check(t("gui.check").into());
-    l.set_update_all(t("gui.update_all").into());
-    l.set_update_installed_only(t("gui.update_installed_only").into());
-    l.set_update_sel(t("gui.update_sel").into());
-    l.set_install_sel_market(t("gui.install_sel_market").into());
-    l.set_remove_sel(t("gui.remove_sel").into());
-    l.set_sel_label(t("gui.sel_label").into());
-    l.set_sel_all(t("gui.sel_all").into());
-    l.set_sel_pending(t("gui.sel_pending").into());
-    l.set_sel_none(t("gui.sel_none").into());
-    l.set_col_skill(t("gui.col_skill").into());
-    l.set_col_author(t("gui.col_author").into());
-    l.set_col_installed(t("gui.col_installed").into());
-    l.set_col_latest(t("gui.col_latest").into());
-    l.set_col_state(t("gui.col_state").into());
-    l.set_col_actions(t("gui.col_actions").into());
     // Tooltip do selo verificado (só o check + hover; sem texto ao lado).
     l.set_verified(t("gui.verified_badge").into());
-    l.set_tab_installed(t("gui.tab_installed").into());
-    l.set_tab_marketplace(t("gui.tab_marketplace").into());
     l.set_tab_overdev(t("gui.tab_overdev").into());
     l.set_tab_graph(t("gui.tab_graph").into());
     l.set_coming_soon(t("gui.coming_soon").into());
-    l.set_act_install(t("gui.install").into());
-    l.set_act_update(t("gui.update").into());
-    l.set_act_remove(t("gui.uninstall").into());
     // aba Environments
     l.set_tab_environments(t("gui.tab_environments").into());
     l.set_mercado_title(t("gui.mercado_title").into());
@@ -79,12 +58,13 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_optimizer_open_disco(t("gui.optimizer_open_disco").into());
     l.set_optimizer_missing(t("gui.optimizer_missing").into());
     l.set_optimizer_install(t("gui.optimizer_install").into());
-    l.set_env_method(t("gui.env_method").into());
-    l.set_env_no_methods(t("gui.env_no_methods").into());
+    l.set_skills_title(t("gui.skills_title").into());
+    l.set_skills_body(t("gui.skills_body").into());
+    l.set_skills_open(t("gui.skills_open").into());
+    l.set_skills_missing(t("gui.skills_missing").into());
+    l.set_skills_install(t("gui.skills_install").into());
+    l.set_skills_tab(t("gui.skills_tab").into());
     // modal de instalação do Marketplace
-    l.set_mp_recommends_note(t("gui.mp_recommends_note").into());
-    l.set_mp_env_note(t("gui.mp_env_note").into());
-    l.set_mp_confirm(t("gui.mp_confirm").into());
     l.set_mp_cancel(t("gui.mp_cancel").into());
     // aba Overdev (seletor de projeto + view) — reusa as chaves do egui.
     l.set_project(t("gui.project").into());
@@ -202,7 +182,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_open_vscode(tor("gui.open_vscode", "Abrir no VSCode").into());
     l.set_open_loose_project(tor("gui.open_loose_project", "Abrir projeto avulso…").into());
     // aba Gerenciar (criar + editar skills) — chaves NOVAS via `tor`. Ver relatório.
-    l.set_manage(tor("gui.manage", "Gerenciar").into());
     // Tela SSH — chaves NOVAS via `tor`.
     // SSH — entropia (do lib, por tipo) + prova + Bitwarden. Chaves NOVAS via `tor`.
     // Tela Configurações — chaves NOVAS via `tor`.
@@ -274,14 +253,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_notif_open(tor("gui.notif_open", "Abrir").into());
     l.set_notif_go_installed(tor("gui.notif_go_installed", "Ver instaladas").into());
     // Fork + comparar.
-    l.set_fork_badge(tor("gui.fork_badge", "fork").into());
-    l.set_compare_official(tor("gui.compare_official", "Comparar com oficial").into());
-    l.set_compare_note(tor(
-        "gui.compare_note",
-        "Comparar NÃO sobrescreve nada — apenas mostra as diferenças entre o seu fork e a versão oficial nova.",
-    ).into());
-    l.set_compare_files(tor("gui.compare_files", "Arquivos").into());
-    l.set_compare_loading(tor("gui.compare_loading", "Comparando…").into());
     // Conta (login via device flow) — chaves NOVAS via `tor`.
     l.set_acc_section(tor("gui.acc_section", "Conta").into());
     l.set_acc_login(tor("gui.acc_login", "Entrar na plataforma").into());

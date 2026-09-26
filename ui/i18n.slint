@@ -3,31 +3,10 @@
 
 export global L {
     in-out property <string> window-title: "schematize";
-    in-out property <string> check;
-    in-out property <string> update-all;
-    in-out property <string> update-installed-only; // texto-guia do "Atualizar tudo"
-    in-out property <string> update-sel;
-    in-out property <string> install-sel-market;
-    in-out property <string> remove-sel;
-    in-out property <string> sel-label;
-    in-out property <string> sel-all;
-    in-out property <string> sel-pending;
-    in-out property <string> sel-none;
-    in-out property <string> col-skill;
-    in-out property <string> col-author;
-    in-out property <string> col-installed;
-    in-out property <string> col-latest;
-    in-out property <string> col-state;
-    in-out property <string> col-actions;
     in-out property <string> verified;   // tooltip do selo
-    in-out property <string> tab-installed;
-    in-out property <string> tab-marketplace;
     in-out property <string> tab-overdev;
     in-out property <string> tab-graph;
     in-out property <string> coming-soon;
-    in-out property <string> act-install;
-    in-out property <string> act-update;
-    in-out property <string> act-remove;   // "Desinstalar" por-linha
     // aba Environments
     in-out property <string> tab-environments;
     // Aba MERCADO — o hub delega a janela do market (ADR-0012). As chaves `env-*` abaixo
@@ -63,12 +42,15 @@ export global L {
     in-out property <string> optimizer-open-disco;
     in-out property <string> optimizer-missing;
     in-out property <string> optimizer-install;
-    in-out property <string> env-method;      // "Método:"
-    in-out property <string> env-no-methods;  // nenhum método disponível
+    // Delegação das SKILLS (E5 da extradição, ADR-0012 F4).
+    in-out property <string> skills-title;
+    in-out property <string> skills-body;
+    in-out property <string> skills-open;
+    in-out property <string> skills-missing;
+    in-out property <string> skills-install;
+    /// O rótulo da sub-aba. Curto de propósito: ele divide espaço com "Ambientes" numa barra.
+    in-out property <string> skills-tab;
     // modal de instalação do Marketplace (dep opcional + environment opcional)
-    in-out property <string> mp-recommends-note; // "Recomenda a skill base:"
-    in-out property <string> mp-env-note;         // "o environment mexe na máquina / roda em terminal"
-    in-out property <string> mp-confirm;          // "Instalar"
     in-out property <string> mp-cancel;           // "Cancelar"
     // aba Overdev (seletor de projeto + view)
     in-out property <string> project;            // "Projeto:"
@@ -154,7 +136,6 @@ export global L {
     in-out property <string> open-vscode;            // "Abrir no VSCode"
     in-out property <string> open-loose-project;     // "Abrir projeto avulso…" (no modal)
     // ---- aba Gerenciar (criar + editar skills) — chaves NOVAS via `tor` ----
-    in-out property <string> manage;                 // sub-aba "Gerenciar"
     // ---- Tela SSH (chaves) — chaves NOVAS via `tor` ----
     // ---- Tela Configurações — chaves NOVAS via `tor` ----
     in-out property <string> cfg-title;
@@ -211,11 +192,6 @@ export global L {
     in-out property <string> notif-go-installed;      // ação skill_outdated: "Ver instaladas"
 
     // ---- fork + comparar ----
-    in-out property <string> fork-badge;              // "fork"
-    in-out property <string> compare-official;        // "Comparar com oficial"
-    in-out property <string> compare-note;            // "Comparar NÃO sobrescreve nada"
-    in-out property <string> compare-files;           // "Arquivos"
-    in-out property <string> compare-loading;         // "Comparando…"
 
     // ---- Conta (login via device flow) ----
     in-out property <string> acc-section;              // título da seção "Conta"

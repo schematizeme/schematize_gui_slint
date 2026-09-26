@@ -111,13 +111,16 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
                         util::open_url(&url);
                     }
                 }
-                // skill desatualizada → leva pra aba Instaladas do Mercado.
+                // Skill desatualizada → leva à aba de Skills, que agora DELEGA.
+                //
+                // A paginação e a lista saíram na E5: quem desenha skill é a janela do
+                // `schematize-skills`. O que a notificação faz é o que ela sempre fez —
+                // levar a pessoa ao lugar certo —, e o lugar certo passou a ser a tela que
+                // abre aquela janela.
                 "skill_outdated" => {
                     app.global::<Notif>().set_open(false);
                     app.set_screen(1);
                     app.set_active_tab(0);
-                    app.global::<Mp>().set_page(0);
-                    recompute_pagination(&app);
                 }
                 // Rótulo livre do servidor: INERTE de propósito. Ele chega saneado e
                 // serve pra texto/ícone — nunca pra decidir comportamento.

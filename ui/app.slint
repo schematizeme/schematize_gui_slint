@@ -25,15 +25,12 @@ import { SettingsScreen } from "screen_settings.slint";
 import { GraphScreen } from "screen_graph.slint";
 import { OverdevScreen } from "screen_overdev.slint";
 import { TelaDelegada } from "screen_delegado.slint";
-import { SkillsScreen } from "screen_skills.slint";
-import { InstallModal } from "modal_install.slint";
 import { DevDirsModal } from "modal_devdirs.slint";
 import { RunConfirmModal } from "modal_runconfirm.slint";
 import { SnapConfirmModal } from "modal_snapconfirm.slint";
 import { SnapViewModal } from "modal_snapview.slint";
 import { NotifModal } from "modal_notif.slint";
 import { AccountModal } from "modal_account.slint";
-import { CompareModal } from "modal_compare.slint";
 import { ResolveModal } from "modal_resolve.slint";
 import { LangModal } from "modal_lang.slint";
 
@@ -415,25 +412,19 @@ export component AppWindow inherits Window {
                 padding-bottom: 8px;
                 spacing: 8px;
                 alignment: start;
+                // DUAS sub-abas, e não quatro. "Instaladas", "Marketplace" e "Gerenciar" eram
+                // três faces do MESMO app (catálogo, instaladas, autoria) e foram para a janela
+                // dele na E5 — manter três botões que abrem a mesma janela seria a barra
+                // fingindo uma escolha que não existe mais.
                 TabBtn {
-                    label: L.tab-installed;
+                    label: L.skills-tab;
                     active: root.active-tab == 0;
                     clicked => { root.active-tab = 0; }
-                }
-                TabBtn {
-                    label: L.tab-marketplace;
-                    active: root.active-tab == 1;
-                    clicked => { root.active-tab = 1; }
                 }
                 TabBtn {
                     label: L.tab-environments;
                     active: root.active-tab == 2;
                     clicked => { root.active-tab = 2; }
-                }
-                TabBtn {
-                    label: L.manage;
-                    active: root.active-tab == 3;
-                    clicked => { root.active-tab = 3; Mg.refresh-skills(); }
                 }
             }
         }
@@ -494,7 +485,23 @@ export component AppWindow inherits Window {
         }
 
         // ---- páginas Instaladas (0) e Marketplace (1) -----------------
-        if root.screen == 1 && root.active-tab <= 1: SkillsScreen { active-tab <=> root.active-tab; }
+        // ---- aba SKILLS (tela 1, sub-aba 0) — DELEGA a janela do schematize-skills ----
+        // Catálogo, instaladas, criação e edição saíram daqui com os módulos que as
+        // alimentavam (E5 da extradição, ADR-0012 F4). Skill é conteúdo de TERCEIRO — um
+        // domínio que aceita extensão de fora tem ciclo próprio de release, e prendê-lo ao
+        // ciclo do hub faz um conserto de catálogo esperar por um conserto de janela.
+        if root.screen == 1 && root.active-tab == 0: TelaDelegada {
+            titulo: L.skills-title;
+            corpo: L.skills-body;
+            rotulo-abrir: L.skills-open;
+            rotulo-ausente: L.skills-missing;
+            rotulo-instalar: L.skills-install;
+            presente: Cfg.skills-presente;
+            cmd: Cfg.skills-cmd;
+            msg: Cfg.skills-msg;
+            abrir => { Cfg.skills-abrir(); }
+            instalar => { Cfg.skills-instalar(); }
+        }
     }
 
     // ---- MODAL de instalação (Marketplace) ----------------------------
@@ -503,7 +510,6 @@ export component AppWindow inherits Window {
     // da linguagem (runtime+ferramentas) por um método disponível nesta máquina.
     // Nada é marcado por padrão — a recomendada e o environment só entram se o
     // usuário marcar. O environment roda num TERMINAL (consentimento honesto).
-    if Mp.open: InstallModal { }
 
     // ---- MODAL de diretórios de dev (aberto pela ProjectBar) ----------
     // TODA a gestão de dev_dirs vive AQUI (fora da tela principal): listar,
@@ -540,7 +546,6 @@ export component AppWindow inherits Window {
     // ---- PAINEL de comparação (fork ativo vs nova oficial) --------------
     // Só LEITURA: base→nova, lista de arquivos com status e o diff monoespaçado.
     // Deixa explícito que comparar NÃO sobrescreve nada.
-    if Cmp.open: CompareModal { }
 
     // ---- VISOR read-only do SQL/migration gerado (Database builder) -----
     // Mostra o resultado de to_sql/to_migration num TextEdit mono + botão de salvar.

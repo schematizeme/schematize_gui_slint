@@ -1,6 +1,13 @@
 //! Histórico do overdev na aba Overdev: snapshots do DB local e commits do git,
 //! ambos PAGINADOS no Rust (a UI recebe uma página por vez).
 
+/// Tamanho da página das listas paginadas desta aba (snapshots e commits).
+///
+/// **Veio do `skillrows.rs`, que saiu na E5.** Lá ele era compartilhado com as listas de
+/// skills — um `PAGE` só para três telas de assuntos diferentes. Com as skills fora, ele não
+/// tinha mais por que morar longe de quem o usa: a paginação desta aba é decisão desta aba.
+pub(crate) const PAGE: usize = 20;
+
 use crate::prelude::*;
 
 /// Uma página do histórico do DB (metadados → SnapRow).

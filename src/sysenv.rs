@@ -131,6 +131,9 @@ pub(crate) const GIT_GUI_BINS: [&str; 1] = ["schematize-git-gui"];
 /// Nome da JANELA do optimizer — a que a tela de Disco passa a abrir (E3 da extradição).
 pub(crate) const OPTIMIZER_GUI_BINS: [&str; 1] = ["schematize-optimizer-gui"];
 
+/// Nome da JANELA das skills — a que a aba de Skills passa a abrir (E5, ADR-0012 F4).
+pub(crate) const SKILLS_GUI_BINS: [&str; 1] = ["schematize-skills-gui"];
+
 /// **O quê:** localiza um binário irmão para montar comando de terminal — primeiro ao lado do
 /// executável atual, senão no `$PATH`, senão devolve o nome canônico.
 ///
@@ -258,6 +261,18 @@ pub(crate) fn git_bin() -> Option<String> {
 /// **O quê:** o caminho da janela do OPTIMIZER. **Onde:** a tela de Disco.
 pub(crate) fn optimizer_gui_bin() -> Option<String> {
     gui_de_app(&OPTIMIZER_GUI_BINS)
+}
+
+/// **O quê:** o caminho do binário HEADLESS das skills, ou `None` se não está instalado.
+///
+/// **Onde:** [`crate::skillactions`], que lê os botões declarados pelas skills.
+pub(crate) fn skills_bin() -> Option<String> {
+    gui_de_app(&["schematize-skills"])
+}
+
+/// **O quê:** o caminho da janela das SKILLS. **Onde:** a aba de Skills.
+pub(crate) fn skills_gui_bin() -> Option<String> {
+    gui_de_app(&SKILLS_GUI_BINS)
 }
 
 /// **O quê:** abre a janela de um app, desacoplada deste processo. `false` se não deu.

@@ -24,6 +24,19 @@ use schematize::gestorboot;
 
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
+    // ---- relançar o app (janela nova), depois do self-update ----
+    //
+    // **Esta linha veio do `wire/skills.rs`, e a E5 quase a levou junto.** Ela morava lá por
+    // acidente histórico — o self-update nasceu ao lado da lista de skills. Ao apagar aquele
+    // arquivo, o `restart_app` ficou sem NENHUM chamador e o `-D warnings` o apontou: o botão
+    // «Reiniciar» que aparece depois de uma atualização teria ficado inerte, e nada mais
+    // reprovaria isso — um callback do `.slint` sem fiação não dá erro, ele só não faz nada.
+    //
+    // O lugar dele é aqui: reiniciar é o último passo do fluxo de VERSÃO.
+    {
+        app.global::<App>().on_restart(move || crate::sysenv::restart_app());
+    }
+
     // ==================== Versão do app + self-update ====================
     // "Verificar atualização" → `marketstatus::ler()` em thread; se há versão nova,
     // acende o botão "Atualizar app" que roda selfupdate::run() em thread e, ao

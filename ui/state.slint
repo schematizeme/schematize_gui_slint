@@ -97,6 +97,12 @@ export global Cfg {
     in-out property <string> optimizer-msg;
     callback optimizer-abrir-disco();
     callback optimizer-instalar();
+
+    in-out property <bool> skills-presente: false;
+    in-out property <string> skills-cmd;
+    in-out property <string> skills-msg;
+    callback skills-abrir();
+    callback skills-instalar();
     in-out property <[EnvRow]> rows;
     in-out property <[LangItem]> langs;
     in-out property <string> lang-code;   // código do idioma atual

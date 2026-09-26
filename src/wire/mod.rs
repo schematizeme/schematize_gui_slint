@@ -15,27 +15,19 @@ use crate::prelude::*;
 pub(crate) mod account;
 pub(crate) mod appversion;
 pub(crate) mod caixa;
-pub(crate) mod comparar;
 pub(crate) mod envs;
 pub(crate) mod graph;
-pub(crate) mod manage;
 pub(crate) mod notificacoes;
 pub(crate) mod odhistory;
 pub(crate) mod overdev;
 pub(crate) mod quiz;
 pub(crate) mod settings;
-pub(crate) mod skills;
 
 /// Estado compartilhado pelos callbacks da janela.
 ///
 /// Tudo aqui é `Rc`/`Arc`: clonar é barato e é assim que cada callback leva
 /// sua referência pro `move`. Nada de dado grande por valor.
 pub(crate) struct Ctx {
-    pub(crate) row_items: Rc<Vec<Option<Item>>>,
-    pub(crate) model: Rc<VecModel<SkillRow>>,
-    pub(crate) modal: Rc<RefCell<ModalState>>,
-    pub(crate) env_methods: Rc<HashMap<String, Vec<String>>>,
-    pub(crate) env_langs: Rc<HashSet<String>>,
     pub(crate) graph_state: Rc<RefCell<GraphState>>,
     pub(crate) graph_nodes: Rc<VecModel<GraphNode>>,
     pub(crate) graph_edges: Rc<VecModel<GraphEdge>>,
