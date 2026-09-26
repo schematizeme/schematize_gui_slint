@@ -29,6 +29,12 @@ const COMANDO_INSTALAR_DEPLOYER: &str =
 const COMANDO_INSTALAR_DATABASE: &str =
     "cargo install --git https://github.com/schematizeme/schematize_database_rs --bins";
 
+/// O comando que instala a janela do Git. O `--bins` pela mesma razão do database: a janela é
+/// o SEGUNDO binário do repo do CLI dele (ADR-0020), e o cargo recusa um pacote com mais de um
+/// binário sem a flag.
+const COMANDO_INSTALAR_GIT: &str =
+    "cargo install --git https://github.com/schematizeme/schematize_git_rs --bins";
+
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     let row_items = cx.row_items.clone();
@@ -186,6 +192,51 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_DATABASE)])
             };
             a.global::<Cfg>().set_database_msg(msg.into());
+        });
+    }
+
+    // ==================== tela DELEGADA ao git ====================
+    //
+    // Contas, o que ainda não saiu desta máquina e os repositórios saíram daqui com o módulo
+    // `githist` (E2 da extradição, ADR-0019). E havia um motivo a mais: aplicar identidade e
+    // escrever alias podem PEDIR CREDENCIAL, e uma janela Slint não tem como responder a um
+    // prompt — lá as duas ações abrem TERMINAL, que é onde o git e o ssh sabem perguntar.
+    {
+        let cfg = app.global::<Cfg>();
+        cfg.set_git_presente(crate::sysenv::git_gui_bin().is_some());
+        cfg.set_git_cmd(SharedString::from(COMANDO_INSTALAR_GIT));
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_git_abrir(move || {
+            let Some(a) = weak.upgrade() else { return };
+            // Sem flag de aba: a janela do git abre em Projetos, que é a pergunta mais urgente
+            // que ela responde — o que pode sumir com a máquina.
+            if crate::sysenv::abrir_gui(crate::sysenv::git_gui_bin(), None) {
+                a.global::<Cfg>().set_git_msg(SharedString::new());
+                return;
+            }
+            a.global::<Cfg>().set_git_presente(false);
+            a.global::<Cfg>().set_git_msg(SharedString::from(
+                "não consegui abrir a janela do Git — ela ainda está instalada?",
+            ));
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_git_instalar(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let inner = format!(
+                "echo '── {COMANDO_INSTALAR_GIT} ──'; echo; \
+                 {COMANDO_INSTALAR_GIT}; \
+                 echo; read -n1 -s -r -p '…'"
+            );
+            let msg = if launch_terminal(&inner) {
+                t("gui.env_terminal_opened")
+            } else {
+                tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_GIT)])
+            };
+            a.global::<Cfg>().set_git_msg(msg.into());
         });
     }
 

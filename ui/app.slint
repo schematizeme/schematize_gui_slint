@@ -13,7 +13,7 @@ import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { L } from "i18n.slint";
 import {
-    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow,
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, SnapRow, CommitRow, NotifItem, CmpFile, DiscoTotal, DiscoRow, DockerRow,
 } from "types.slint";
 import {
     VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
@@ -27,7 +27,6 @@ import { OverdevScreen } from "screen_overdev.slint";
 import { TelaDelegada } from "screen_delegado.slint";
 import { SkillsScreen } from "screen_skills.slint";
 import { DiscoScreen } from "screen_disco.slint";
-import { GitScreen } from "screen_git.slint";
 import { InstallModal } from "modal_install.slint";
 import { DevDirsModal } from "modal_devdirs.slint";
 import { RunConfirmModal } from "modal_runconfirm.slint";
@@ -39,7 +38,6 @@ import { CompareModal } from "modal_compare.slint";
 import { DiscoConfirmModal } from "modal_discoconfirm.slint";
 import { ResolveModal } from "modal_resolve.slint";
 import { LangModal } from "modal_lang.slint";
-import { GitConfirmModal } from "modal_gitconfirm.slint";
 
 // Reexporta os globais que o RUST acessa (`app.global::<L>()`): só o que sai do
 // arquivo de entrada aparece na API gerada.
@@ -47,8 +45,8 @@ export { L } from "i18n.slint";
 export { Theme } from "theme.slint";
 // Estado de tela por área (globals). Reexportado porque o Rust acessa via
 // `app.global::<Od>()` — só o que sai do arquivo de entrada vira API gerada.
-import { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
-export { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App, Dsk, Gh } from "state.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App, Dsk } from "state.slint";
+export { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App, Dsk } from "state.slint";
 
 export component AppWindow inherits Window {
     title: L.window-title;
@@ -150,7 +148,6 @@ export component AppWindow inherits Window {
         // Git: o resumo é barato o bastante pra abrir já preenchido (walk + git por
         // repo, em thread). Disco NÃO: medir GB de árvore é caro e não pode disparar
         // sozinho — a tela abre pedindo "Varrer".
-        if (root.screen == 8) { Gh.refresh(); }
     }
 
     VerticalLayout {
@@ -379,11 +376,24 @@ export component AppWindow inherits Window {
             instalar => { Cfg.deployer-instalar(); }
         }
 
-        // ---- TELA GIT (8) — contas, o que falta enviar, repositórios -------
-        // Contas cadastradas (sem segredo: só o NOME da chave), qual identidade
-        // vale em cada repo, quantos commits só existem NESTA máquina, e os
-        // repositórios do serviço via `gh`.
-        if root.screen == 8: GitScreen {  }
+        // ---- tela GIT (8) — DELEGA a janela do schematize-git -------------
+        // Contas, o que ainda não saiu desta máquina e os repositórios do serviço saíram daqui
+        // com o módulo que os alimentava (E2 da extradição, ADR-0018/0019). E havia um motivo
+        // a mais para a tela não morar aqui: aplicar identidade e escrever alias podem PEDIR
+        // CREDENCIAL, e uma janela Slint não tem como responder a um prompt — ela ficaria
+        // pendurada. Lá as duas ações abrem TERMINAL, que é onde o git e o ssh sabem perguntar.
+        if root.screen == 8: TelaDelegada {
+            titulo: L.git-title;
+            corpo: L.git-body;
+            rotulo-abrir: L.git-open;
+            rotulo-ausente: L.git-missing;
+            rotulo-instalar: L.git-install;
+            presente: Cfg.git-presente;
+            cmd: Cfg.git-cmd;
+            msg: Cfg.git-msg;
+            abrir => { Cfg.git-abrir(); }
+            instalar => { Cfg.git-instalar(); }
+        }
 
         // ---- barra de sub-abas do MERCADO (só na tela Mercado) --------
         if root.screen == 1: Rectangle {
@@ -530,7 +540,6 @@ export component AppWindow inherits Window {
     if Dsk.confirm-open: DiscoConfirmModal { }
 
     // ---- CONFIRMAÇÃO de aplicar uma conta a um repositório --------------
-    if Gh.confirm-open: GitConfirmModal { }
 
     // ---- RESOLVER item humano (responder libera a máquina · recusar cancela) ----
     if Od.resolve-open: ResolveModal { }

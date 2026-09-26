@@ -1,6 +1,6 @@
 import {
     SkillRow, EnvRow, LangItem, ProjItem, OverItem, SnapRow, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction,
-    DiscoTotal, DiscoRow, DockerRow, GitAccountRow, GitProjRow, GitRepoRow, QuizItem, QuizOpcao,
+    DiscoTotal, DiscoRow, DockerRow, QuizItem, QuizOpcao,
     } from "types.slint";
 
 // Estado de TELA da GUI, agrupado por área — um `global` por recorte.
@@ -85,6 +85,12 @@ export global Cfg {
     in-out property <string> database-msg;
     callback database-abrir();
     callback database-instalar();
+
+    in-out property <bool> git-presente: false;
+    in-out property <string> git-cmd;
+    in-out property <string> git-msg;
+    callback git-abrir();
+    callback git-instalar();
     in-out property <[EnvRow]> rows;
     in-out property <[LangItem]> langs;
     in-out property <string> lang-code;   // código do idioma atual
@@ -461,41 +467,11 @@ export global Dsk {
 }
 
 // GIT — contas, o que ainda não saiu da máquina, e os repositórios do serviço.
-export global Gh {
-    in-out property <int> section: 0;            // 0 = Projetos · 1 = Contas · 2 = Repositórios
-    in-out property <[GitAccountRow]> accounts;
-    in-out property <[GitProjRow]> projects;
-    in-out property <[GitRepoRow]> repos;
-    in-out property <[CommitRow]> commits;       // histórico do projeto selecionado
-    in-out property <string> commits-of;         // nome do projeto cujos commits estão à vista
-    in-out property <bool> loading-projects: false;
-    in-out property <bool> loading-repos: false;
-    in-out property <bool> scanned: false;
-    in-out property <int> at-risk: 0;            // projetos com commit só nesta máquina
-    in-out property <string> status;
-    in-out property <bool> status-error: false;
-    // cadastro de conta (form)
-    in-out property <string> new-rotulo;
-    in-out property <string> new-usuario;
-    in-out property <string> new-email;
-    in-out property <string> new-servico: "github.com";
-    in-out property <string> new-chave;          // NOME do arquivo em ~/.ssh (vazio = conta `gh`)
-    in-out property <string> form-status;
-    in-out property <bool> form-error: false;
-    // aplicar conta a um projeto
-    in-out property <string> sel-account;        // rótulo escolhido nos chips
-    in-out property <int> sel-project: -1;       // projeto selecionado (idx na lista completa)
-    in-out property <bool> confirm-open: false;
-    in-out property <string> confirm-msg;
-    callback refresh();                  // re-scaneia projetos (thread)
-    callback add-account();
-    callback remove-account(int);
-    callback write-alias(int);           // escreve o bloco no ~/.ssh/config
-    callback pick-account(string);
-    callback pick-project(int);          // seleciona e carrega os commits
-    callback apply-request();            // pede confirmação de aplicar sel-account em sel-project
-    callback confirm-yes();
-    callback confirm-no();
-    callback list-repos(string);         // `gh repo list` da conta (thread)
-    callback open-project(int);          // abre a pasta do projeto
-}
+// O global `Gh` foi embora com a tela (E2 M5 da extradição, ADR-0019).
+//
+// Contas, projetos, repositórios, commits, o modal de confirmação e as ações de aplicar
+// identidade e escrever alias SSH: tudo isso é do `schematize-git`, que tem app e janela
+// próprios. Enquanto morava aqui, existiam DUAS telas do mesmo produto — e este projeto já
+// pagou por isso quando as duas cópias de `environments/` divergiram.
+//
+// O que fica é o caminho até lá: `Cfg.git-*`, mais acima.

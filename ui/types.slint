@@ -239,38 +239,13 @@ export struct DockerRow {
 // Uma conta cadastrada (espelha `gitcontas::contas::Conta`). SEM SEGREDO: só o
 // NOME do arquivo de chave, nunca o conteúdo. `alias-ok` diz se o bloco do
 // ~/.ssh/config já existe — é o que faz o push sair pela identidade certa.
-export struct GitAccountRow {
-    rotulo: string,
-    usuario: string,
-    email: string,
-    servico: string,
-    auth: string,        // "ssh:<arquivo>" | "gh"
-    is-ssh: bool,
-    alias-ok: bool,
-    op-label: string,
-    op-error: bool,
-}
+// ---- Git (tela 8): os TRÊS structs saíram com a tela ------------------------
+//
+// `GitAccountRow`, `GitProjRow` e `GitRepoRow` espelhavam o domínio do git. Foram embora com a
+// tela e com o módulo (E2 M5 da extradição, ADR-0019): quem desenha conta e repositório agora
+// é a janela do `schematize-git`, e ela lê o `--json` do binário dele em vez de compartilhar
+// struct com ninguém.
 
-// O estado local de um repositório (espelha `gitcontas::repos::EstadoLocal`).
-// `unpushed` é a informação central: commit que só existe NESTA máquina.
-export struct GitProjRow {
-    idx: int,
-    nome: string,
-    raiz: string,
-    conta: string,       // rótulo da conta em uso, ou "? <e-mail>" se nenhuma casa
-    known-account: bool, // a identidade do repo casa com alguma conta cadastrada?
-    remoto: string,
-    unpushed: int,
-    sujo: bool,
-}
-
-// Um repositório no serviço (espelha `gitcontas::repos::Remoto`).
-export struct GitRepoRow {
-    caminho: string,
-    privado: bool,
-    descricao: string,
-    atualizado: string,
-}
 
 
 // Uma OPÇÃO clicável de um quiz do overdev.

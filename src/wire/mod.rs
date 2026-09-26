@@ -17,7 +17,6 @@ pub(crate) mod appversion;
 pub(crate) mod caixa;
 pub(crate) mod disco;
 pub(crate) mod envs;
-pub(crate) mod git;
 pub(crate) mod graph;
 pub(crate) mod manage;
 pub(crate) mod odhistory;

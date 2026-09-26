@@ -69,6 +69,11 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_database_open(t("gui.database_open").into());
     l.set_database_missing(t("gui.database_missing").into());
     l.set_database_install(t("gui.database_install").into());
+    l.set_git_title(t("gui.git_title").into());
+    l.set_git_body(t("gui.git_body").into());
+    l.set_git_open(t("gui.git_open_window").into());
+    l.set_git_missing(t("gui.git_missing").into());
+    l.set_git_install(t("gui.git_install").into());
     l.set_env_method(t("gui.env_method").into());
     l.set_env_no_methods(t("gui.env_no_methods").into());
     // modal de instalação do Marketplace
@@ -337,48 +342,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_home_git_desc(
         tor("gui.home_git_desc", "Contas, o que ainda não saiu daqui, e seus repositórios.").into(),
     );
-    l.set_git_projects(tor("gui.git_projects", "Projetos").into());
-    l.set_git_accounts(tor("gui.git_accounts", "Contas").into());
-    l.set_git_repos(tor("gui.git_repos", "Repositórios").into());
-    l.set_git_scanning(tor("gui.git_scanning", "lendo os repositórios…").into());
-    l.set_git_rescan(tor("gui.git_rescan", "Reler").into());
-    l.set_git_intro(tor(
-        "gui.git_intro",
-        "Git não guarda histórico de push — mas guarda o que ainda NÃO foi enviado. É isso que esta lista mostra: commit que só existe nesta máquina some com a máquina.",
-    ).into());
-    l.set_git_at_risk(
-        tor("gui.git_at_risk", "projeto(s) com commit que só existe nesta máquina.").into(),
-    );
-    l.set_git_no_remote(tor("gui.git_no_remote", "sem remoto").into());
-    l.set_git_dirty(tor("gui.git_dirty", "sujo").into());
-    l.set_git_open(tor("gui.git_open", "Abrir").into());
-    l.set_git_use_account(tor("gui.git_use_account", "Usar a conta neste repositório").into());
-    l.set_git_apply(tor("gui.git_apply", "Aplicar").into());
-    l.set_git_no_accounts(
-        tor("gui.git_no_accounts", "Nenhuma conta cadastrada — cadastre em Contas.").into(),
-    );
-    l.set_git_history(tor("gui.git_history", "Histórico").into());
-    l.set_git_accounts_intro(tor(
-        "gui.git_accounts_intro",
-        "Quem trabalha com mais de uma conta empurra commit com a identidade errada — e no GitHub isso é público. Cadastre cada conta uma vez e aplique-a por repositório.",
-    ).into());
-    l.set_git_write_alias(tor("gui.git_write_alias", "Escrever alias SSH").into());
-    l.set_git_alias_ok(tor("gui.git_alias_ok", "alias ok").into());
-    l.set_git_remove(tor("gui.git_remove", "Remover").into());
-    l.set_git_add_account(tor("gui.git_add_account", "CADASTRAR CONTA").into());
-    l.set_git_f_label(tor("gui.git_f_label", "rótulo (pessoal)").into());
-    l.set_git_f_user(tor("gui.git_f_user", "usuário no serviço").into());
-    l.set_git_f_email(tor("gui.git_f_email", "e-mail do commit").into());
-    l.set_git_f_service(tor("gui.git_f_service", "serviço").into());
-    l.set_git_f_key(tor("gui.git_f_key", "chave em ~/.ssh (vazio = gh)").into());
-    l.set_git_save(tor("gui.git_save", "Salvar").into());
-    l.set_git_no_secrets(tor(
-        "gui.git_no_secrets",
-        "Guardamos só o NOME do arquivo de chave e o host — nunca a chave nem token. Autenticar segue com o gh / agente SSH.",
-    ).into());
-    l.set_git_private(tor("gui.git_private", "privado").into());
-    l.set_git_public(tor("gui.git_public", "público").into());
-    l.set_git_loading_repos(tor("gui.git_loading_repos", "consultando o gh…").into());
 
     // ---- Resolver item humano · caixa de entrada · skills do projeto ----
     l.set_od_answer(tor("gui.od_answer", "Responder").into());
@@ -513,9 +476,13 @@ mod tests {
         // Self-check: o varredor tem de ter ACHADO chaves. Um split que parasse de casar faria
         // o laço rodar zero vezes e o teste passar sempre — guard que não pode falhar não mede.
         //
-        // O piso é 250, e hoje há bem mais. Ele existe para pegar o varredor cego, não para
-        // congelar a contagem: subir a cada chave nova transformaria este teste num contador
-        // que reprova toda vez que alguém traduz alguma coisa.
-        assert!(vistas > 250, "só {vistas} chaves varridas — o varredor está cego");
+        // **O piso é BAIXO de propósito, e eu já o pus alto demais uma vez.**
+        //
+        // Ele existe para pegar o varredor CEGO — o caso em que o laço roda zero vezes e o
+        // teste passa sempre. Não para congelar a contagem. Pus 250 quando havia 280, e a
+        // extradição da tela Git levou 29 rótulos consigo: o teste reprovou sobre um hub que
+        // tinha ficado MENOR de propósito. Este número vai cair de novo a cada fase, e o
+        // guard não pode brigar com o trabalho que ele acompanha.
+        assert!(vistas > 100, "só {vistas} chaves varridas — o varredor está cego");
     }
 }

@@ -125,6 +125,9 @@ pub(crate) const DEPLOYER_GUI_BINS: [&str; 1] = ["schematize-deployer-gui"];
 /// um repo próprio por trás: os dois binários saem do mesmo commit.
 pub(crate) const DATABASE_GUI_BINS: [&str; 1] = ["schematize-database-gui"];
 
+/// Nome da JANELA do git — a que a tela de Git passa a abrir (ADR-0019, ADR-0020).
+pub(crate) const GIT_GUI_BINS: [&str; 1] = ["schematize-git-gui"];
+
 /// **O quê:** localiza um binário irmão para montar comando de terminal — primeiro ao lado do
 /// executável atual, senão no `$PATH`, senão devolve o nome canônico.
 ///
@@ -230,6 +233,11 @@ pub(crate) fn deployer_gui_bin() -> Option<String> {
 /// **O quê:** o caminho da janela do DATABASE. **Onde:** a tela de Banco de dados.
 pub(crate) fn database_gui_bin() -> Option<String> {
     gui_de_app(&DATABASE_GUI_BINS)
+}
+
+/// **O quê:** o caminho da janela do GIT. **Onde:** a tela de Git.
+pub(crate) fn git_gui_bin() -> Option<String> {
+    gui_de_app(&GIT_GUI_BINS)
 }
 
 /// **O quê:** abre a janela de um app, desacoplada deste processo. `false` se não deu.

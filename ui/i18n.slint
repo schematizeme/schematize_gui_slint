@@ -51,6 +51,12 @@ export global L {
     in-out property <string> database-open;
     in-out property <string> database-missing;
     in-out property <string> database-install;
+    // Delegação do GIT (E2 da extradição, ADR-0019).
+    in-out property <string> git-title;
+    in-out property <string> git-body;
+    in-out property <string> git-open;
+    in-out property <string> git-missing;
+    in-out property <string> git-install;
     in-out property <string> env-method;      // "Método:"
     in-out property <string> env-no-methods;  // nenhum método disponível
     // modal de instalação do Marketplace (dep opcional + environment opcional)
@@ -245,35 +251,6 @@ export global L {
     // ---- Git (tela 8) ----
     in-out property <string> home-git;                  // card "Git"
     in-out property <string> home-git-desc;
-    in-out property <string> git-projects;              // seção "Projetos"
-    in-out property <string> git-accounts;              // seção "Contas"
-    in-out property <string> git-repos;                 // seção "Repositórios"
-    in-out property <string> git-scanning;              // "lendo os repositórios…"
-    in-out property <string> git-rescan;                // "Reler"
-    in-out property <string> git-intro;
-    in-out property <string> git-at-risk;               // sufixo do aviso de commit local
-    in-out property <string> git-no-remote;             // "sem remoto"
-    in-out property <string> git-dirty;                 // "sujo"
-    in-out property <string> git-open;                  // "Abrir"
-    in-out property <string> git-use-account;           // "Usar a conta neste repositório"
-    in-out property <string> git-apply;                 // "Aplicar"
-    in-out property <string> git-no-accounts;
-    in-out property <string> git-history;               // "Histórico"
-    in-out property <string> git-accounts-intro;
-    in-out property <string> git-write-alias;           // "Escrever alias SSH"
-    in-out property <string> git-alias-ok;              // "alias ok"
-    in-out property <string> git-remove;                // "Remover"
-    in-out property <string> git-add-account;           // "Cadastrar conta"
-    in-out property <string> git-f-label;
-    in-out property <string> git-f-user;
-    in-out property <string> git-f-email;
-    in-out property <string> git-f-service;
-    in-out property <string> git-f-key;
-    in-out property <string> git-save;                  // "Salvar"
-    in-out property <string> git-no-secrets;            // não guardamos segredo
-    in-out property <string> git-private;               // "privado"
-    in-out property <string> git-public;                // "público"
-    in-out property <string> git-loading-repos;
 
     // ---- Resolver item humano + caixa de entrada + skills do projeto ----
     in-out property <string> od-answer;             // "Responder"
