@@ -430,8 +430,12 @@ mod tests {
     /// dívida em zero, ele pode ser estrito, e antes não podia.
     #[test]
     fn nenhuma_chave_chega_crua_na_tela() {
-        let fonte = include_str!("i18nbind.rs");
-        let producao = fonte.split("#[cfg(test)]").next().expect("há código antes dos testes");
+        // **TODO o crate, e não só este arquivo.** O `build.rs` junta `src/**/*.rs` (só o
+        // código de produção de cada um) porque o `include_str!` não aceita glob e uma lista
+        // à mão apodreceria no primeiro arquivo novo. Enquanto isto lia só o `i18nbind.rs`,
+        // havia 71 usos em outros arquivos e 24 chaves deles fora do catálogo — o guard
+        // reprovava sobre o arquivo que já estava certo e era cego para o resto.
+        let producao = include_str!(concat!(env!("OUT_DIR"), "/fontes_i18n.txt"));
         // **O varredor casa `("gui.`, e não `t("`.** A primeira versão procurava `t("` para
         // pegar as duas formas — e não pegava: `tor("` não contém a subsequência `t("`, ela
         // tem `r("`. O teste passava varrendo 67 chaves onde havia 280, e só o piso do

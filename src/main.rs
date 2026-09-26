@@ -34,6 +34,7 @@ mod gitlog; // histórico de commits, lido do BINÁRIO do git (E2 da extradiçã
 mod graphstate; // estado + passo da física do grafo
 mod graphview; // ponte do grafo com a UI (modelos, carga preguiçosa, timer)
 mod i18nbind; // catálogo i18n -> propriedades do `global L`
+mod marketstatus; // versões, lidas do `market status --json` (E4 M5 da extradição)
 mod odhistory; // histórico do overdev (snapshots + commits), paginado
 mod odload; // carga do estado do overdev + editor acoplado
 mod odmonitor; // monitor leve do .schematize/overdev/ (thread -> UI)
@@ -299,6 +300,8 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::caixa::wire(&app, &cx);
     wire::settings::wire(&app, &cx);
     wire::appversion::wire(&app, &cx);
+    wire::notificacoes::wire(&app, &cx);
+    wire::comparar::wire(&app, &cx);
     wire::account::wire(&app, &cx);
 
     app.run()
