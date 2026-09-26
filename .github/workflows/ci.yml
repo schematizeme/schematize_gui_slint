@@ -57,3 +57,9 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: testes
         run: cargo test --all-targets
+
+      # Rótulo ligado no Rust que nenhuma tela desenha. Não é `#[test]` porque a varredura
+      # precisa ler TODOS os `.slint`, e o `include_str!` do Rust não aceita glob — uma lista
+      # escrita à mão apodreceria no primeiro arquivo novo, que é a falha que o guard pega.
+      - name: rótulos sem tela
+        run: python3 scripts/i18n-ligacoes-vivas.py

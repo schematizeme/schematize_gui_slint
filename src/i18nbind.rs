@@ -25,9 +25,6 @@ pub(crate) fn tor(key: &str, fallback: &str) -> String {
 pub(crate) fn install_i18n(app: &AppWindow) {
     let l = app.global::<L>();
     l.set_window_title("schematize".into());
-    l.set_subtitle(t("app.tagline").into());
-    l.set_theme_light(t("gui.theme_light").into());
-    l.set_theme_dark(t("gui.theme_dark").into());
     l.set_check(t("gui.check").into());
     l.set_update_all(t("gui.update_all").into());
     l.set_update_installed_only(t("gui.update_installed_only").into());
@@ -72,7 +69,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_database_open(t("gui.database_open").into());
     l.set_database_missing(t("gui.database_missing").into());
     l.set_database_install(t("gui.database_install").into());
-    l.set_env_intro(t("gui.env_intro").into());
     l.set_env_method(t("gui.env_method").into());
     l.set_env_no_methods(t("gui.env_no_methods").into());
     // modal de instalação do Marketplace
@@ -83,18 +79,14 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     // aba Overdev (seletor de projeto + view) — reusa as chaves do egui.
     l.set_project(t("gui.project").into());
     l.set_no_project(t("gui.no_project").into());
-    l.set_detected_projects(t("gui.detected_projects").into());
-    l.set_recent_projects(t("gui.recent_projects").into());
     l.set_open_folder(t("gui.open_folder").into());
     l.set_reload(t("gui.reload").into());
     l.set_dev_dirs(t("gui.dev_dirs").into());
     l.set_add_dev_dir(t("gui.add_dev_dir").into());
     l.set_dev_dirs_empty(t("gui.dev_dirs_empty").into());
-    l.set_remove(t("gui.remove").into());
     // Projetos fixados (pins) — chaves NOVAS com fallback embutido via `tor`.
     l.set_pinned_projects(tor("gui.pinned_projects", "Projetos fixados").into());
     l.set_pin_folder(tor("gui.pin_folder", "Fixar pasta…").into());
-    l.set_unpin(tor("gui.unpin", "Desafixar").into());
     l.set_pin_hint(
         tor(
             "gui.pin_hint",
@@ -145,7 +137,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
          neste projeto com acesso ao seu ambiente — ele pode editar arquivos. O app apenas MONITORA o \
          progresso. Confira o comando abaixo antes de confirmar.",
     ).into());
-    l.set_od_run_done(tor("gui.od_done", "concluído").into());
     l.set_od_agent_cmd(tor("gui.od_agent_cmd", "Comando do agente").into());
     l.set_od_ext_terminal(
         tor(
@@ -179,7 +170,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     );
     // Home + navegação (Fase 1) — chaves NOVAS, com fallback embutido via `tor`
     // até serem adicionadas ao lib. Ver lista no relatório de entrega.
-    l.set_home(tor("gui.home", "Início").into());
     l.set_home_title(tor("gui.home_title", "O que você quer fazer?").into());
     l.set_home_market(tor("gui.home_market", "Mercado de Skills").into());
     l.set_home_overdev_desc(
@@ -203,68 +193,8 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_open_loose_project(tor("gui.open_loose_project", "Abrir projeto avulso…").into());
     // aba Gerenciar (criar + editar skills) — chaves NOVAS via `tor`. Ver relatório.
     l.set_manage(tor("gui.manage", "Gerenciar").into());
-    l.set_create_skill(tor("gui.create_skill", "Criar skill").into());
-    l.set_edit_skill(tor("gui.edit_skill", "Editar skill").into());
-    l.set_skill_slug(tor("gui.skill_slug", "Slug").into());
-    l.set_skill_name(tor("gui.skill_name", "Nome").into());
-    l.set_skill_desc(tor("gui.skill_desc", "Descrição").into());
-    l.set_create(tor("gui.create", "Criar").into());
-    l.set_save(tor("gui.save", "Salvar").into());
-    l.set_saved(tor("gui.saved", "Salvo").into());
-    l.set_slug_invalid(
-        tor("gui.slug_invalid", "slug inválido — use só [a-z0-9-], começando por letra/dígito")
-            .into(),
-    );
-    l.set_skill_exists(tor("gui.skill_exists", "essa skill já existe").into());
-    l.set_pick_skill(tor("gui.pick_skill", "Escolha uma skill…").into());
-    l.set_pick_file(tor("gui.pick_file", "Arquivos").into());
-    l.set_skill_created(tor("gui.skill_created", "Skill criada em").into());
-    l.set_no_installed_skills(
-        tor("gui.no_installed_skills", "Nenhuma skill instalada para editar").into(),
-    );
-    l.set_edit_now(tor("gui.edit_now", "Editar agora").into());
-    l.set_pick_file_hint(
-        tor("gui.pick_file_hint", "Selecione um arquivo na barra lateral para editar").into(),
-    );
     // Tela SSH — chaves NOVAS via `tor`.
-    l.set_ssh_title(tor("gui.ssh_title", "Chaves SSH").into());
-    l.set_ssh_generate(tor("gui.ssh_generate", "Gerar chave").into());
-    l.set_ssh_name(tor("gui.ssh_name", "Nome").into());
-    l.set_ssh_kind(tor("gui.ssh_kind", "Tipo").into());
-    l.set_ssh_comment(tor("gui.ssh_comment", "Comentário").into());
-    l.set_ssh_passphrase(tor("gui.ssh_passphrase", "Passphrase (opcional)").into());
-    l.set_ssh_import(tor("gui.ssh_import", "Importar chave existente").into());
-    l.set_ssh_import_file(tor("gui.ssh_import_file", "Arquivo da chave privada").into());
-    l.set_ssh_import_hint(
-        tor(
-            "gui.ssh_import_hint",
-            "Aponte para a chave PRIVADA (não o .pub). Ela é copiada para ~/.ssh em 600 e \
-         continua com a passphrase que já tinha.",
-        )
-        .into(),
-    );
-    l.set_ssh_copy_pub(tor("gui.ssh_copy_pub", "Copiar pública").into());
-    l.set_ssh_copied(tor("gui.ssh_copied", "copiado").into());
-    l.set_ssh_remove(tor("gui.ssh_remove", "Remover").into());
-    l.set_ssh_empty(tor("gui.ssh_empty", "Nenhuma chave em ~/.ssh — gere uma acima.").into());
-    l.set_ssh_priv_note(
-        tor("gui.ssh_priv_note", "A chave privada nunca é exposta — só a pública sai.").into(),
-    );
-    l.set_ssh_keys_title(tor("gui.ssh_keys_title", "Suas chaves").into());
     // SSH — entropia (do lib, por tipo) + prova + Bitwarden. Chaves NOVAS via `tor`.
-    l.set_ssh_kind_hint(tor(
-        "gui.ssh_kind_hint",
-        "ed25519 é o default forte da casa; use RSA só para hosts legados — e nunca abaixo de 4096 bits.",
-    ).into());
-    l.set_ssh_proof_label(
-        tor("gui.ssh_proof_label", "Prova da chave (bits · fingerprint · tipo)").into(),
-    );
-    l.set_ssh_export_bw(tor("gui.ssh_export_bw", "Exportar → Bitwarden").into());
-    l.set_ssh_bw_note(tor(
-        "gui.ssh_bw_note",
-        "Exportar → Bitwarden salva a chave no seu cofre (se destravado) ou gera um arquivo de import 600. \
-         A chave PRIVADA nunca aparece nesta tela.",
-    ).into());
     // Tela Configurações — chaves NOVAS via `tor`.
     l.set_cfg_title(tor("gui.cfg_title", "Configurações").into());
     l.set_cfg_language(tor("gui.cfg_language", "Idioma").into());
@@ -284,8 +214,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         tor("gui.cfg_dirs_desc", "Onde o schematize procura os seus projetos.").into(),
     );
     l.set_cfg_manage(tor("gui.cfg_manage", "Gerenciar…").into());
-    l.set_cfg_on(tor("gui.cfg_on", "ligado").into());
-    l.set_cfg_off(tor("gui.cfg_off", "desligado").into());
     // Diagnóstico (relatório de debug) — chaves NOVAS via `tor`.
     l.set_cfg_debug_title(tor("gui.cfg_debug_title", "Diagnóstico").into());
     l.set_cfg_debug_btn(tor("gui.cfg_debug_btn", "Gerar relatório de debug").into());
@@ -318,7 +246,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_app_version_title(tor("gui.app_version_title", "Versão do app").into());
     l.set_app_check_update(tor("gui.app_check_update", "Verificar atualização").into());
     l.set_app_checking(tor("gui.app_checking", "Verificando…").into());
-    l.set_app_up_to_date(tor("gui.app_up_to_date", "Você está atualizado").into());
     l.set_app_update_btn(tor("gui.app_update_btn", "Atualizar app").into());
     l.set_app_updating(tor("gui.app_updating", "Atualizando…").into());
     l.set_app_restart_hint(
@@ -338,14 +265,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_notif_go_installed(tor("gui.notif_go_installed", "Ver instaladas").into());
     // Fork + comparar.
     l.set_fork_badge(tor("gui.fork_badge", "fork").into());
-    l.set_fork_will(tor(
-        "gui.fork_will",
-        "Esta é uma skill OFICIAL. Ao editá-la, ela será forkada: uma cópia editável fica ativa e a versão oficial é preservada para comparar depois.",
-    ).into());
-    l.set_fork_active(
-        tor("gui.fork_active", "Fork ativo — a versão oficial está preservada para você comparar.")
-            .into(),
-    );
     l.set_compare_official(tor("gui.compare_official", "Comparar com oficial").into());
     l.set_compare_note(tor(
         "gui.compare_note",
@@ -487,7 +406,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_od_caixa_merge(tor("gui.od_caixa_merge", "Fundir no checklist").into());
     l.set_od_caixa_pending(tor("gui.od_caixa_pending", "a organizar").into());
     l.set_od_caixa_ready(tor("gui.od_caixa_ready", "a fundir").into());
-    l.set_od_skills_title(tor("gui.od_skills_title", "Skills deste projeto").into());
     l.set_od_skills_outdated(
         tor("gui.od_skills_outdated", "evoluíram desde que moldaram este projeto").into(),
     );
@@ -509,43 +427,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     // `tor` = traduz com FALLBACK: chave ainda não traduzida cai no texto pt-BR em vez
     // de renderizar vazio. Tela nova nasce utilizável nos 11 locales e a tradução chega
     // depois — o contrário deixaria a UI muda pra quem não usa pt.
-    l.set_vps_title(tor("gui.vps_title", "Gestor de VPS").into());
-    l.set_vps_busy(tor("gui.vps_busy", "trabalhando…").into());
-    l.set_vps_add(tor("gui.vps_add", "Registrar um host").into());
-    l.set_vps_add_btn(tor("gui.vps_add_btn", "Registrar").into());
-    l.set_vps_f_alias(tor("gui.vps_f_alias", "alias").into());
-    l.set_vps_f_host(tor("gui.vps_f_host", "IP ou domínio").into());
-    l.set_vps_f_user(tor("gui.vps_f_user", "usuário").into());
-    l.set_vps_f_key(tor("gui.vps_f_key", "chave (~/.ssh)").into());
-    l.set_vps_f_port(tor("gui.vps_f_port", "porta").into());
-    l.set_vps_empty(tor(
-        "gui.vps_empty",
-        "Nenhuma VPS registrada. Preencha o formulário acima — a chave privada nunca é lida, só referenciada por caminho.",
-    ).into());
-    l.set_vps_untrusted(tor("gui.vps_untrusted", "host key NÃO confiada").into());
-    l.set_vps_trust(tor("gui.vps_trust", "Confiar na host key").into());
-    l.set_vps_probe(tor("gui.vps_probe", "Sondar").into());
-    l.set_vps_bootstrap(tor("gui.vps_bootstrap", "Instalar fronteira").into());
-    l.set_vps_seed(tor("gui.vps_seed", "Semear verbos").into());
-    l.set_vps_terminal(tor("gui.vps_terminal", "Abrir no terminal").into());
-    l.set_vps_cmd(tor("gui.vps_cmd", "comando ou verbo…").into());
-    l.set_vps_run(tor("gui.vps_run", "Executar").into());
-    l.set_vps_verbs(tor("gui.vps_verbs", "CATÁLOGO DE VERBOS").into());
-    l.set_vps_audit(tor("gui.vps_audit", "TRILHA DE AUDITORIA (append-only, já redigida)").into());
-    l.set_vps_confirm_title(tor("gui.vps_confirm_title", "Confirmação humana necessária").into());
-    l.set_vps_confirm_yes(tor("gui.vps_confirm_yes", "Sim, executar").into());
-    l.set_vps_trust_title(tor("gui.vps_trust_title", "Confiar nesta host key?").into());
-    l.set_vps_trust_desc(tor(
-        "gui.vps_trust_desc",
-        "Compare esta fingerprint com a que o provedor informou. Confiar sem conferir é o mesmo que aceitar qualquer servidor que atenda neste endereço.",
-    ).into());
-    l.set_vps_trust_changed(tor(
-        "gui.vps_trust_changed",
-        "ATENÇÃO: a fingerprint MUDOU em relação à que estava pinada. Ou o servidor foi reinstalado, ou você não está falando com ele.",
-    ).into());
-    l.set_vps_trust_yes(tor("gui.vps_trust_yes", "Confiar").into());
-    l.set_refresh(tor("gui.refresh", "Atualizar").into());
-    l.set_cancel(tor("gui.cancel", "Cancelar").into());
     l.set_home_vps(tor("gui.home_vps", "VPS").into());
     l.set_home_vps_desc(tor(
         "gui.home_vps_desc",
@@ -590,37 +471,51 @@ mod tests {
     /// Varre o fonte deste arquivo atrás de `t("…")` e cobra que nenhuma volte igual a si
     /// mesma. É exaustivo por construção: chave nova entra aqui junto com a linha que a usa.
     ///
-    /// **Só as do `t(`, e não as do `tor(`, e a diferença importa.** O `tor` recebe um texto de
-    /// reserva, então chave ausente ali nunca vira chave crua na tela — vira o PORTUGUÊS do
-    /// código em todos os 20 idiomas, calado. É um defeito mais brando e muito mais espalhado
-    /// (163 das 298 chaves `tor` não estão no catálogo hoje), e está registrado como dívida no
-    /// checklist do overdev. Misturar os dois aqui reprovaria 163 linhas de uma vez sem
-    /// separar o grave do brando.
+    /// **Vale para o `t(` E para o `tor(`, e os dois falham de jeitos diferentes.**
+    ///
+    /// O `t()` devolve a própria CHAVE — `gui.database_title` aparece como título da tela. O
+    /// `tor()` tem texto de reserva, então ele devolve o **português do código em todos os 20
+    /// idiomas**, calado: mais brando, e por isso muito mais fácil de acumular. Quando isto foi
+    /// medido pela primeira vez, **163 das 298 chaves `tor` não estavam no catálogo**.
+    ///
+    /// Elas foram sanadas: 52 eram de telas que já não existem e morreram com as ligações, as
+    /// 111 restantes foram traduzidas nos 20 idiomas. Este teste é o que impede a volta — com a
+    /// dívida em zero, ele pode ser estrito, e antes não podia.
     #[test]
     fn nenhuma_chave_chega_crua_na_tela() {
         let fonte = include_str!("i18nbind.rs");
         let producao = fonte.split("#[cfg(test)]").next().expect("há código antes dos testes");
+        // **O varredor casa `("gui.`, e não `t("`.** A primeira versão procurava `t("` para
+        // pegar as duas formas — e não pegava: `tor("` não contém a subsequência `t("`, ela
+        // tem `r("`. O teste passava varrendo 67 chaves onde havia 280, e só o piso do
+        // self-check abaixo revelou isso. Casar a ABERTURA do argumento pega `t(`, `tor(` e
+        // `tf(` sem depender do nome da função.
         let mut vistas = 0;
-        for trecho in producao.split("t(\"").skip(1) {
-            let Some(chave) = trecho.split('"').next() else { continue };
-            // Só as chaves literais: um `tf(` com argumento montado não passa por aqui.
-            if !chave.starts_with("gui.") {
+        for trecho in producao.split("(\"gui.").skip(1) {
+            let Some(resto) = trecho.split('"').next() else { continue };
+            let chave = format!("gui.{resto}");
+            // Só as chaves literais: um argumento montado em tempo de execução não passa aqui.
+            if resto.is_empty()
+                || !resto.chars().all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit())
+            {
                 continue;
             }
             vistas += 1;
             assert_ne!(
-                crate::prelude::t(chave),
+                crate::prelude::t(&chave),
                 chave,
-                "`{chave}` não existe no catálogo — a tela mostraria a CHAVE ao usuário, e \
-                 nada mais reprovaria isso"
+                "`{chave}` não existe no catálogo.\n\nCom `t()` a tela mostra a CHAVE CRUA ao \
+                 usuário; com `tor()` ela mostra o PORTUGUÊS do código nos 20 idiomas, calada. \
+                 Nos dois casos nada mais reprova. Acrescente a chave aos 20 catálogos em \
+                 `schematize_cli_rs/src/i18n/`."
             );
         }
         // Self-check: o varredor tem de ter ACHADO chaves. Um split que parasse de casar faria
         // o laço rodar zero vezes e o teste passar sempre — guard que não pode falhar não mede.
         //
-        // O piso é 70, e hoje há 73. Ele existe para pegar o varredor cego, não para congelar
-        // a contagem: subir a cada chave nova transformaria este teste num contador que reprova
-        // toda vez que alguém traduz alguma coisa.
-        assert!(vistas > 70, "só {vistas} chaves varridas — o varredor está cego");
+        // O piso é 250, e hoje há bem mais. Ele existe para pegar o varredor cego, não para
+        // congelar a contagem: subir a cada chave nova transformaria este teste num contador
+        // que reprova toda vez que alguém traduz alguma coisa.
+        assert!(vistas > 250, "só {vistas} chaves varridas — o varredor está cego");
     }
 }
