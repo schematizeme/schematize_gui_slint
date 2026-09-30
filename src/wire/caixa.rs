@@ -153,12 +153,12 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         app.global::<Od>().on_skills_rerun(move || {
             let Some(app) = weak.upgrade() else { return };
             let Some(root) = cur.borrow().clone() else { return };
-            let alvos = skillsproj::desatualizadas(&root);
-            if alvos.is_empty() {
+            // O prompt vem pronto do `schematize-skills` — ver `skillsapplied`.
+            let aplicadas = crate::skillsapplied::ler(&root);
+            if aplicadas.atrasadas.is_empty() {
                 return;
             }
-            let prompt = skillsproj::prompt_rerun(&schematize_bin(), &alvos);
-            match agentrun::launch_prompt_in_terminal(&root, &prompt) {
+            match agentrun::launch_prompt_in_terminal(&root, &aplicadas.prompt) {
                 Ok(_) => aviso(
                     &app,
                     tor("gui.od_rerun_ok", "agente aberto pra reaplicar as skills."),
@@ -224,7 +224,7 @@ pub(crate) fn atualiza_caixa(app: &AppWindow, root: Option<&Path>) {
     };
     o.set_caixa_pending(caixa::pendentes(root).len() as i32);
     o.set_caixa_ready(caixa::processadas(root).len() as i32);
-    let atrasadas = skillsproj::desatualizadas(root);
+    let atrasadas = crate::skillsapplied::ler(root).atrasadas;
     o.set_skills_outdated(atrasadas.len() as i32);
     o.set_skills_summary(
         atrasadas

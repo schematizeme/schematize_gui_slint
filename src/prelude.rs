@@ -14,7 +14,6 @@ pub(crate) use crate::*;
 
 pub(crate) use schematize::agentrun;
 pub(crate) use schematize::i18n::{self, t, tf};
-pub(crate) use schematize::skillsproj;
 pub(crate) use schematize::{
     account, autostart, config, debugreport, links, notifications, overdev, overdevdb, panel,
     projects, selfupdate, settings, upgrade, usage, util,

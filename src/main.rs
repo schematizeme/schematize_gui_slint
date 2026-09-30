@@ -41,6 +41,7 @@ mod odproj; // projetos, caminhos e parse do CHECKLIST 2-níveis
 mod quizmodel; // parser PURO da fila de quiz do overdev
 mod repulsion; // repulsão do grafo em grade espacial (era O(n²)/quadro)
 mod skillactions; // os botões que as skills declaram, lidos do BINÁRIO (E5)
+mod skillsapplied; // skills atrasadas no projeto, lidas do BINÁRIO (E5)
 mod spiral; // semente de posição dos nós do grafo (espiral áurea)
 mod sysenv; // integração com o sistema (processo, PATH, terminal, editor)
 mod wire; // FIAÇÃO da janela: um módulo por recorte da UI (ver wire/mod.rs)
