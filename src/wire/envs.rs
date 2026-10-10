@@ -49,8 +49,27 @@ const COMANDO_INSTALAR_OPTIMIZER: &str =
 const COMANDO_INSTALAR_SKILLS: &str =
     "cargo install --git https://github.com/schematizeme/schematize_skills_rs --bins";
 
+/// O comando que instala a janela do Overdev — o MESMO que a dica do CLI mostra para um app
+/// ausente (`schematize_cli_rs/src/instalardica.rs`, `dica("schematize-overdev")`).
+///
+/// **Por que é uma constante aqui, e não uma chamada ao CLI.** `schematize::instalardica` ainda
+/// não existe no commit do CLI que o `Cargo.lock` pina, e rodar `schematize apps …` só para
+/// montar um texto de tela acopla a abertura da janela a um subprocesso. Quando o pino subir
+/// para um CLI que a exporte, esta constante e [`NOTA_OVERDEV_PRIVADO`] viram uma chamada
+/// a `dica`; até lá, o teste de forma (no fim do arquivo) impede que o texto mude calado.
+///
+/// Sem `--bins`: a dica oficial usa `--locked`, e o cargo instala os dois binários do pacote.
+const COMANDO_INSTALAR_OVERDEV: &str =
+    "cargo install --git https://github.com/schematizeme/schematize_overdev_rs --locked";
+
+/// A nota honesta da dica do CLI para app de repositório privado. O repo do overdev ainda não
+/// é público: o comando acima falha para quem não tem acesso, e a tela diz isso em vez de
+/// prometer o que não cumpre (§37.48).
+const NOTA_OVERDEV_PRIVADO: &str =
+    "o repositório ainda não é público; quem tem acesso instala com o comando acima";
+
 /// Liga os callbacks deste recorte da UI.
-pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
+pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // ==================== aba MERCADO ====================
     //
     // Esta aba DELEGA: ela abre a janela do market em vez de desenhar a lista (ADR-0012).
@@ -337,6 +356,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
         });
     }
 
+    wire_overdev(app, cx);
+
     // O MODAL DE INSTALAÇÃO saiu com a tela (E5 da extradição).
     //
     // Ele oferecia instalar a skill, a recomendada e o environment da linguagem num passo só.
@@ -372,4 +393,82 @@ fn abrir_deployer(app: &AppWindow, aba: &str) {
     app.global::<Cfg>().set_deployer_msg(SharedString::from(
         "não consegui abrir a janela do Deployer — ela ainda está instalada?",
     ));
+}
+
+/// **O quê:** liga a faixa da janela do Overdev — estado inicial (a janela está instalada?),
+/// abrir no projeto atual (opcionalmente numa aba) e instalar.
+///
+/// **Onde:** [`wire`], uma vez ao subir.
+///
+/// **A janela `schematize-overdev-gui` cobre PARTE da aba (E6 M5, ADR-0018):** progresso,
+/// checklist, fila de perguntas e histórico de snapshots. O resto (run/stop, split, editor,
+/// notas, caixa, commits) segue no hub até a janela portá-lo. Este recorte é só o caminho até
+/// lá, e o que fazer quando ela não está instalada.
+///
+/// **Independência (piso 10):** o hub SOBE sem o overdev. Ausência vira `presente=false` e uma
+/// tela acionável; nada aqui falha o boot.
+fn wire_overdev(app: &AppWindow, cx: &Ctx) {
+    {
+        let cfg = app.global::<Cfg>();
+        cfg.set_overdev_presente(crate::sysenv::overdev_gui_bin().is_some());
+        cfg.set_overdev_cmd(SharedString::from(COMANDO_INSTALAR_OVERDEV));
+        cfg.set_overdev_nota(SharedString::from(NOTA_OVERDEV_PRIVADO));
+    }
+    {
+        let weak = app.as_weak();
+        let cur = cx.od_current.clone();
+        app.global::<Cfg>().on_overdev_abrir(move |aba| {
+            let Some(a) = weak.upgrade() else { return };
+            // Resolve DE NOVO a cada clique: a janela pode ter sido instalada (ou removida)
+            // depois que o hub subiu, e o clique é a hora de saber.
+            let bin = crate::sysenv::overdev_gui_bin();
+            let projeto = cur.borrow().clone();
+            if crate::sysenv::abrir_gui_no_projeto(bin, projeto.as_deref(), Some(aba.as_str())) {
+                a.global::<Cfg>().set_overdev_presente(true);
+                a.global::<Cfg>().set_overdev_msg(SharedString::new());
+                return;
+            }
+            a.global::<Cfg>().set_overdev_presente(false);
+            a.global::<Cfg>().set_overdev_msg(SharedString::from(
+                "não consegui abrir a janela do Overdev — ela ainda está instalada?",
+            ));
+        });
+    }
+    {
+        let weak = app.as_weak();
+        app.global::<Cfg>().on_overdev_instalar(move || {
+            let Some(a) = weak.upgrade() else { return };
+            let inner = format!(
+                "echo '── {COMANDO_INSTALAR_OVERDEV} ──'; echo; \
+                 {COMANDO_INSTALAR_OVERDEV}; \
+                 echo; read -n1 -s -r -p '…'"
+            );
+            let msg = if launch_terminal(&inner) {
+                t("gui.env_terminal_opened")
+            } else {
+                tf("gui.env_no_terminal", &[("cmd", COMANDO_INSTALAR_OVERDEV)])
+            };
+            a.global::<Cfg>().set_overdev_msg(msg.into());
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// O comando e a nota espelham a dica do CLI para o overdev (`instalardica.rs`): repo
+    /// `schematizeme/schematize_overdev_rs`, `--locked`, e a nota de que o repo é privado. Se
+    /// alguém trocar um deles sem trocar o outro lado, este teste é o aviso — o hub passaria a
+    /// mandar instalar o que o CLI não manda.
+    #[test]
+    fn a_dica_do_overdev_espelha_a_do_cli() {
+        assert_eq!(
+            COMANDO_INSTALAR_OVERDEV,
+            "cargo install --git https://github.com/schematizeme/schematize_overdev_rs --locked"
+        );
+        assert!(NOTA_OVERDEV_PRIVADO.contains("ainda não é público"));
+        // O comando é UMA linha: ele é copiado para o terminal e colado em pedido de ajuda.
+        assert!(!COMANDO_INSTALAR_OVERDEV.contains('\n'));
+    }
 }

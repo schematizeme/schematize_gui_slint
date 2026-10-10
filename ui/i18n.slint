@@ -50,6 +50,12 @@ export global L {
     in-out property <string> skills-install;
     /// O rótulo da sub-aba. Curto de propósito: ele divide espaço com "Ambientes" numa barra.
     in-out property <string> skills-tab;
+    in-out property <string> overdev-open;
+    in-out property <string> overdev-missing;
+    in-out property <string> overdev-install;
+    in-out property <string> overdev-aba-perguntas;
+    in-out property <string> overdev-aba-checklist;
+    in-out property <string> overdev-aba-historico;
     // modal de instalação do Marketplace (dep opcional + environment opcional)
     in-out property <string> mp-cancel;           // "Cancelar"
     // aba Overdev (seletor de projeto + view)
@@ -157,11 +163,6 @@ export global L {
     in-out property <string> cfg-debug-net;           // "incluir diagnóstico de rede (mais lento)"
     in-out property <string> cfg-debug-saved;         // "Relatório gravado em"
     // ---- Overdev — aditivos (histórico DB + commits) ----
-    in-out property <string> od-history;              // "Histórico (backup)"
-    in-out property <string> od-history-note;         // explicação da cópia de segurança
-    in-out property <string> od-view;                 // "Ver"
-    in-out property <string> od-restore;              // "Restaurar"
-    in-out property <string> od-snap-empty;           // empty-state do histórico
     in-out property <string> od-commits;              // "Commits e push"
     in-out property <string> od-commits-empty;        // empty-state dos commits
     in-out property <string> od-close;                // "Fechar" (visor)
@@ -250,19 +251,4 @@ export global L {
     in-out property <string> home-vps-desc;
 
     // ---- QUIZ do overdev (a fila de perguntas clicáveis) ----
-    in-out property <string> quiz-title;                                  // Perguntas — o título do painel de quiz
-    in-out property <string> quiz-esperando-voce;                         // "esperando você" — a contagem que é sua
-    in-out property <string> quiz-revisar;                                // "a revisar pela máquina" — a contagem que NÃO é sua
-    in-out property <string> quiz-vazio;                                  // fila vazia
-    in-out property <string> quiz-sugerida;                               // marca da opção que o agente recomenda (destaque, não pré-seleção)
-    in-out property <string> quiz-destrava;                               // "Destrava:" — o que a resposta libera
-    in-out property <string> quiz-confirmar;                              // confirma o conjunto marcado num `multipla`
-    in-out property <string> quiz-enviar;                                 // envia a resposta em texto
-    in-out property <string> quiz-outro;                                  // placeholder do "outro" no sim_nao_outro
-    in-out property <string> quiz-resposta;                               // placeholder da resposta livre
-    in-out property <string> quiz-feito;                                  // "Marcar feito"
-    in-out property <string> quiz-recusar;                                // "Recusar" — CANCELA o item de máquina vinculado
-    in-out property <string> quiz-respondeu;                              // "Você respondeu:"
-    in-out property <string> quiz-aguarda-revisao;                        // a máquina ainda não revisou — o item segue bloqueado
-    in-out property <string> quiz-revisao;                                // "Revisão da máquina:"
 }

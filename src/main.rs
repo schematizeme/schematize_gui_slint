@@ -38,7 +38,6 @@ mod odhistory; // histórico do overdev (snapshots + commits), paginado
 mod odload; // carga do estado do overdev + editor acoplado
 mod odmonitor; // monitor leve do .schematize/overdev/ (thread -> UI)
 mod odproj; // projetos, caminhos e parse do CHECKLIST 2-níveis
-mod quizmodel; // parser PURO da fila de quiz do overdev
 mod repulsion; // repulsão do grafo em grade espacial (era O(n²)/quadro)
 mod skillactions; // os botões que as skills declaram, lidos do BINÁRIO (E5)
 mod skillsapplied; // skills atrasadas no projeto, lidas do BINÁRIO (E5)
@@ -155,11 +154,8 @@ fn main() -> Result<(), slint::PlatformError> {
     let od_stop_flag = Arc::new(AtomicBool::new(false));
     // Histórico do DB do overdev + commits (aditivos): estado completo no Rust +
     // modelos com a PÁGINA atual (paginação Rust-side).
-    let od_snaps_all: Rc<RefCell<Vec<overdevdb::SnapshotMeta>>> = Rc::new(RefCell::new(Vec::new()));
-    let od_snaps_model = Rc::new(VecModel::<SnapRow>::from(Vec::new()));
     let od_commits_all: Rc<RefCell<Vec<crate::gitlog::Commit>>> = Rc::new(RefCell::new(Vec::new()));
     let od_commits_model = Rc::new(VecModel::<CommitRow>::from(Vec::new()));
-    app.global::<Od>().set_snaps(ModelRc::from(od_snaps_model.clone()));
     app.global::<Od>().set_commits(ModelRc::from(od_commits_model.clone()));
     // `--project <path>` (ou 1º argumento posicional que seja um dir): abre DIRETO nesse projeto e na
     // aba Overdev — é o multi-janela (cada projeto no seu processo). Senão, restaura o mais recente.
@@ -196,29 +192,16 @@ fn main() -> Result<(), slint::PlatformError> {
             let abs = std::fs::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(&p));
             *od_current.borrow_mut() = Some(abs.clone());
             load_overdev_into(&app, &od_cl, Some(&abs));
-            refresh_od_history(
-                &app,
-                &od_snaps_all,
-                &od_snaps_model,
-                &od_commits_all,
-                &od_commits_model,
-                Some(&abs),
-            );
+            refresh_od_history(&app, &od_commits_all, &od_commits_model, Some(&abs));
             // grafo compartilha o projeto restaurado.
             graph_mark_dirty(&graph_loaded); // grafo carrega só quando a aba Grafo abrir
 
-            // A FILA DE QUIZ do projeto restaurado. Sem esta chamada o painel nasce vazio e
-            // só se enche no primeiro `quiz-refresh` — e uma pergunta que existe mas não
-            // aparece até alguém clicar em atualizar é a mesma falha que o
-            // `PERGUNTAS-OVERDEV.txt` já tinha: o lugar existe, e ninguém olha.
-            wire::quiz::recarregar(&app, Some(&abs));
             if arg_project.is_some() {
                 app.set_screen(2); // veio de --project → abre na aba Overdev
             }
         }
         None => {
             load_overdev_into(&app, &od_cl, None);
-            wire::quiz::recarregar(&app, None);
         }
     }
     // DEPOIS do bloco acima, e de propósito: quem escreveu `--tela` disse o que quer com mais
@@ -244,14 +227,11 @@ fn main() -> Result<(), slint::PlatformError> {
         od_cl,
         od_current,
         od_stop_flag,
-        od_snaps_all,
-        od_snaps_model,
         od_commits_all,
         od_commits_model,
     };
     wire::envs::wire(&app, &cx);
     wire::overdev::wire(&app, &cx);
-    wire::quiz::wire(&app, &cx);
     wire::odhistory::wire(&app, &cx);
     wire::graph::wire(&app, &cx);
     wire::caixa::wire(&app, &cx);

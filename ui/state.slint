@@ -1,6 +1,5 @@
 import {
-    SkillRow, EnvRow, LangItem, ProjItem, OverItem, SnapRow, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction,
-    QuizItem, QuizOpcao,
+    SkillRow, EnvRow, LangItem, ProjItem, OverItem, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction,
     } from "types.slint";
 
 // Estado de TELA da GUI, agrupado por área — um `global` por recorte.
@@ -103,6 +102,17 @@ export global Cfg {
     in-out property <string> skills-msg;
     callback skills-abrir();
     callback skills-instalar();
+
+    // OVERDEV (E6 M5): a janela `schematize-overdev-gui` cobre parte da aba (progresso,
+    // checklist, perguntas, histórico de snapshots) — o resto segue no hub. `nota` carrega o
+    // aviso honesto de que o repositório ainda não é público (o mesmo da dica do CLI,
+    // `instalardica.rs`), para a tela não prometer um `cargo install` que falha sem acesso.
+    in-out property <bool> overdev-presente: false;
+    in-out property <string> overdev-cmd;
+    in-out property <string> overdev-nota;
+    in-out property <string> overdev-msg;
+    callback overdev-abrir(string);   // "" = janela inicial; "perguntas"|"checklist"|"historico"
+    callback overdev-instalar();
     in-out property <[EnvRow]> rows;
     in-out property <[LangItem]> langs;
     in-out property <string> lang-code;   // código do idioma atual
@@ -213,21 +223,6 @@ export global Od {
     in-out property <[string]> completions;              // monitor: log de conclusões ("HH:MM:SS  texto")
     in-out property <string> usage-line;                 // monitor: tokens+modelo já formatado (vazio = sem dado)
     callback refresh-history();       // recarrega histórico do DB + commits do projeto atual
-    in-out property <[SnapRow]> snaps;    // histórico do DB (página atual)
-    in-out property <int> snap-page: 0;
-    in-out property <int> snap-total: 0;
-    callback snap-page-prev();
-    callback snap-page-next();
-    callback snap-view(int);          // Ver: get(id) → visor
-    callback snap-restore-request(int);
-    in-out property <bool> snap-confirm-open: false;
-    in-out property <int> snap-confirm-id: -1;
-    in-out property <string> snap-confirm-msg;
-    callback snap-restore-confirm();
-    callback snap-restore-cancel();
-    in-out property <bool> snap-view-open: false;   // visor read-only
-    in-out property <string> snap-view-title;
-    in-out property <string> snap-view-content;
     in-out property <[CommitRow]> commits;
     in-out property <int> commit-page: 0;
     in-out property <int> commit-total: 0;
@@ -264,29 +259,6 @@ export global Od {
     callback editor-pick(string);    // troca o arquivo do editor (PLAN.md/CHECKLIST.md)
     callback editor-save();          // regrava o arquivo do editor no .overdev/
 
-    // ---- QUIZ: a fila de perguntas que se responde CLICANDO ------------------------------
-    //
-    // **Não é modal.** O `ResolveModal` bloqueia a tela porque a resposta dele É o texto; aqui
-    // a resposta é um clique, e o pedido do usuário foi explícito: "assim como ocorre nos quiz
-    // que interrompem a fila de dev, mas SEM interromper". Então os cards moram na própria aba,
-    // ao lado do run que continua andando.
-    in-out property <[QuizItem]> quiz;             // a fila inteira (abertas + respondidas)
-    in-out property <int> quiz-abertas: 0;         // quantas esperam a pessoa
-    in-out property <int> quiz-revisar: 0;         // respondidas aguardando a MÁQUINA
-    in-out property <string> quiz-status;          // feedback da última ação
-    in-out property <bool> quiz-erro: false;       // o status é erro?
-    in-out property <string> quiz-outro-input;     // o campo "outro" do sim_nao_outro
-    // Responder por CLIQUE: (id da pergunta, id da opção).
-    callback quiz-responder(string, string);
-    // Responder com texto (o "outro", ou `livre`).
-    callback quiz-responder-texto(string, string);
-    // `multipla`: marca/desmarca uma opção sem enviar, e depois confirma.
-    callback quiz-marcar(string, string);
-    callback quiz-confirmar-multipla(string);
-    // As duas ações que o usuário pediu ao lado das respostas.
-    callback quiz-marcar-feito(string);
-    callback quiz-recusar(string);
-    callback quiz-refresh();
     callback add-note(string);       // add_note(root,"task",texto) — ponto por task
     callback add-correction(string); // add_note(root,"correcao",texto) — prompt de correção
     callback run-request();          // clique "Executar overdev" → abre o guardrail (mostra o comando)

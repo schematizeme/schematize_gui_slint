@@ -13,7 +13,7 @@ import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { L } from "i18n.slint";
 import {
-    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, SnapRow, CommitRow, NotifItem, CmpFile,
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, CommitRow, NotifItem, CmpFile,
 } from "types.slint";
 import {
     VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
@@ -27,8 +27,6 @@ import { OverdevScreen } from "screen_overdev.slint";
 import { TelaDelegada } from "screen_delegado.slint";
 import { DevDirsModal } from "modal_devdirs.slint";
 import { RunConfirmModal } from "modal_runconfirm.slint";
-import { SnapConfirmModal } from "modal_snapconfirm.slint";
-import { SnapViewModal } from "modal_snapview.slint";
 import { NotifModal } from "modal_notif.slint";
 import { AccountModal } from "modal_account.slint";
 import { ResolveModal } from "modal_resolve.slint";
@@ -527,10 +525,8 @@ export component AppWindow inherits Window {
     // O gate HUMANO de produção e o TOFU explícito da host key.
 
     // ---- MODAL de confirmação de RESTAURAR snapshot ---------------------
-    if Od.snap-confirm-open: SnapConfirmModal { }
 
     // ---- VISOR read-only de um snapshot do DB ---------------------------
-    if Od.snap-view-open: SnapViewModal { }
 
     // ---- PAINEL de notificações (sininho) -------------------------------
     // Overlay ancorado no topo-direito. Agrupa Globais e Pessoais; cada item com

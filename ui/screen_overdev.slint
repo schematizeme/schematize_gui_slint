@@ -2,7 +2,7 @@ import { ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { L } from "i18n.slint";
 import {
-    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, SnapRow, CommitRow, NotifItem, CmpFile,
+    GraphNode, GraphEdge, SkillRow, EnvRow, ProjItem, OverItem, SkillAction, LangItem, CommitRow, NotifItem, CmpFile,
 } from "types.slint";
 import {
     VerifiedCheck, Check, Btn, ThemeToggle, Bell, Collapse, Chip, TabBtn, StatePill,
@@ -11,11 +11,27 @@ import {
 import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
 import { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App } from "state.slint";
 import { InboxPanel } from "panel_inbox.slint";
-import { QuizPanel } from "quiz.slint";
+import { FaixaDelegada } from "screen_delegado.slint";
 
 // Tela OVERDEV (2) — objetivo, progresso, checklist FATIADO, editor acoplado,
 // tarefas/notas, monitor do run e o histórico (snapshots + commits).
 export component OverdevScreen inherits VerticalLayout {
+            // JANELA do overdev (delegada): abrir/instalar + atalhos para as abas que moraram aqui.
+            FaixaDelegada {
+                rotulo-abrir: L.overdev-open;
+                rotulo-ausente: L.overdev-missing;
+                rotulo-instalar: L.overdev-install;
+                rotulo-perguntas: L.overdev-aba-perguntas;
+                rotulo-checklist: L.overdev-aba-checklist;
+                rotulo-historico: L.overdev-aba-historico;
+                presente: Cfg.overdev-presente;
+                cmd: Cfg.overdev-cmd;
+                nota: Cfg.overdev-nota;
+                msg: Cfg.overdev-msg;
+                abrir => { Cfg.overdev-abrir(""); }
+                abrir-aba(aba) => { Cfg.overdev-abrir(aba); }
+                instalar => { Cfg.overdev-instalar(); }
+            }
             // (seletor de projeto agora vive no CABEÇALHO, ao lado do "← Voltar")
             // ---- conteúdo do overdev ----
             // Empty-state: nenhum projeto escolhido.
@@ -137,13 +153,8 @@ export component OverdevScreen inherits VerticalLayout {
                         Btn { label: L.open-browser; small: true; clicked => { Od.open-browser(); } }
                         Btn { label: L.od-open-terminal; small: true; clicked => { Od.open-terminal(); } }
                     }
-                    // ---- QUIZ: as perguntas que esperam você, logo abaixo do progresso ----
-                    //
-                    // Aqui e não no fim da tela: o que espera uma PESSOA tem de estar onde ela
-                    // olha primeiro. Enterrado depois do checklist e do histórico, um card com
-                    // uma pergunta aberta viraria exatamente o que o `PERGUNTAS-OVERDEV.txt`
-                    // já era — um lugar onde a pergunta fica e ninguém vê.
-                    QuizPanel {}
+                    // O QUIZ (fila de perguntas) saiu daqui (E6 M5): é a aba «Perguntas» da janela do
+                    // schematize-overdev, e a faixa no topo abre a janela direto nela.
                     // ---- Fase 4: overdev em terminal externo + MONITOR leve ----
                     // O `claude` roda num terminal do sistema (processo próprio, RAM dele,
                     // fora do app). Aqui é só o botão de disparo + um monitor que relê o
@@ -639,56 +650,8 @@ export component OverdevScreen inherits VerticalLayout {
                         }
                     }
                     Rectangle { height: 6px; }
-                    // ---- Histórico do DB do overdev (cópia de segurança) ----
-                    Rectangle { height: 1px; background: Theme.border; }
-                    VerticalLayout {
-                        spacing: 8px;
-                        Text { text: L.od-history; font-size: 14px; font-weight: 800; color: Theme.text; }
-                        Text { text: L.od-history-note; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
-                        if Od.snaps.length == 0: Text { text: L.od-snap-empty; font-size: 12px; color: Theme.text-dim; }
-                        for s[si] in Od.snaps: Rectangle {
-                            height: 44px;
-                            border-radius: 8px;
-                            background: Theme.surface;
-                            border-width: 1px;
-                            border-color: Theme.border;
-                            HorizontalLayout {
-                                padding-left: 12px;
-                                padding-right: 12px;
-                                spacing: 12px;
-                                VerticalLayout {
-                                    width: 210px;
-                                    alignment: center;
-                                    Text { text: s.file; font-size: 12.5px; font-weight: 600; color: Theme.text; overflow: elide; }
-                                }
-                                VerticalLayout {
-                                    width: 130px;
-                                    alignment: center;
-                                    Text { text: s.date; font-size: 11.5px; color: Theme.text-dim; }
-                                }
-                                VerticalLayout {
-                                    width: 70px;
-                                    alignment: center;
-                                    Text { text: s.size; font-size: 11.5px; color: Theme.text-dim; }
-                                }
-                                Rectangle {}
-                                VerticalLayout {
-                                    alignment: center;
-                                    Btn { label: L.od-view; small: true; clicked => { Od.snap-view(s.id); } }
-                                }
-                                VerticalLayout {
-                                    alignment: center;
-                                    Btn { label: L.od-restore; small: true; danger: true; clicked => { Od.snap-restore-request(s.id); } }
-                                }
-                            }
-                        }
-                        if Od.snap-total > 20: Pager {
-                            page: Od.snap-page;
-                            total: Od.snap-total;
-                            prev => { Od.snap-page-prev(); }
-                            next => { Od.snap-page-next(); }
-                        }
-                    }
+                    // O histórico de SNAPSHOTS do DB saiu daqui (E6 M5): é a aba «Histórico» da janela
+                    // do overdev. Os COMMITS ficam (a janela não os portou).
                     // ---- Histórico de commits / push ----
                     Rectangle { height: 1px; background: Theme.border; }
                     VerticalLayout {

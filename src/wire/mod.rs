@@ -20,7 +20,6 @@ pub(crate) mod graph;
 pub(crate) mod notificacoes;
 pub(crate) mod odhistory;
 pub(crate) mod overdev;
-pub(crate) mod quiz;
 pub(crate) mod settings;
 
 /// Estado compartilhado pelos callbacks da janela.
@@ -39,8 +38,6 @@ pub(crate) struct Ctx {
     pub(crate) od_cl: Rc<ChecklistView>,
     pub(crate) od_current: Rc<RefCell<Option<PathBuf>>>,
     pub(crate) od_stop_flag: Arc<AtomicBool>,
-    pub(crate) od_snaps_all: Rc<RefCell<Vec<overdevdb::SnapshotMeta>>>,
-    pub(crate) od_snaps_model: Rc<VecModel<SnapRow>>,
     pub(crate) od_commits_all: Rc<RefCell<Vec<crate::gitlog::Commit>>>,
     pub(crate) od_commits_model: Rc<VecModel<CommitRow>>,
 }

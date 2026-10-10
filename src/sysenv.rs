@@ -134,6 +134,11 @@ pub(crate) const OPTIMIZER_GUI_BINS: [&str; 1] = ["schematize-optimizer-gui"];
 /// Nome da JANELA das skills — a que a aba de Skills passa a abrir (E5, ADR-0012 F4).
 pub(crate) const SKILLS_GUI_BINS: [&str; 1] = ["schematize-skills-gui"];
 
+/// Nome da JANELA do overdev — a que a aba Overdev passa a abrir (E6 M5, ADR-0018). É o
+/// SEGUNDO binário do repo do CLI dele (ADR-0020), então sai do mesmo commit que o
+/// `schematize-overdev`.
+pub(crate) const OVERDEV_GUI_BINS: [&str; 1] = ["schematize-overdev-gui"];
+
 /// **O quê:** localiza um binário irmão para montar comando de terminal — primeiro ao lado do
 /// executável atual, senão no `$PATH`, senão devolve o nome canônico.
 ///
@@ -223,7 +228,8 @@ fn gui_de_app(nomes: &[&str]) -> Option<String> {
             }
         }
     }
-    nomes.iter().find(|n| which_bin(n)).map(|n| (*n).to_string())
+    let path = std::env::var("PATH").unwrap_or_default();
+    nomes.iter().find_map(|n| achar_no_path(n, &path)).map(|p| p.to_string_lossy().into_owned())
 }
 
 /// **O quê:** o caminho da janela do MARKET. **Onde:** a aba do Mercado.
@@ -246,18 +252,6 @@ pub(crate) fn git_gui_bin() -> Option<String> {
     gui_de_app(&GIT_GUI_BINS)
 }
 
-/// **O quê:** o caminho do binário HEADLESS do git, ou `None` se ele não está instalado.
-///
-/// **Onde:** [`crate::gitlog`], que lê o histórico de commits da aba Overdev.
-///
-/// **É `Option` e não o nome canônico**, ao contrário do [`bin_irmao`]: aqui o destino é um
-/// `spawn` silencioso cujo resultado alimenta uma lista secundária. Sem o app, a lista sai
-/// vazia e o resto da aba continua — que é o piso 10. Um nome que não resolve daria o mesmo
-/// resultado com um erro de "not found" no meio do caminho.
-pub(crate) fn git_bin() -> Option<String> {
-    gui_de_app(&["schematize-git"])
-}
-
 /// **O quê:** o caminho da janela do OPTIMIZER. **Onde:** a tela de Disco.
 pub(crate) fn optimizer_gui_bin() -> Option<String> {
     gui_de_app(&OPTIMIZER_GUI_BINS)
@@ -270,9 +264,96 @@ pub(crate) fn skills_bin() -> Option<String> {
     gui_de_app(&["schematize-skills"])
 }
 
+/// **O quê:** o caminho do binário HEADLESS do git, ou `None` se ele não está instalado.
+///
+/// **Onde:** [`crate::gitlog`], que lê o histórico de commits da aba Overdev.
+///
+/// **É `Option` e não o nome canônico**, ao contrário do [`bin_irmao`]: aqui o destino é um
+/// `spawn` silencioso cujo resultado alimenta uma lista secundária. Sem o app, a lista sai
+/// vazia e o resto da aba continua — que é o piso 10. Um nome que não resolve daria o mesmo
+/// resultado com um erro de "not found" no meio do caminho.
+pub(crate) fn git_bin() -> Option<String> {
+    gui_de_app(&["schematize-git"])
+}
+
 /// **O quê:** o caminho da janela das SKILLS. **Onde:** a aba de Skills.
 pub(crate) fn skills_gui_bin() -> Option<String> {
     gui_de_app(&SKILLS_GUI_BINS)
+}
+
+/// **O quê:** procura `nome` nos diretórios de `path_var` (formato do `$PATH`) e devolve o
+/// caminho ABSOLUTO de um arquivo executável, ou `None`. PURA — recebe o PATH em vez de lê-lo.
+///
+/// **Onde:** [`gui_de_app`] (com o `$PATH` do processo) e os testes (com um PATH fabricado).
+///
+/// **Por que absoluto.** O `Command::new("nome")` resolve pelo PATH de QUEM spawna, e a janela
+/// aberta pelo lançador do desktop tem um PATH mínimo. Resolver aqui, uma vez, e passar o
+/// caminho inteiro ao `spawn` tira essa dúvida do clique: ou achou, e abre; ou não achou, e a
+/// tela diz que falta — em vez de um botão que falha calado.
+///
+/// **Por que recebe o PATH.** Mexer em `std::env` num teste afeta os outros que rodam em
+/// paralelo; com a string como argumento, o teste "app ausente" não depende da máquina onde
+/// roda. Diretório relativo ou vazio no PATH é ignorado: significaria "o cwd", e o cwd de um
+/// hub aberto pelo desktop não é lugar de onde se quer executar nada.
+pub(crate) fn achar_no_path(nome: &str, path_var: &str) -> Option<PathBuf> {
+    path_var
+        .split(':')
+        .filter(|d| Path::new(d).is_absolute())
+        .map(|d| Path::new(d).join(nome))
+        .find(|c| e_executavel(c))
+}
+
+/// **O quê:** `c` é um arquivo regular com bit de execução (Unix) — ou só um arquivo (outros
+/// sistemas, onde a extensão manda). **Onde:** [`achar_no_path`].
+fn e_executavel(c: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(c) else { return false };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+/// **O quê:** o caminho da janela do OVERDEV. **Onde:** a aba Overdev.
+pub(crate) fn overdev_gui_bin() -> Option<String> {
+    gui_de_app(&OVERDEV_GUI_BINS)
+}
+
+/// **O quê:** abre a janela do overdev SOBRE um projeto, desacoplada deste processo. `false`
+/// se não deu.
+///
+/// **Onde:** os botões da faixa da aba Overdev. A janela trabalha sobre um projeto, e o hub é
+/// quem sabe qual é (a barra do cabeçalho). O contrato dela (`schematize-overdev-gui`) é
+/// `--dir <projeto>` e `--aba perguntas|checklist|historico`; o cwd também vai no projeto,
+/// para a janela que ignorar a flag ainda abrir no lugar certo.
+///
+/// **`aba` vazia = sem `--aba`** (a janela abre na inicial). **Sem projeto**, sem `--dir`: ela
+/// decide o que fazer sem ele.
+pub(crate) fn abrir_gui_no_projeto(
+    bin: Option<String>,
+    projeto: Option<&Path>,
+    aba: Option<&str>,
+) -> bool {
+    let Some(bin) = bin else { return false };
+    let mut cmd = std::process::Command::new(bin);
+    if let Some(dir) = projeto.filter(|d| d.is_dir()) {
+        cmd.arg("--dir").arg(dir).current_dir(dir);
+    }
+    if let Some(a) = aba.filter(|a| !a.is_empty()) {
+        cmd.arg("--aba").arg(a);
+    }
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    desacopla_processo(&mut cmd);
+    cmd.spawn().is_ok()
 }
 
 /// **O quê:** abre a janela de um app, desacoplada deste processo. `false` se não deu.
@@ -414,5 +495,111 @@ mod tests {
         // Qualquer outra coisa (renomeado à mão, rodado do target/) cai no CANÔNICO.
         assert_eq!(app_id_de(Some("schematize-gui-old")), "schematize-gui");
         assert_eq!(app_id_de(None), "schematize-gui");
+    }
+
+    /// Diretório temporário ÚNICO por teste (rodam em paralelo).
+    fn tmp(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("gui-sysenv-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).expect("criar tmp do teste");
+        d
+    }
+
+    /// Cria um script em `dir/nome` com `corpo`, com ou sem bit de execução.
+    #[cfg(unix)]
+    fn script(dir: &Path, nome: &str, corpo: &str, exec: bool) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let p = dir.join(nome);
+        std::fs::write(&p, corpo).expect("gravar script");
+        let modo = if exec { 0o755 } else { 0o644 };
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(modo)).expect("chmod");
+        p
+    }
+
+    /// **App ausente é ESTADO, não erro:** com um PATH sem o binário, a resposta é `None` — e é
+    /// isso que faz a aba mostrar «não instalado» em vez de um botão que não abre nada.
+    #[test]
+    #[cfg(unix)]
+    fn path_sem_o_binario_nao_acha() {
+        let vazio = tmp("vazio");
+        let outro = tmp("outro");
+        script(&outro, "outra-coisa", "#!/bin/sh\n", true);
+        let path = format!("{}:{}", vazio.display(), outro.display());
+        assert_eq!(achar_no_path("schematize-overdev-gui", &path), None);
+        assert_eq!(achar_no_path("schematize-overdev-gui", ""), None, "PATH vazio");
+    }
+
+    /// Achou: o caminho devolvido é ABSOLUTO e aponta para o arquivo — nunca o nome puro.
+    #[test]
+    #[cfg(unix)]
+    fn path_com_o_binario_devolve_o_caminho_absoluto() {
+        let d = tmp("presente");
+        let esperado = script(&d, "schematize-overdev-gui", "#!/bin/sh\n", true);
+        let path = format!("/nao/existe:{}", d.display());
+        let achou = achar_no_path("schematize-overdev-gui", &path).expect("devia achar");
+        assert!(achou.is_absolute());
+        assert_eq!(achou, esperado);
+    }
+
+    /// Arquivo SEM bit de execução não é app instalado: o `spawn` falharia com «permission
+    /// denied», e a tela ofereceria abrir o que não abre. E PATH relativo (`.`, vazio) não vale.
+    #[test]
+    #[cfg(unix)]
+    fn sem_bit_de_execucao_e_path_relativo_nao_contam() {
+        let d = tmp("semexec");
+        script(&d, "schematize-overdev-gui", "#!/bin/sh\n", false);
+        assert_eq!(achar_no_path("schematize-overdev-gui", &d.display().to_string()), None);
+        // Relativo: o mesmo arquivo executável, mas apontado por «.» e por entrada vazia.
+        let r = tmp("relativo");
+        script(&r, "schematize-overdev-gui", "#!/bin/sh\n", true);
+        // `.` e a entrada vazia significam «o cwd», e o cwd de um hub aberto pelo desktop não
+        // é lugar de onde se quer executar nada. O teste não mexe no cwd do processo.
+        assert_eq!(achar_no_path("schematize-overdev-gui", ".:"), None);
+    }
+
+    /// A janela abre com `--dir`, `--aba` e o cwd NO PROJETO — é assim que ela sabe sobre qual trabalhar. O script
+    /// grava o `pwd` que recebeu; o teste espera o arquivo (o spawn é assíncrono).
+    #[test]
+    #[cfg(unix)]
+    fn a_janela_abre_com_o_cwd_no_projeto() {
+        let bin_dir = tmp("bin");
+        let projeto = tmp("projeto");
+        let saida = tmp("saida").join("cwd.txt");
+        let corpo = format!("#!/bin/sh\n{{ pwd; echo \"$@\"; }} > '{}'\n", saida.display());
+        let bin = script(&bin_dir, "schematize-overdev-gui", &corpo, true);
+        let ok = abrir_gui_no_projeto(
+            Some(bin.display().to_string()),
+            Some(&projeto),
+            Some("perguntas"),
+        );
+        assert!(ok, "o spawn devia dar certo");
+        let mut lido = String::new();
+        for _ in 0..100 {
+            if let Ok(t) = std::fs::read_to_string(&saida) {
+                if !t.trim().is_empty() {
+                    lido = t;
+                    break;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+        let real = std::fs::canonicalize(&projeto).expect("canonicalize");
+        let mut linhas = lido.lines();
+        let cwd = linhas.next().expect("cwd gravado");
+        assert_eq!(std::fs::canonicalize(cwd).expect("cwd existe"), real);
+        // O contrato da janela: `--dir <projeto> --aba <aba>`.
+        let args = linhas.next().expect("args gravados");
+        assert_eq!(args, format!("--dir {} --aba perguntas", projeto.display()));
+    }
+
+    /// Sem binário não há o que abrir: `false`, sem panicar — a tela volta ao estado «ausente».
+    #[test]
+    fn abrir_sem_binario_devolve_false() {
+        assert!(!abrir_gui_no_projeto(None, None, None));
+        assert!(!abrir_gui_no_projeto(
+            Some("/nao/existe/schematize-overdev-gui".into()),
+            None,
+            None
+        ));
     }
 }

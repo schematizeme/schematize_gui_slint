@@ -32,6 +32,9 @@ export component TelaDelegada inherits VerticalLayout {
     // O comando de instalação, VISÍVEL: quem prefere o terminal não deveria ter de adivinhá-lo,
     // e quem for pedir ajuda tem o que colar.
     in property <string> cmd;
+    // Aviso opcional sob o comando — para o que a pessoa precisa saber ANTES de rodá-lo (ex.:
+    // «o repositório ainda não é público»). Vazio = nada a dizer.
+    in property <string> nota;
     // O que aconteceu com o último clique.
     in property <string> msg;
     callback abrir();
@@ -123,6 +126,17 @@ export component TelaDelegada inherits VerticalLayout {
                 }
             }
 
+            if !root.presente && root.nota != "": HorizontalLayout {
+                alignment: center;
+                Text {
+                    text: root.nota;
+                    font-size: 12px;
+                    color: Theme.warn;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+
             if root.msg != "": HorizontalLayout {
                 alignment: center;
                 Text {
@@ -134,5 +148,64 @@ export component TelaDelegada inherits VerticalLayout {
                 }
             }
         }
+    }
+}
+
+// FAIXA DELEGADA — a versão COMPACTA da [`TelaDelegada`], para quando a aba ainda tem conteúdo
+// próprio e a janela do app dono cobre só PARTE dele (aba Overdev, E6 M5).
+//
+// Existe separada porque a `TelaDelegada` ocupa a tela inteira e centraliza: serve a quem saiu
+// por completo. Aqui o estado é o mesmo — janela presente abre (com atalhos para as abas dela);
+// ausente mostra o comando de instalação e a nota honesta — mas numa faixa no topo.
+export component FaixaDelegada inherits Rectangle {
+    in property <string> rotulo-abrir;
+    in property <string> rotulo-ausente;
+    in property <string> rotulo-instalar;
+    in property <string> rotulo-perguntas;
+    in property <string> rotulo-checklist;
+    in property <string> rotulo-historico;
+    in property <bool> presente: false;
+    in property <string> cmd;
+    in property <string> nota;
+    in property <string> msg;
+    callback abrir();
+    callback abrir-aba(string);
+    callback instalar();
+
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        if root.presente: HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Btn { label: root.rotulo-abrir; primary: true; small: true; clicked => { root.abrir(); } }
+            Btn { label: root.rotulo-perguntas; small: true; clicked => { root.abrir-aba("perguntas"); } }
+            Btn { label: root.rotulo-checklist; small: true; clicked => { root.abrir-aba("checklist"); } }
+            Btn { label: root.rotulo-historico; small: true; clicked => { root.abrir-aba("historico"); } }
+        }
+        if !root.presente: VerticalLayout {
+            spacing: 6px;
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: start;
+                VerticalLayout {
+                    alignment: center;
+                    Text { text: root.rotulo-ausente; font-size: 12.5px; color: Theme.warn; }
+                }
+                Btn { label: root.rotulo-instalar; primary: true; small: true; clicked => { root.instalar(); } }
+            }
+            Text {
+                text: root.cmd;
+                font-size: 11.5px;
+                font-family: "monospace";
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+            if root.nota != "": Text { text: root.nota; font-size: 11.5px; color: Theme.warn; wrap: word-wrap; }
+        }
+        if root.msg != "": Text { text: root.msg; font-size: 12px; color: Theme.text-dim; wrap: word-wrap; }
     }
 }
