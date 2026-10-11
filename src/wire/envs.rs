@@ -479,6 +479,27 @@ mod tests {
         }
     }
 
+    /// **A lista de abas do teste acima não envelhece calada, quando o irmão está ao lado.**
+    ///
+    /// Lê `schematize_overdev_rs/src/gui/main.rs` (o `aba_dos_args` da janela) e cobra que cada
+    /// aba aceita apareça lá como `Some("nome")`. Num clone SÓ deste repo (CI) o arquivo não
+    /// existe: imprime `SKIP` em voz alta e não verifica — nunca passa calado fingindo ter
+    /// checado.
+    #[test]
+    fn as_abas_aceitas_batem_com_o_fonte_da_janela_quando_presente() {
+        let fonte = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../schematize_overdev_rs/src/gui/main.rs");
+        let Ok(txt) = std::fs::read_to_string(&fonte) else {
+            eprintln!("SKIP: {} ausente — abas da janela NÃO verificadas aqui", fonte.display());
+            return;
+        };
+        // `perguntas` é o DEFAULT da janela (`_ => 0`), sem braço próprio — por isso não entra.
+        for aba in ["checklist", "execucao", "caixa", "notas", "historico"] {
+            let brac = format!("Some(\"{aba}\")");
+            assert!(txt.contains(&brac), "a janela não aceita mais `--aba {aba}`");
+        }
+    }
+
     /// O comando e a nota espelham a dica do CLI para o overdev (`instalardica.rs`): repo
     /// `schematizeme/schematize_overdev_rs`, `--locked`, e a nota de que o repo é privado. Se
     /// alguém trocar um deles sem trocar o outro lado, este teste é o aviso — o hub passaria a
