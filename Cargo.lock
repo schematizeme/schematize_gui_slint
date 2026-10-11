@@ -4266,7 +4266,7 @@ dependencies = [
 [[package]]
 name = "schematize"
 version = "0.66.0"
-source = "git+https://github.com/schematizeme/schematize-cli?branch=main#8d5a0b6f256a0e60639d90609ef992e1bc52d054"
+source = "git+https://github.com/schematizeme/schematize-cli?branch=main#235e01edfe508f88b86a480cd73924511a690f4d"
 dependencies = [
  "clap",
  "notify-rust",
