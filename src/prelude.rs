@@ -12,11 +12,10 @@
 
 pub(crate) use crate::*;
 
-pub(crate) use schematize::agentrun;
 pub(crate) use schematize::i18n::{self, t, tf};
 pub(crate) use schematize::{
-    account, autostart, config, debugreport, links, notifications, overdev, panel, projects,
-    selfupdate, settings, upgrade, usage, util,
+    account, autostart, config, debugreport, links, notifications, projects, selfupdate, upgrade,
+    util,
 };
 pub(crate) use slint::{Model, ModelRc, SharedString, TimerMode, VecModel, Weak};
 pub(crate) use std::cell::RefCell;

@@ -29,12 +29,8 @@ i-slint-backend-winit = { version = "1.17", default-features = false, features =
 # Reusa a LÓGICA do crate irmão (catálogo + install/remove/versões + i18n) SEM
 # a GUI egui: default-features=false NÃO ativa a feature `gui` (eframe/rfd ficam
 # de fora). Nada de reimplementar registry/skills/i18n aqui.
-# `default-features = false` deixa a GUI egui (feature `gui`: eframe/rfd) de fora —
-# a única GUI é esta. Mas isso também derruba o default `sqlite-embutido` do lib, e
-# sem ele o link procura a libsqlite3 do sistema. As duas features abaixo espelham
-# as do lib: `sqlite-embutido` (default aqui também) compila o SQLite no binário;
-# `sqlite-do-sistema` linka a da distro, e é o que o install.sh escolhe quando o
-# `libsqlite3-dev` está presente.
+# `default-features = false` deixa a GUI egui (feature `gui`: eframe/rfd) de fora — a única GUI é
+# esta. As features de SQLite do lib saíram com o `rusqlite` (E6 do ADR-0018), e as daqui junto.
 schematize = { git = "https://github.com/schematizeme/schematize-cli", branch = "main", default-features = false }
 # Seletor de pasta NATIVO do sistema (aba Overdev: "Abrir pasta…" / dev_dirs).
 # Mesmo backend do egui: xdg-portal + wayland (funciona em Wayland/X11 via portal,
@@ -52,11 +48,6 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # `database::Schema` do lib deriva serde; aqui só precisamos do formato JSON. Já
 # está no grafo de deps (transitivo via `schematize`) — declarar não puxa crate novo.
 serde_json = "1"
-
-[features]
-default = ["sqlite-embutido"]
-sqlite-embutido = ["schematize/sqlite-embutido"]
-sqlite-do-sistema = ["schematize/sqlite-do-sistema"]
 
 [build-dependencies]
 slint-build = "1.17"

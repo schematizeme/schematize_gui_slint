@@ -321,6 +321,15 @@ fn e_executavel(c: &Path) -> bool {
     }
 }
 
+/// **O quê:** o caminho do binário HEADLESS do overdev, ou `None` se o app não está instalado.
+///
+/// **Onde:** [`crate::overdevcli`] — a porta única do hub para o `schematize-overdev` (leituras
+/// `--json` e ações). `Option` e não o nome canônico: o destino é um `spawn` cujo motivo de falha
+/// precisa chegar à tela («o app não está instalado» + o comando), não um `not found` cru.
+pub(crate) fn overdev_bin() -> Option<String> {
+    gui_de_app(&["schematize-overdev"])
+}
+
 /// **O quê:** o caminho da janela do OVERDEV. **Onde:** a aba Overdev.
 pub(crate) fn overdev_gui_bin() -> Option<String> {
     gui_de_app(&OVERDEV_GUI_BINS)

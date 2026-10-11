@@ -58,14 +58,9 @@ pub(crate) fn build_proj_items(projects: &[projects::Project], recent: &[String]
 /// Dir de overdev do projeto pela regra "ler ambos" do lib: `.schematize/overdev` (novo, vivo) se
 /// existir; senão `.overdev` legado; senão o novo default. Era hardcoded `.overdev` — por isso a GUI
 /// mostrava 0/0/0 e editor vazio em projetos já migrados pro `.schematize/` (gerava no novo, lia no
-/// antigo). Usa o MESMO resolvedor do CLI (`panel::load_overdev`), então GUI e CLI concordam.
+/// antigo). Usa o MESMO resolvedor do hub (`schematize::paths`), que é o do app.
 pub(crate) fn overdev_dir(root: &Path) -> PathBuf {
     schematize::paths::overdev_dir_at(root)
-}
-
-/// Caminho do CHECKLIST do overdev do projeto (dir resolvido por `overdev_dir`).
-pub(crate) fn checklist_path(root: &Path) -> PathBuf {
-    overdev_dir(root).join("CHECKLIST.md")
 }
 
 /// Caminho de um arquivo do editor (`PLAN.md`/`CHECKLIST.md`) no dir de overdev resolvido.
@@ -75,96 +70,25 @@ pub(crate) fn overdev_file_path(root: &Path, target: &str) -> PathBuf {
     overdev_dir(root).join(name)
 }
 
-/// Parseia o CHECKLIST 2-níveis de `<root>` em `OverItem`s (kind + origem + índice).
-/// Casa `- [H ...]` ANTES de `- [ ]`/`- [x]` (senão o humano cai no ramo de máquina).
-/// `hindex` numera 1-based só os HUMANOS ABERTOS (- [H ]) — é o arg de `od-mark-human`.
-/// Tira o comentário de vínculo (`<!-- ovf:q:… -->`) do texto que vai pra tela.
+/// Os itens do CHECKLIST 2-níveis do app como `OverItem`s (kind + origem + índice).
 ///
-/// O marcador é a cola entre a pergunta e o item que ela trava, e por isso mora no
-/// arquivo — mas mostrá-lo seria vazar detalhe de implementação na cara do usuário.
-fn limpa(s: &str) -> slint::SharedString {
-    s.split("<!--").next().unwrap_or(s).trim().into()
-}
-
-pub(crate) fn parse_checklist_items(root: &Path) -> Vec<OverItem> {
-    // Multi-arquivo: CHECKLIST.md E/OU a pasta checklist/*.md (granularidade / split multiagent) —
-    // mesmo resolvedor do lib, pra a GUI contar certo depois de um split.
-    let cl = schematize::paths::read_multidoc(&overdev_dir(root), "CHECKLIST.md", "checklist");
-    let mut out = Vec::new();
-    let mut hopen = 0i32; // contador de humanos abertos (1-based)
-    for line in cl.lines() {
-        let t = line.trim_start();
-        // Subtask = linha INDENTADA. É como o `park` vincula a pergunta ao item de
-        // máquina que ela trava (ver `overdev::resposta`), e é o que a UI usa pra
-        // mostrar a dependência em vez de uma lista plana onde tudo parece igual.
-        let sub = line.len() > t.len();
-        // Linha-filha de resposta/recusa: não é item, mas é o conteúdo da decisão —
-        // esconder deixaria o "respondido" sem dizer o que foi respondido.
-        if sub && (t.starts_with("- resposta:") || t.starts_with("- recusado:")) {
-            out.push(OverItem {
-                kind: "nota".into(),
-                text: limpa(t.trim_start_matches("- ")),
-                machine: false,
-                hindex: -1,
-                sub: true,
-            });
-            continue;
-        }
-        let (kind, machine, hidx, rest): (&str, bool, i32, &str) = if let Some(r) =
-            t.strip_prefix("- [H ]")
-        {
-            hopen += 1;
-            ("hopen", false, hopen, r)
-        } else if let Some(r) = t.strip_prefix("- [H x]").or_else(|| t.strip_prefix("- [H X]")) {
-            ("hdone", false, -1, r)
-        } else if let Some(r) = t.strip_prefix("- [H r]").or_else(|| t.strip_prefix("- [H R]")) {
-            ("hresp", false, -1, r)
-        } else if let Some(r) = t.strip_prefix("- [H -]") {
-            ("hrec", false, -1, r)
-        } else if let Some(r) = t.strip_prefix("- [-]") {
-            ("cancel", true, -1, r)
-        } else if let Some(r) = t.strip_prefix("- [ ]") {
-            ("open", true, -1, r)
-        } else if let Some(r) = t.strip_prefix("- [x]").or_else(|| t.strip_prefix("- [X]")) {
-            ("done", true, -1, r)
-        } else if let Some(r) = t.strip_prefix("- [~]") {
-            ("hold", true, -1, r)
-        } else {
-            continue;
-        };
-        out.push(OverItem { kind: kind.into(), text: limpa(rest), machine, hindex: hidx, sub });
-    }
-    out
-}
-
-/// Fecha o `index`-ésimo (1-based) item HUMANO ABERTO de `<root>`: `- [H ]`→`- [H x]`.
-/// Path-aware (o `overdev::human_done` do lib opera no cwd, não serve à GUI que
-/// monitora outro projeto) — replica a regra do lib editando o arquivo direto.
-pub(crate) fn mark_human_done_at(root: &Path, index: i32) -> Result<(), String> {
-    if index < 1 {
-        return Err("índice humano inválido".into());
-    }
-    let path = checklist_path(root);
-    let s = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let mut seen = 0i32;
-    let mut hit = false;
-    let out: Vec<String> = s
-        .lines()
-        .map(|l| {
-            if !hit && l.trim_start().starts_with("- [H ]") {
-                seen += 1;
-                if seen == index {
-                    hit = true;
-                    return l.replacen("- [H ]", "- [H x]", 1);
-                }
-            }
-            l.to_string()
+/// **Quem classifica é o app** (`schematize-overdev checklist --json`, lido em
+/// [`crate::overdevcli::checklist`]): `- [H ]` casado antes de `- [ ]`, vínculo
+/// `<!-- ovf:q:… -->` removido do texto, `humano_n` 1-based só nos humanos abertos (é o arg de
+/// `od-mark-human`). O hub não tem segunda cópia da lei dos marcadores — a que divergisse
+/// contaria diferente do gate.
+/// **O quê:** o documento do app → as linhas da UI. PURA. **Onde:** `odload::load_overdev_into`.
+pub(crate) fn itens_de(c: &crate::overdevcli::Checklist) -> Vec<OverItem> {
+    c.itens
+        .iter()
+        .map(|i| OverItem {
+            kind: i.tipo.as_str().into(),
+            text: i.texto.as_str().into(),
+            machine: i.maquina,
+            hindex: if i.humano_n > 0 { i.humano_n } else { -1 },
+            sub: i.sub,
         })
-        .collect();
-    if !hit {
-        return Err(format!("não há {index}º item humano aberto"));
-    }
-    std::fs::write(&path, out.join("\n")).map_err(|e| e.to_string())
+        .collect()
 }
 
 /// Re-sonda dev_dirs + pins + projetos e reconstrói os modelos do seletor, da lista
@@ -203,16 +127,24 @@ pub(crate) fn skill_action_rows() -> Vec<SkillAction> {
         .collect()
 }
 
-/// Recomputa o orçamento do governador de concorrência e joga nos props da GUI (linha "máquina:
-/// teto/livre/load/rodando" + clampa o K do split ao teto). Persiste ~/.schematize/agents.json.
-pub(crate) fn apply_agent_budget(app: &AppWindow) {
-    let b = schematize::agents::budget();
-    let _ = schematize::agents::persist(&b);
-    app.global::<Od>().set_agent_cap(b.total_cap as i32);
-    app.global::<Od>().set_agent_avail(b.available as i32);
-    app.global::<Od>().set_agent_running(b.snap.running_claudes as i32);
-    app.global::<Od>().set_agent_load(format!("{:.2}", b.snap.load1).into());
-    let cap = (b.total_cap as i32).max(2);
+/// Recomputa o orçamento do governador de concorrência (`agents --json`, que também persiste
+/// `~/.schematize/agents.json`) e joga nos props da GUI (linha "máquina: teto/livre/load/rodando"
+/// e clampa o K do split ao teto). Sem o app, ou com falha dele, a linha NÃO é zerada: o motivo
+/// vai para o status da execução (zero seria afirmar «a máquina não tem teto»).
+pub(crate) fn apply_agent_budget(app: &AppWindow, projeto: Option<&Path>) {
+    let dir = projeto.map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
+    let b = match crate::overdevcli::orcamento(&dir) {
+        Ok(b) => b,
+        Err(e) => {
+            app.global::<Od>().set_run_status(e.into());
+            return;
+        }
+    };
+    app.global::<Od>().set_agent_cap(b.teto as i32);
+    app.global::<Od>().set_agent_avail(b.livres as i32);
+    app.global::<Od>().set_agent_running(b.rodando as i32);
+    app.global::<Od>().set_agent_load(format!("{:.2}", b.load1).into());
+    let cap = (b.teto as i32).max(2);
     let k = app.global::<Od>().get_split_k().clamp(2, cap);
     app.global::<Od>().set_split_k(k);
 }

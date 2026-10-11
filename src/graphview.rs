@@ -73,9 +73,9 @@ pub(crate) fn graph_sync(
     }
 }
 
-/// Carrega o grafo do `proj` (ou limpa se None) no estado. Espelha o
-/// `reload_project` do egui: posições em espiral inicial, graus, e fit pendente.
-pub(crate) fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
+/// Zera o estado do grafo (seleção, busca, arrasto, zoom, física) para uma carga nova.
+/// **Onde:** [`load_graph_into`] e [`load_service_into`] — o mesmo reinício para os dois.
+fn reiniciar(st: &mut GraphState, proj: Option<&Path>, servico: Option<&str>) {
     st.nodes.clear();
     st.edges.clear();
     st.descs.clear();
@@ -87,26 +87,21 @@ pub(crate) fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
     st.ox = 0.0;
     st.oy = 0.0;
     st.alpha = 1.0;
-    st.service = None; // visão GLOBAL (drill-down sai)
+    st.service = servico.map(str::to_string); // None = visão GLOBAL (drill-down sai)
     st.project = proj.map(|p| p.to_path_buf());
-    let Some(p) = proj else {
-        return;
-    };
-    // Grafo global PAGINADO: GRAFO_GLOBAL.md autorado; senão, se o flat passar do cap, AGREGA por
-    // microserviço (1 nó por serviço) — o "1600 nós ilegíveis" vira mapa mental; o drill ("Grafo do
-    // serviço") abre o detalhe via `load_service_graph` (fallback pelo flat).
-    let (nodes, edges, _idx, aggregated) = panel::load_graph_global(p);
-    st.aggregated = aggregated;
-    // descrições dos nós (nome -> "O quê") do índice/MAPA, guardadas p/ o bloco lateral.
-    st.descs = panel::node_descriptions(p);
+}
+
+/// Povoa o estado com os nós e arestas lidos do app: posição em espiral inicial (semente
+/// espalhada, ver `spiral.rs`), graus e fit pendente. **Onde:** as duas cargas.
+fn povoar(st: &mut GraphState, g: crate::overdevcli::Grafo) {
     let mut id_to_idx: HashMap<String, usize> = HashMap::new();
-    for (i, n) in nodes.iter().enumerate() {
+    for (i, n) in g.nos.into_iter().enumerate() {
         id_to_idx.insert(n.id.clone(), i);
-        let (sx, sy) = spiral::position(i); // semente espalhada (ver spiral.rs)
+        let (sx, sy) = spiral::position(i);
         st.nodes.push(GNode {
-            id: n.id.clone(),
-            loc: n.loc.clone(),
             label: trunc_label(&n.id),
+            id: n.id,
+            loc: n.loc,
             x: sx,
             y: sy,
             vx: 0.0,
@@ -117,70 +112,56 @@ pub(crate) fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) {
             dim: false,
         });
     }
-    for e in &edges {
-        if let (Some(&a), Some(&b)) = (id_to_idx.get(&e.from), id_to_idx.get(&e.to)) {
+    for e in &g.arestas {
+        if let (Some(&a), Some(&b)) = (id_to_idx.get(&e.de), id_to_idx.get(&e.para)) {
             st.edges.push((a, b));
             st.nodes[a].deg += 1.0;
             st.nodes[b].deg += 1.0;
         }
     }
+    // descrições dos nós (nome -> "O quê") do índice/MAPA, guardadas p/ o bloco lateral.
+    st.descs = g.descricoes;
     st.fit_pending = true;
     st.refresh_flags();
 }
 
-/// Drill-down: carrega o grafo DETALHADO de UM microserviço (`.schematize/grafos/<servico>.md`)
-/// no estado. Devolve `true` se achou/carregou (nós > 0); `false` se não há grafo detalhado desse
-/// serviço — nesse caso o chamador mantém a visão atual e avisa (não zera a tela à toa).
-pub(crate) fn load_service_into(st: &mut GraphState, proj: Option<&Path>, servico: &str) -> bool {
+/// Carrega o grafo do `proj` (ou limpa se None) no estado.
+///
+/// Grafo global PAGINADO: `GRAFO_GLOBAL.md` autorado; senão, se o flat passar do cap, AGREGA por
+/// microserviço (1 nó por serviço) — o "1600 nós ilegíveis" vira mapa mental; o drill ("Grafo do
+/// serviço") abre o detalhe via [`load_service_into`]. **Quem lê e parseia o índice é o app**
+/// (`schematize-overdev graph json`); o hub só desenha. Se o app não responde, o estado fica
+/// LIMPO e o motivo volta no `Err` — a tela diz «instale», não finge um projeto sem grafo.
+pub(crate) fn load_graph_into(st: &mut GraphState, proj: Option<&Path>) -> Result<(), String> {
+    reiniciar(st, proj, None);
     let Some(p) = proj else {
-        return false;
+        return Ok(());
     };
-    let (nodes, edges) = panel::load_service_graph(p, servico);
-    if nodes.is_empty() {
-        return false;
+    let g = crate::overdevcli::grafo(p, None)?;
+    st.aggregated = g.agregado;
+    povoar(st, g);
+    Ok(())
+}
+
+/// Drill-down: carrega o grafo DETALHADO de UM microserviço (`.schematize/grafos/<servico>.md`)
+/// no estado. Devolve `Ok(true)` se achou/carregou (nós > 0); `Ok(false)` se não há grafo
+/// detalhado desse serviço — nesse caso o chamador mantém a visão atual e avisa (não zera a tela
+/// à toa). `Err` é o app que não respondeu: a visão atual também fica intacta.
+pub(crate) fn load_service_into(
+    st: &mut GraphState,
+    proj: Option<&Path>,
+    servico: &str,
+) -> Result<bool, String> {
+    let Some(p) = proj else {
+        return Ok(false);
+    };
+    let g = crate::overdevcli::grafo(p, Some(servico))?;
+    if g.nos.is_empty() {
+        return Ok(false);
     }
-    st.nodes.clear();
-    st.edges.clear();
-    st.descs.clear();
-    st.sel = None;
-    st.search.clear();
-    st.drag_node = None;
-    st.moved = false;
-    st.scale = 1.0;
-    st.ox = 0.0;
-    st.oy = 0.0;
-    st.alpha = 1.0;
-    st.service = Some(servico.to_string());
-    st.project = Some(p.to_path_buf());
-    st.descs = panel::node_descriptions(p);
-    let mut id_to_idx: HashMap<String, usize> = HashMap::new();
-    for (i, n) in nodes.iter().enumerate() {
-        id_to_idx.insert(n.id.clone(), i);
-        let (sx, sy) = spiral::position(i); // semente espalhada (ver spiral.rs)
-        st.nodes.push(GNode {
-            id: n.id.clone(),
-            loc: n.loc.clone(),
-            label: trunc_label(&n.id),
-            x: sx,
-            y: sy,
-            vx: 0.0,
-            vy: 0.0,
-            deg: 0.0,
-            selected: false,
-            hot: false,
-            dim: false,
-        });
-    }
-    for e in &edges {
-        if let (Some(&a), Some(&b)) = (id_to_idx.get(&e.from), id_to_idx.get(&e.to)) {
-            st.edges.push((a, b));
-            st.nodes[a].deg += 1.0;
-            st.nodes[b].deg += 1.0;
-        }
-    }
-    st.fit_pending = true;
-    st.refresh_flags();
-    true
+    reiniciar(st, Some(p), Some(servico));
+    povoar(st, g);
+    Ok(true)
 }
 
 /// (Re)liga o Timer da física se estiver parado. O tick roda um passo, sincroniza,
@@ -274,14 +255,23 @@ pub(crate) fn graph_enter(
     let mesmo_projeto = loaded.borrow().as_deref() == proj;
     let disco_igual = state.borrow().carregado_em == mtime_agora;
     if !mesmo_projeto || !disco_igual {
-        load_graph_into(&mut state.borrow_mut(), proj);
+        let res = load_graph_into(&mut state.borrow_mut(), proj);
         state.borrow_mut().carregado_em = mtime_agora;
         *loaded.borrow_mut() = proj.map(|p| p.to_path_buf());
         if let Some(app) = weak.upgrade() {
+            avisa_falha_do_grafo(&app, res);
             graph_sync(&app, &state.borrow(), nodes, edges);
         }
     }
     graph_kick(timer, weak.clone(), state.clone(), nodes.clone(), edges.clone());
+}
+
+/// Mostra no banner do grafo o motivo de a carga ter falhado (app ausente ou ilegível).
+/// **Onde:** [`graph_enter`] e [`graph_load_and_kick`]. Sucesso não toca o banner.
+fn avisa_falha_do_grafo(app: &AppWindow, res: Result<(), String>) {
+    if let Err(e) = res {
+        app.global::<G>().set_reindex_status(e.into());
+    }
 }
 
 /// Carrega o grafo do projeto no estado, sincroniza e (re)liga a física.
@@ -295,9 +285,10 @@ pub(crate) fn graph_load_and_kick(
     nodes: &Rc<VecModel<GraphNode>>,
     edges: &Rc<VecModel<GraphEdge>>,
 ) {
-    load_graph_into(&mut state.borrow_mut(), proj);
+    let res = load_graph_into(&mut state.borrow_mut(), proj);
     *loaded.borrow_mut() = proj.map(|p| p.to_path_buf());
     if let Some(app) = weak.upgrade() {
+        avisa_falha_do_grafo(&app, res);
         graph_sync(&app, &state.borrow(), nodes, edges);
     }
     graph_kick(timer, weak.clone(), state.clone(), nodes.clone(), edges.clone());

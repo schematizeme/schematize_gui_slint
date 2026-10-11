@@ -180,21 +180,20 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
         });
     }
-    // exportar vault Obsidian do índice (bônus — via panel::export_obsidian_at).
+    // exportar vault Obsidian do índice (bônus — via `schematize-overdev graph obsidian`).
     {
         let weak = app.as_weak();
         let gs = graph_state.clone();
         app.global::<G>().on_export(move || {
             let proj = gs.borrow().project.clone();
             if let Some(p) = proj {
-                match panel::export_obsidian_at(&p, None) {
+                match crate::overdevcli::exportar_obsidian(&p) {
                     Ok(dir) => {
                         if let Some(app) = weak.upgrade() {
-                            app.global::<Sk>().set_status(
-                                tf("gui.exported", &[("p", &dir.to_string_lossy())]).into(),
-                            );
+                            app.global::<Sk>()
+                                .set_status(tf("gui.exported", &[("p", &dir)]).into());
                         }
-                        util::open_url(&dir.to_string_lossy());
+                        util::open_url(&dir);
                     }
                     Err(e) => {
                         if let Some(app) = weak.upgrade() {
@@ -207,11 +206,16 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     }
     // abrir o painel HTML (com o mesmo grafo) no navegador (bônus).
     {
+        let weak = app.as_weak();
         let gs = graph_state.clone();
         app.global::<G>().on_open_browser(move || {
             let proj = gs.borrow().project.clone();
             if let Some(p) = proj {
-                let _ = panel::open_in_browser(&p);
+                if let Err(e) = crate::overdevcli::abrir_painel(&p) {
+                    if let Some(app) = weak.upgrade() {
+                        app.global::<G>().set_reindex_status(e.into());
+                    }
+                }
             }
         });
     }
@@ -228,7 +232,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             };
             let w = weak.clone();
             std::thread::spawn(move || {
-                let res = agentrun::launch_prompt_in_terminal(&root, &agentrun::reindex_prompt());
+                let res = crate::overdevcli::terminal(
+                    &root,
+                    crate::overdevcli::Terminal::Receita("reindex"),
+                );
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = w.upgrade() {
                         let msg = match res {
@@ -283,7 +290,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let Some(servico) = servico else { return };
             let carregou = load_service_into(&mut gs.borrow_mut(), proj.as_deref(), &servico);
             if let Some(app) = weak.upgrade() {
-                if carregou {
+                if let Err(e) = &carregou {
+                    app.global::<G>().set_reindex_status(e.clone().into());
+                    return;
+                }
+                if carregou == Ok(true) {
                     graph_sync(&app, &gs.borrow(), &gn, &ge);
                     graph_kick(&gt, weak.clone(), gs.clone(), gn.clone(), ge.clone());
                     app.global::<G>().set_reindex_status(SharedString::new());

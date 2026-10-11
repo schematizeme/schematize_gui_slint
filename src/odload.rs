@@ -22,16 +22,28 @@ pub(crate) fn load_overdev_into(app: &AppWindow, cl: &ChecklistView, proj: Optio
     // cada chamador, porque esta é a função única que significa "a tela passou a
     // mostrar este projeto" — ligar em cada ponto de chamada garantiria esquecer um.
     crate::wire::caixa::atualiza_caixa(app, Some(p));
-    apply_agent_budget(app); // linha do governador (teto/livre/load) na aba Overdev
+    apply_agent_budget(app, Some(p)); // linha do governador (teto/livre/load) na aba Overdev
     app.global::<Od>().set_current(basename_of(p).into());
-    let ov = panel::load_overdev(p);
-    // Checklist 2-níveis parseado direto (o panel::load_overdev do lib ignora os
-    // marcadores humanos `- [H ]`/`- [H x]`; aqui a GUI precisa deles).
+    // Tudo do run vem do app `schematize-overdev` (`checklist`, `documentos`, `notas` --json).
+    // Falha dele (ausente, ilegível) NÃO vira «sem run»: o motivo vai para o status e a tela
+    // fica vazia, em vez de afirmar que o projeto não tem overdev.
+    let lista = crate::overdevcli::checklist(p);
+    let (objetivo, modo, itens) = match &lista {
+        Ok(c) => (
+            c.objetivo.clone(),
+            c.modo.clone().unwrap_or_else(|| "inativo".to_string()),
+            crate::odproj::itens_de(c),
+        ),
+        Err(e) => {
+            app.global::<Od>().set_run_status(e.clone().into());
+            (String::new(), "inativo".to_string(), Vec::new())
+        }
+    };
     // O checklist COMPLETO fica no Rust; a UI recebe só a página corrente (e as
     // contagens, que a `ChecklistView` publica na mesma passada).
-    cl.set_all(app, parse_checklist_items(p));
+    cl.set_all(app, itens);
     // Sem run: objetivo vazio E sem itens (mesma regra do egui).
-    let has = !(ov.objetivo.trim().is_empty() && cl.is_empty());
+    let has = !(objetivo.trim().is_empty() && cl.is_empty());
     app.global::<Od>().set_has_overdev(has);
     if !has {
         cl.clear(app);
@@ -40,14 +52,27 @@ pub(crate) fn load_overdev_into(app: &AppWindow, cl: &ChecklistView, proj: Optio
         app.global::<Od>().set_notes(SharedString::new());
         return;
     }
-    app.global::<Od>().set_objetivo(ov.objetivo.clone().into());
-    app.global::<Od>().set_mode(ov.mode.clone().into());
-    app.global::<Od>().set_decisoes(ov.decisoes.clone().into());
-    app.global::<Od>().set_plano(ov.plano.clone().into());
-    app.global::<Od>().set_perguntas(ov.perguntas.clone().into());
+    app.global::<Od>().set_objetivo(objetivo.into());
+    app.global::<Od>().set_mode(modo.into());
+    let docs = crate::overdevcli::documentos(p).unwrap_or_else(|e| {
+        app.global::<Od>().set_run_status(e.into());
+        Default::default()
+    });
+    app.global::<Od>().set_decisoes(docs.decisoes.into());
+    app.global::<Od>().set_plano(docs.plano.into());
+    app.global::<Od>().set_perguntas(docs.perguntas.into());
     // Editor (arquivo atualmente escolhido) + notas do humano.
     load_editor_content(app, p);
-    app.global::<Od>().set_notes(overdev::read_notes(p).into());
+    atualiza_notas(app, p);
+}
+
+/// **O quê:** relê as notas do humano (`notas --json`) no campo da aba. **Onde:** a carga e depois
+/// de anexar uma nota. Falha do app vai para o status da execução; as notas antigas ficam.
+pub(crate) fn atualiza_notas(app: &AppWindow, p: &Path) {
+    match crate::overdevcli::notas(p) {
+        Ok(n) => app.global::<Od>().set_notes(n.into()),
+        Err(e) => app.global::<Od>().set_run_status(e.into()),
+    }
 }
 
 /// Teto do que entra no `TextEdit` do editor acoplado. O `TextEdit` do Slint NÃO é

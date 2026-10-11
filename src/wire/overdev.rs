@@ -130,9 +130,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // Governador de concorrência: "Rechecar" recomputa o teto (CPU/RAM/load − claudes-da-máquina).
     {
         let weak = app.as_weak();
+        let cur = od_current.clone();
         app.global::<Od>().on_refresh_agents(move || {
             if let Some(app) = weak.upgrade() {
-                apply_agent_budget(&app);
+                apply_agent_budget(&app, cur.borrow().as_deref());
             }
         });
     }
@@ -149,7 +150,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 );
                 return;
             };
-            match schematize::agentrun::launch_prompt_in_terminal(&project, command.as_str()) {
+            match crate::overdevcli::terminal(
+                &project,
+                crate::overdevcli::Terminal::Prompt(command.as_str()),
+            ) {
                 Ok(_) => app
                     .global::<Od>()
                     .set_run_status(format!("Rodando {command} num terminal externo…").into()),
@@ -174,7 +178,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 );
                 return;
             };
-            match schematize::agentrun::abrir_terminal_no_projeto(&project) {
+            match crate::overdevcli::terminal(&project, crate::overdevcli::Terminal::Vazio) {
                 Ok(term) => app.global::<Od>().set_run_status(
                     format!("terminal `{term}` aberto em {}", project.display()).into(),
                 ),
@@ -195,50 +199,15 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 app.global::<Od>().set_split_status("Selecione um projeto primeiro.".into());
                 return;
             };
+            // O teto do governador, o slot livre e o lançamento dos K claudes são do APP: ele
+            // recusa passar do teto com o número, e o resumo (✓/✗) volta para a tela.
             let k = (k.max(2)) as usize;
-            let b = schematize::agents::budget();
-            if k > b.total_cap {
-                app.global::<Od>().set_split_status(
-                    format!("{k} claudes passa do teto seguro ({}). Reduza o K.", b.total_cap).into(),
-                );
-                return;
-            }
-            match schematize::overdev::split(&project, k) {
-                Ok(res) => {
-                    let plan = b.split_plan(k);
-                    let mut msg = format!(
-                        "✓ {} itens em {} parte(s) (checklist/part-*.md) · {} subagents por claude.",
-                        res.moved,
-                        res.parts.len(),
-                        plan.subagents_each
-                    );
-                    if dispatch {
-                        if b.available < k {
-                            msg.push_str(&format!(" NÃO lancei: só {} slot(s) livre(s) agora.", b.available));
-                        } else {
-                            let mut ok = 0;
-                            for f in &res.parts {
-                                let rel = f.strip_prefix(&project).unwrap_or(f);
-                                let prompt = format!(
-                                    "Rode o overdev deste projeto cuidando APENAS de `{}` (sua fatia do split). \
-                                     Feche TODOS os itens `- [ ]` dele com prova. Você pode usar até {} subagents \
-                                     em paralelo — NÃO ultrapasse (há outros claudes nas outras fatias). Não toque \
-                                     nos outros part-*.md.",
-                                    rel.display(),
-                                    plan.subagents_each
-                                );
-                                if schematize::agentrun::launch_prompt_in_terminal(&project, &prompt).is_ok() {
-                                    ok += 1;
-                                }
-                            }
-                            msg.push_str(&format!(" Lancei {ok}/{} claude(s).", res.parts.len()));
-                        }
-                    }
-                    app.global::<Od>().set_split_status(msg.into());
-                    apply_agent_budget(&app); // atualiza o "rodando/livre" após lançar
-                }
-                Err(e) => app.global::<Od>().set_split_status(format!("split falhou: {e}").into()),
-            }
+            let msg = match crate::overdevcli::dividir(&project, k, dispatch) {
+                Ok(resumo) => resumo,
+                Err(e) => format!("split falhou: {e}"),
+            };
+            app.global::<Od>().set_split_status(msg.into());
+            apply_agent_budget(&app, Some(&project)); // atualiza o "rodando/livre" após lançar
         });
     }
     // "Gerar afazeres do archive" — dispara a skill schematize-archive (/archive-todos) num terminal
@@ -265,8 +234,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             }
             let weak = weak.clone();
             std::thread::spawn(move || {
-                let res =
-                    agentrun::launch_prompt_in_terminal(&root, &agentrun::archive_todos_prompt());
+                let res = crate::overdevcli::terminal(
+                    &root,
+                    crate::overdevcli::Terminal::Receita("archive-todos"),
+                );
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = weak.upgrade() {
                         match res {
@@ -335,9 +306,14 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // abrir o painel HTML do projeto atual no navegador.
     {
         let cur = od_current.clone();
+        let weak = app.as_weak();
         app.global::<Od>().on_open_browser(move || {
             if let Some(p) = cur.borrow().as_ref() {
-                let _ = panel::open_in_browser(p);
+                if let Err(e) = crate::overdevcli::abrir_painel(p) {
+                    if let Some(app) = weak.upgrade() {
+                        app.global::<Od>().set_run_status(e.into());
+                    }
+                }
             }
         });
     }
@@ -350,7 +326,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         app.global::<Od>().on_mark_human(move |idx| {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                let _ = mark_human_done_at(&p, idx);
+                if let Err(e) = crate::overdevcli::marcar_humano(&p, idx) {
+                    app.global::<Od>().set_run_status(e.into());
+                }
                 load_overdev_into(&app, &cl, Some(&p));
             }
         });
@@ -476,8 +454,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 if !texto.trim().is_empty() {
-                    let _ = overdev::add_note(&p, "task", &texto);
-                    app.global::<Od>().set_notes(overdev::read_notes(&p).into());
+                    if let Err(e) = crate::overdevcli::adicionar_nota(&p, "task", &texto) {
+                        app.global::<Od>().set_run_status(e.into());
+                    }
+                    atualiza_notas(&app, &p);
                 }
             }
         });
@@ -490,8 +470,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let root = cur.borrow().clone();
             if let (Some(app), Some(p)) = (weak.upgrade(), root) {
                 if !texto.trim().is_empty() {
-                    let _ = overdev::add_note(&p, "correcao", &texto);
-                    app.global::<Od>().set_notes(overdev::read_notes(&p).into());
+                    if let Err(e) = crate::overdevcli::adicionar_nota(&p, "correcao", &texto) {
+                        app.global::<Od>().set_run_status(e.into());
+                    }
+                    atualiza_notas(&app, &p);
                 }
             }
         });
@@ -524,7 +506,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         });
     }
     // ---- Fase 4: guardrail — CONFIRMAR: abre o `claude` num TERMINAL EXTERNO ----
-    // Chama `agentrun::launch_in_terminal` numa thread (processo próprio, RAM dele,
+    // Chama `terminal --receita overdev` numa thread (processo próprio, RAM dele,
     // fora do app). Sucesso → mensagem "claude aberto no terminal <nome>…" + liga o
     // MONITOR leve. Erro (claude/terminal ausente) → mostra a msg e não monitora.
     {
@@ -550,36 +532,41 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     VecModel::<SharedString>::from(Vec::new()),
                 )));
                 stop.store(false, Ordering::SeqCst);
-                let objetivo = overdev::objetivo_at(&p).unwrap_or_default();
                 let w = weak.clone();
                 let stop2 = stop.clone();
-                std::thread::spawn(move || match agentrun::launch_in_terminal(&p, &objetivo) {
-                    Ok(term) => {
-                        let wu = w.clone();
-                        let _ = slint::invoke_from_event_loop(move || {
-                            if let Some(app) = wu.upgrade() {
-                                app.global::<Od>().set_session_running(true);
-                                let msg = format!(
-                                    "{}{}{}",
-                                    tor("gui.od_launched_pre", "claude aberto no terminal "),
-                                    term,
-                                    tor(
-                                        "gui.od_launched_post",
-                                        " — o overdev roda fora do app; acompanhe abaixo.",
-                                    ),
-                                );
-                                app.global::<Od>().set_run_status(msg.into());
-                            }
-                        });
-                        run_monitor(w, p, stop2, false);
-                    }
-                    Err(e) => {
-                        let _ = slint::invoke_from_event_loop(move || {
-                            if let Some(app) = w.upgrade() {
-                                app.global::<Od>().set_session_running(false);
-                                app.global::<Od>().set_run_status(e.into());
-                            }
-                        });
+                // A receita `overdev` monta o prompt com o objetivo do run e sobe o supervisor.
+                std::thread::spawn(move || {
+                    match crate::overdevcli::terminal(
+                        &p,
+                        crate::overdevcli::Terminal::Receita("overdev"),
+                    ) {
+                        Ok(term) => {
+                            let wu = w.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(app) = wu.upgrade() {
+                                    app.global::<Od>().set_session_running(true);
+                                    let msg = format!(
+                                        "{}{}{}",
+                                        tor("gui.od_launched_pre", "claude aberto no terminal "),
+                                        term,
+                                        tor(
+                                            "gui.od_launched_post",
+                                            " — o overdev roda fora do app; acompanhe abaixo.",
+                                        ),
+                                    );
+                                    app.global::<Od>().set_run_status(msg.into());
+                                }
+                            });
+                            run_monitor(w, p, stop2, false);
+                        }
+                        Err(e) => {
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(app) = w.upgrade() {
+                                    app.global::<Od>().set_session_running(false);
+                                    app.global::<Od>().set_run_status(e.into());
+                                }
+                            });
+                        }
                     }
                 });
             }

@@ -64,9 +64,9 @@ pub(crate) fn install_i18n(app: &AppWindow) {
     l.set_skills_missing(t("gui.skills_missing").into());
     l.set_skills_install(t("gui.skills_install").into());
     l.set_skills_tab(t("gui.skills_tab").into());
-    // Faixa da janela do Overdev (E6 M5). Frases NOVAS que ainda não estão nos 20 catálogos do
-    // CLI (outro repo): ver `CHAVES_PENDENTES_NO_CLI` e o guard no fim do arquivo. «Instalar a
-    // janela», «Perguntas» e «Histórico» já existem.
+    // Faixa da janela do Overdev (E6 M5). As três frases próprias da faixa moram nos 20 catálogos
+    // do CLI desde o pino que trouxe o commit `8d5a0b6`; «Instalar a janela», «Perguntas» e
+    // «Histórico» já existiam.
     l.set_overdev_open(tor("gui.overdev_open", "Abrir a janela do Overdev").into());
     l.set_overdev_missing(
         tor("gui.overdev_missing", "A janela do Overdev não está instalada nesta máquina.").into(),
@@ -362,16 +362,16 @@ pub(crate) fn install_i18n(app: &AppWindow) {
 
 #[cfg(test)]
 mod tests {
-    /// As chaves da faixa do Overdev que o catálogo do CLI AINDA não tem.
+    /// As chaves que esta GUI usa e o catálogo do CLI AINDA não tem. **Vazia, e deve ficar.**
     ///
     /// **O quê:** exceção nomeada e mínima ao guard `nenhuma_chave_chega_crua_na_tela`.
     ///
-    /// **Por que existe:** os 20 catálogos moram em `schematize_cli_rs/src/i18n/`, outro repo, e
-    /// o pino do `Cargo.lock` só sobe para commits já publicados. As chaves entram lá em outro
-    /// commit; até o pino chegar, a tela mostra o português de reserva do `tor()`. **Quando o
-    /// catálogo ganhar a chave, o guard reprova esta lista** — a exceção se desfaz sozinha.
-    const CHAVES_PENDENTES_NO_CLI: [&str; 3] =
-        ["gui.overdev_open", "gui.overdev_missing", "gui.overdev_aba_checklist"];
+    /// **Por que o mecanismo continua:** os 20 catálogos moram em `schematize_cli_rs/src/i18n/`,
+    /// outro repo, e o pino do `Cargo.lock` só sobe para commits já publicados. Frase nova da GUI
+    /// nasce aqui, com o português de reserva do `tor()`, até o pino chegar. **Quando o catálogo
+    /// ganhar a chave, o guard reprova esta lista** — a exceção se desfaz sozinha. As três
+    /// chaves da faixa do Overdev saíram dela com o pino em `8d5a0b6`.
+    const CHAVES_PENDENTES_NO_CLI: [&str; 0] = [];
 
     /// **TODA chave que esta ligação usa tem de EXISTIR no catálogo.**
     ///

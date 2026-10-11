@@ -1,13 +1,12 @@
 //! Fiação da CAIXA DE ENTRADA e das ações de item humano (responder/recusar),
 //! mais o aviso de skills desatualizadas neste projeto.
 //!
-//! Tudo aqui opera num `root` explícito — a GUI observa um projeto que não é o cwd,
-//! então nada pode usar as funções cwd-relative do lib. A lógica (trava, idempotência,
-//! máquina de estados) mora no lib; aqui é só ligar o botão nela.
+//! Tudo aqui opera num `root` explícito — a GUI observa um projeto que não é o cwd; o app roda
+//! com ele como diretório corrente. A lógica (trava, idempotência, máquina de estados) mora no
+//! app `schematize-overdev`; aqui é só ligar o botão nela, por [`crate::overdevcli`].
 
 use crate::prelude::*;
 use crate::wire::Ctx;
-use schematize::overdev::{caixa, resposta, trava};
 
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
@@ -22,8 +21,8 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                 return;
             };
             let texto = app.global::<Od>().get_caixa_text().to_string();
-            match caixa::adicionar(&root, &texto) {
-                Ok(_) => {
+            match crate::overdevcli::capturar_demanda(&root, &texto) {
+                Ok(()) => {
                     app.global::<Od>().set_caixa_text(SharedString::new());
                     aviso(
                         &app,
@@ -44,12 +43,11 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         app.global::<Od>().on_caixa_agent(move || {
             let Some(app) = weak.upgrade() else { return };
             let Some(root) = cur.borrow().clone() else { return };
-            let n = caixa::pendentes(&root).len();
-            if n == 0 {
+            // O app monta o prompt do organizador. Sem demanda pendente não há o que organizar.
+            if matches!(crate::overdevcli::caixa(&root), Ok((0, _))) {
                 return;
             }
-            let prompt = caixa::prompt_agente(&schematize_bin(), n);
-            match agentrun::launch_prompt_in_terminal(&root, &prompt) {
+            match crate::overdevcli::organizar_caixa(&root) {
                 Ok(_) => {
                     aviso(&app, tor("gui.od_caixa_agent_ok", "agente aberto no terminal."), false)
                 }
@@ -66,13 +64,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
         app.global::<Od>().on_caixa_merge(move || {
             let Some(app) = weak.upgrade() else { return };
             let Some(root) = cur.borrow().clone() else { return };
-            match caixa::mesclar(&root) {
-                Ok(n) => {
-                    aviso(
-                        &app,
-                        format!("{n} {}", tor("gui.od_caixa_merged", "item(ns) no checklist.")),
-                        false,
-                    );
+            match crate::overdevcli::fundir_caixa(&root) {
+                Ok(frase) => {
+                    aviso(&app, frase, false);
                     // Recarrega o checklist: os itens novos têm de aparecer na hora,
                     // senão parece que a fusão não fez nada.
                     load_overdev_into(&app, &cl, Some(&root));
@@ -116,26 +110,18 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             let Some(app) = weak.upgrade() else { return };
             let Some(root) = cur.borrow().clone() else { return };
             let o = app.global::<Od>();
-            let acao = if o.get_resolve_answer() {
-                resposta::Acao::Responder
-            } else {
-                resposta::Acao::Recusar
-            };
-            let alvo = resposta::Alvo::Indice(o.get_resolve_index().max(1) as usize);
+            let responder = o.get_resolve_answer();
             let texto = o.get_resolve_text().to_string();
-            match resolver_em(&root, &alvo, acao, &texto) {
-                Ok(r) => {
+            match crate::overdevcli::resolver_humano(
+                &root,
+                o.get_resolve_index(),
+                responder,
+                &texto,
+            ) {
+                Ok(frase) => {
                     o.set_resolve_open(false);
-                    let msg = match (&r.vinculado, acao) {
-                        (Some(m), resposta::Acao::Responder) => {
-                            format!("{} {m}", tor("gui.od_released", "liberado pra máquina:"))
-                        }
-                        (Some(m), resposta::Acao::Recusar) => {
-                            format!("{} {m}", tor("gui.od_cancelled", "cancelado:"))
-                        }
-                        (None, _) => tor("gui.od_resolved", "item resolvido."),
-                    };
-                    aviso(&app, msg, false);
+                    // A frase vem do app: «liberado pra máquina: …» / «cancelado: …».
+                    aviso(&app, frase, false);
                     load_overdev_into(&app, &cl, Some(&root));
                 }
                 Err(e) => {
@@ -158,7 +144,10 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             if aplicadas.atrasadas.is_empty() {
                 return;
             }
-            match agentrun::launch_prompt_in_terminal(&root, &aplicadas.prompt) {
+            match crate::overdevcli::terminal(
+                &root,
+                crate::overdevcli::Terminal::Prompt(&aplicadas.prompt),
+            ) {
                 Ok(_) => aviso(
                     &app,
                     tor("gui.od_rerun_ok", "agente aberto pra reaplicar as skills."),
@@ -181,36 +170,6 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     }
 }
 
-/// Resolve um item humano num `root` explícito, com o MESMO ciclo do CLI:
-/// ler e escrever sob a mesma trava, usando a máquina de estados pura do lib.
-///
-/// Não duplica a regra — só a I/O path-aware, que é o que o lib não expõe (as funções
-/// dele são cwd-relative e a GUI observa outro diretório).
-fn resolver_em(
-    root: &Path,
-    alvo: &resposta::Alvo,
-    acao: resposta::Acao,
-    texto: &str,
-) -> Result<resposta::Resolucao, String> {
-    let cl = schematize::paths::overdev_dir_at(root).join("CHECKLIST.md");
-    let r = trava::com_trava(&cl, || {
-        let s = std::fs::read_to_string(&cl).map_err(|e| e.to_string())?;
-        let r = resposta::resolver_str(&s, alvo, acao, texto)?;
-        trava::escreve_atomico(&cl, &r.texto)?;
-        Ok(r)
-    })?;
-    // A decisão vai pro registro durável do projeto — mesmo destino do CLI.
-    let dec = schematize::paths::overdev_dir_at(root).join("DECISOES.md");
-    let rotulo = if acao == resposta::Acao::Responder { "RESPOSTA" } else { "RECUSA" };
-    // Mesmo cuidado do CLI: `unwrap_or_default` mapeia falha de leitura para vazio, e o
-    // `escreve_atomico` seguinte reescreveria o DECISOES.md inteiro a partir do vazio —
-    // o historico de decisoes do projeto apagado por um byte nao-UTF-8.
-    let mut atual = schematize::util::ler_para_modificar(&dec)?;
-    atual.push_str(&format!("\n## {rotulo}: {}\n\n{texto}\n", r.item));
-    trava::escreve_atomico(&dec, &atual)?;
-    Ok(r)
-}
-
 /// Recontagem da caixa + do estado das skills. Chamada ao trocar de projeto e após
 /// cada ação — os números da tela são a única forma de saber que há algo pendente.
 pub(crate) fn atualiza_caixa(app: &AppWindow, root: Option<&Path>) {
@@ -222,8 +181,14 @@ pub(crate) fn atualiza_caixa(app: &AppWindow, root: Option<&Path>) {
         o.set_skills_summary(SharedString::new());
         return;
     };
-    o.set_caixa_pending(caixa::pendentes(root).len() as i32);
-    o.set_caixa_ready(caixa::processadas(root).len() as i32);
+    // Falha do app NÃO zera os contadores (zero afirma «caixa vazia»): o motivo vai ao banner.
+    match crate::overdevcli::caixa(root) {
+        Ok((pendentes, prontas)) => {
+            o.set_caixa_pending(pendentes as i32);
+            o.set_caixa_ready(prontas as i32);
+        }
+        Err(e) => aviso(app, e, true),
+    }
     let atrasadas = crate::skillsapplied::ler(root).atrasadas;
     o.set_skills_outdated(atrasadas.len() as i32);
     o.set_skills_summary(

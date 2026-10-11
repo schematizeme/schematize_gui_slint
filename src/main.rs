@@ -24,6 +24,7 @@ slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/
 // `include_modules!()` acima gera).
 mod lockpin; // guarda: o Cargo.lock tem que pinar um commit do CLI, não um caminho local
 mod prelude;
+mod procedencia; // de qual commit (e se árvore suja) este binário saiu — o `--version`
 
 mod checklist; // paginação PURA do checklist (o que segura o custo de render)
 mod checklistview; // ligação do checklist fatiado com as propriedades da UI
@@ -37,7 +38,8 @@ mod marketstatus; // versões, lidas do `market status --json` (E4 M5 da extradi
 mod odhistory; // histórico do overdev (snapshots + commits), paginado
 mod odload; // carga do estado do overdev + editor acoplado
 mod odmonitor; // monitor leve do .schematize/overdev/ (thread -> UI)
-mod odproj; // projetos, caminhos e parse do CHECKLIST 2-níveis
+mod odproj; // projetos, caminhos do overdev e itens do checklist
+mod overdevcli; // a porta única para o `schematize-overdev` (leituras --json e ações)
 mod repulsion; // repulsão do grafo em grade espacial (era O(n²)/quadro)
 mod skillactions; // os botões que as skills declaram, lidos do BINÁRIO (E5)
 mod skillsapplied; // skills atrasadas no projeto, lidas do BINÁRIO (E5)
@@ -92,7 +94,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // com a primeira linha do log de ambiente (`(WAYLAND_DISPLAY=wayland-0))`) no lugar do
     // número. Responder e sair é o contrato mínimo de um binário de linha de comando.
     if std::env::args().skip(1).any(|a| a == "--version" || a == "-V") {
-        println!("schematize-gui {}", env!("CARGO_PKG_VERSION"));
+        println!("schematize-gui {}", procedencia::rotulo_versao());
         return Ok(());
     }
     detect_display_env();
@@ -247,39 +249,23 @@ fn main() -> Result<(), slint::PlatformError> {
 mod tests {
     use super::*;
 
-    /// Cria um `.overdev/CHECKLIST.md` temporário e ÚNICO (testes rodam em paralelo).
-    fn scratch(checklist: &str) -> std::path::PathBuf {
-        // Importado AQUI e não no prelude: depois da E5, o único uso de `AtomicUsize` neste
-        // crate é este contador de teste, e um `pub(crate) use` que só os testes consomem é
-        // import morto no build de produção — o `-D warnings` o pega, com razão.
-        use std::sync::atomic::AtomicUsize;
-        static SEQ: AtomicUsize = AtomicUsize::new(0);
-        let uniq = SEQ.fetch_add(1, Ordering::SeqCst);
-        let base =
-            std::env::temp_dir().join(format!("gui-od-test-{}-{}", std::process::id(), uniq));
-        let od = base.join(".overdev");
-        std::fs::create_dir_all(&od).unwrap();
-        std::fs::write(od.join("CHECKLIST.md"), checklist).unwrap();
-        base
-    }
+    /// O documento `checklist --json` que o app devolve para o checklist de exemplo: 2 de máquina
+    /// abertos (um indentado), 1 feito, 1 on-hold, 2 humanos abertos, 1 humano feito.
+    const DOC: &str = r#"{"raiz":"/p","modo":"active","objetivo":"meta","itens":[
+        {"tipo":"open","texto":"item máquina aberto A","maquina":true,"humano_n":0,"sub":false},
+        {"tipo":"done","texto":"item máquina feito B","maquina":true,"humano_n":0,"sub":false},
+        {"tipo":"hold","texto":"item on-hold C","maquina":true,"humano_n":0,"sub":false},
+        {"tipo":"hopen","texto":"item humano aberto D","maquina":false,"humano_n":1,"sub":false},
+        {"tipo":"hdone","texto":"item humano feito E","maquina":false,"humano_n":0,"sub":false},
+        {"tipo":"hopen","texto":"item humano aberto F","maquina":false,"humano_n":2,"sub":false},
+        {"tipo":"open","texto":"item indentado aberto G","maquina":true,"humano_n":0,"sub":true}]}"#;
 
-    const FIX: &str = "\
-# OVERDEV
-- [ ] item máquina aberto A
-- [x] item máquina feito B
-- [~] item on-hold C
-- [H ] item humano aberto D
-- [H x] item humano feito E
-- [H ] item humano aberto F
-não é item
-  - [ ] item indentado aberto G
-";
-
+    /// A classificação mora no APP; o hub só a leva para a linha da UI e preserva o índice humano
+    /// (é o argumento de `human --done`). Item de máquina vira `hindex = -1`.
     #[test]
-    fn parse_2niveis_classifica_e_indexa_humanos() {
-        let root = scratch(FIX);
-        let its = parse_checklist_items(&root);
-        // 7 itens de checklist (a linha "não é item" é ignorada).
+    fn itens_do_app_viram_linhas_da_ui_com_o_indice_humano() {
+        let c = crate::overdevcli::interpretar_checklist(DOC).expect("documento válido");
+        let its = itens_de(&c);
         assert_eq!(its.len(), 7);
         let by_kind = |k: &str| its.iter().filter(|i| i.kind == k).count();
         assert_eq!(by_kind("open"), 2, "máquina abertos (inclui indentado)");
@@ -287,29 +273,11 @@ não é item
         assert_eq!(by_kind("hold"), 1, "on-hold");
         assert_eq!(by_kind("hopen"), 2, "humanos abertos");
         assert_eq!(by_kind("hdone"), 1, "humano feito");
-        // hindex numera só os humanos abertos, 1-based, na ordem do arquivo.
         let hopen: Vec<i32> = its.iter().filter(|i| i.kind == "hopen").map(|i| i.hindex).collect();
         assert_eq!(hopen, vec![1, 2]);
-        // itens de máquina não têm origem-humano nem índice.
         let mo = its.iter().find(|i| i.kind == "open").unwrap();
         assert!(mo.machine && mo.hindex == -1);
-        std::fs::remove_dir_all(&root).ok();
-    }
-
-    #[test]
-    fn marca_humano_por_indice_so_o_que_casa() {
-        let root = scratch(FIX);
-        // fecha o 2º humano aberto (F) → vira - [H x]; D segue aberto.
-        mark_human_done_at(&root, 2).unwrap();
-        let its = parse_checklist_items(&root);
-        assert_eq!(its.iter().filter(|i| i.kind == "hopen").count(), 1, "sobra 1 humano aberto");
-        assert!(its.iter().any(|i| i.kind == "hopen" && i.text.contains("aberto D")));
-        assert!(its.iter().any(|i| i.kind == "hdone" && i.text.contains("aberto F")));
-        // não toca itens de máquina.
-        assert_eq!(its.iter().filter(|i| i.kind == "open").count(), 2);
-        // índice fora de faixa → erro, arquivo intacto.
-        assert!(mark_human_done_at(&root, 9).is_err());
-        std::fs::remove_dir_all(&root).ok();
+        assert!(its[6].sub, "o indentado é subtarefa");
     }
 
     #[test]

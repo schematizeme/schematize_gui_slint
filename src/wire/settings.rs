@@ -17,7 +17,7 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
     app.global::<Cfg>().set_lang_code(cur_lang.clone().into());
     app.global::<Cfg>().set_lang_name(i18n::name_of(&cur_lang).unwrap_or("").into());
     app.global::<Cfg>().set_autostart_on(autostart::is_active());
-    app.global::<Cfg>().set_hooks_on(settings::overdev_enabled());
+    mostra_hooks(app, &hooks_dir());
     // trocar idioma AO VIVO: persiste + recarrega TODOS os rótulos estáticos (L).
     {
         let weak = app.as_weak();
@@ -47,18 +47,19 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             });
         });
     }
-    // hooks do overdev no settings.json do Claude Code.
+    // hooks do overdev no settings.json do Claude Code — DELEGADO ao app `schematize-overdev`
+    // (`enable`/`disable`/`hooks --json`). Sem o app, a chave não finge: mostra a dica de instalar.
     {
         let weak = app.as_weak();
         app.global::<Cfg>().on_toggle_hooks(move || {
             let Some(app) = weak.upgrade() else { return };
-            let on = app.global::<Cfg>().get_hooks_on();
-            let res = if on { settings::disable() } else { settings::enable(&schematize_bin()) };
-            app.global::<Cfg>().set_hooks_on(if res.is_ok() {
-                !on
-            } else {
-                settings::overdev_enabled()
-            });
+            let dir = hooks_dir();
+            let ligar = !app.global::<Cfg>().get_hooks_on();
+            if let Err(e) = crate::overdevcli::definir_hooks(&dir, ligar) {
+                app.global::<Cfg>().set_hooks_msg(e.into());
+            }
+            // O estado mostrado é SEMPRE o relido do app, não o que o clique esperava.
+            mostra_hooks(&app, &dir);
         });
     }
     // atalho: reusa o modal de diretórios de dev / projetos fixados.
@@ -133,5 +134,35 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let dir = p.parent().unwrap_or(p);
             open_path_in_files(dir);
         });
+    }
+}
+
+/// **O quê:** o diretório onde rodar os comandos de hooks. **Onde:** a chave de hooks.
+/// Os hooks são GLOBAIS (`~/.claude/settings.json`); o app só precisa de um cwd existente.
+fn hooks_dir() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
+}
+
+/// **O quê:** relê os hooks do app e põe o estado na chave; sem o app (ou com falha) mostra o
+/// motivo e, no caso de ausência, a dica de instalar — a MESMA da aba Overdev.
+///
+/// **Onde:** o arranque da tela e depois de cada clique. `Err` desliga a chave sem afirmar nada
+/// além de «não sei»: o texto de `hooks_msg` diz por quê.
+pub(crate) fn mostra_hooks(app: &AppWindow, dir: &Path) {
+    let cfg = app.global::<Cfg>();
+    match crate::overdevcli::hooks_ligados(dir) {
+        Ok(on) => {
+            cfg.set_hooks_on(on);
+            cfg.set_hooks_msg(SharedString::new());
+        }
+        Err(e) => {
+            cfg.set_hooks_on(false);
+            let dica = if crate::overdevcli::presente() {
+                e
+            } else {
+                format!("{e} — instale com: {}", crate::wire::envs::COMANDO_INSTALAR_OVERDEV)
+            };
+            cfg.set_hooks_msg(dica.into());
+        }
     }
 }

@@ -122,6 +122,9 @@ export global Cfg {
     in-out property <bool> lang-open: false;
     in-out property <bool> autostart-on: false;
     in-out property <bool> hooks-on: false;
+    /// Por que a chave de hooks não sabe o estado (app do overdev ausente/ilegível) + a dica de
+    /// instalar. Vazio = a chave está falando a verdade.
+    in-out property <string> hooks-msg;
     callback set-lang(string);       // troca o idioma (persiste + recarrega L)
     callback toggle-autostart();
     callback toggle-hooks();

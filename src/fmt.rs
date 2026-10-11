@@ -58,10 +58,10 @@ pub(crate) fn fmt_ts_local(ts: i64) -> String {
 /// no `.schematize/overdev/completions.json`.
 pub(crate) const OD_COMPLETIONS_MAX: usize = 120;
 
-/// Materializa as conclusões (`overdev::completions`) em linhas prontas pra UI:
+/// Materializa as conclusões (`monitor --json`) em linhas prontas pra UI:
 /// `HH:MM:SS  <texto>` (hora local). Mantém a ordem do lib (ts asc → recentes
 /// embaixo) e corta nas últimas [`OD_COMPLETIONS_MAX`].
-pub(crate) fn fmt_completions(cs: Vec<overdev::Completion>) -> Vec<String> {
+pub(crate) fn fmt_completions(cs: Vec<crate::overdevcli::Conclusao>) -> Vec<String> {
     let cs = if cs.len() > OD_COMPLETIONS_MAX {
         cs[cs.len() - OD_COMPLETIONS_MAX..].to_vec()
     } else {
@@ -79,17 +79,17 @@ pub(crate) fn fmt_completions(cs: Vec<overdev::Completion>) -> Vec<String> {
         .collect()
 }
 
-/// Monta a linha de tokens do painel do monitor a partir de `usage::Usage`.
+/// Monta a linha de tokens do painel do monitor a partir dos [`crate::overdevcli::Tokens`].
 /// "Tokens: <total> (in <in> / out <out> · cache-read <cr>) · Modelo: <main>".
-pub(crate) fn fmt_usage(u: &usage::Usage) -> String {
-    let model = u.main_model().unwrap_or("—");
+pub(crate) fn fmt_usage(u: &crate::overdevcli::Tokens) -> String {
+    let model = u.modelo.as_deref().unwrap_or("—");
     format!(
         "{}: {} (in {} / out {} · cache-read {}) · {}: {}",
         tor("gui.od_tokens", "Tokens"),
         sep_thousands(u.total),
-        sep_thousands(u.input),
-        sep_thousands(u.output),
-        sep_thousands(u.cache_read),
+        sep_thousands(u.entrada),
+        sep_thousands(u.saida),
+        sep_thousands(u.cache_leitura),
         tor("gui.od_model", "Modelo"),
         model,
     )

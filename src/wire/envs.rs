@@ -59,7 +59,7 @@ const COMANDO_INSTALAR_SKILLS: &str =
 /// a `dica`; até lá, o teste de forma (no fim do arquivo) impede que o texto mude calado.
 ///
 /// Sem `--bins`: a dica oficial usa `--locked`, e o cargo instala os dois binários do pacote.
-const COMANDO_INSTALAR_OVERDEV: &str =
+pub(crate) const COMANDO_INSTALAR_OVERDEV: &str =
     "cargo install --git https://github.com/schematizeme/schematize_overdev_rs --locked";
 
 /// A nota honesta da dica do CLI para app de repositório privado. O repo do overdev ainda não
