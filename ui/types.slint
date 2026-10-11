@@ -104,24 +104,6 @@ export struct ProjItem {
     marker: string,   // projeto: marcador que o identificou (.git/.overdev/…)
 }
 
-// Um item do checklist 2-níveis do overdev: tipo + texto + origem + índice humano.
-// `kind` decide cor/ícone: máquina "done"=✓verde / "open"=○ / "hold"=~amarelo;
-// humano "hdone"=✓ / "hopen"=○ (marcável pela pessoa). `machine`=🤖 vs 👤.
-// `hindex` = posição 1-based do item entre os HUMANOS ABERTOS (arg de od-mark-human);
-// -1 para itens não-marcáveis.
-export struct OverItem {
-    // "done" | "open" | "hold" | "cancel"           (máquina)
-    // "hopen" | "hdone" | "hresp" | "hrec"          (humano)
-    // "nota"                                        (o texto da resposta/recusa)
-    kind: string,
-    text: string,
-    machine: bool,    // true = item de MÁQUINA (agente) · false = item HUMANO
-    hindex: int,      // hopen: 1-based entre humanos abertos · senão -1
-    // Linha INDENTADA = subtask. É assim que uma pergunta parkeada aparece presa ao
-    // item de máquina que ela trava, em vez de solta numa lista plana.
-    sub: bool,
-}
-
 // Uma ação declarada por uma skill instalada (gui.json) — vira botão na aba do projeto.
 // Preenchida pelo Rust a partir de `schematize::guiactions::gui_actions()`.
 export struct SkillAction {

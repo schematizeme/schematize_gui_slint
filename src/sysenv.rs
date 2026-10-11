@@ -340,7 +340,7 @@ pub(crate) fn overdev_gui_bin() -> Option<String> {
 ///
 /// **Onde:** os botões da faixa da aba Overdev. A janela trabalha sobre um projeto, e o hub é
 /// quem sabe qual é (a barra do cabeçalho). O contrato dela (`schematize-overdev-gui`) é
-/// `--dir <projeto>` e `--aba perguntas|checklist|historico`; o cwd também vai no projeto,
+/// `--dir <projeto>` e `--aba perguntas|checklist|historico|execucao|caixa|notas`; o cwd também vai no projeto,
 /// para a janela que ignorar a flag ainda abrir no lugar certo.
 ///
 /// **`aba` vazia = sem `--aba`** (a janela abre na inicial). **Sem projeto**, sem `--dir`: ela

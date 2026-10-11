@@ -1,5 +1,5 @@
-//! Projetos e caminhos do overdev: detecção/seletor de projeto, resolução do dir
-//! `.schematize/overdev`, parse do CHECKLIST 2-níveis e fechamento de item humano.
+//! Projetos do hub: detecção/seletor de projeto, troca do projeto atual e as ações declaradas
+//! por skills. O checklist e o resto do estado do overdev são da janela `schematize-overdev-gui`.
 
 use crate::prelude::*;
 
@@ -55,42 +55,6 @@ pub(crate) fn build_proj_items(projects: &[projects::Project], recent: &[String]
     out
 }
 
-/// Dir de overdev do projeto pela regra "ler ambos" do lib: `.schematize/overdev` (novo, vivo) se
-/// existir; senão `.overdev` legado; senão o novo default. Era hardcoded `.overdev` — por isso a GUI
-/// mostrava 0/0/0 e editor vazio em projetos já migrados pro `.schematize/` (gerava no novo, lia no
-/// antigo). Usa o MESMO resolvedor do hub (`schematize::paths`), que é o do app.
-pub(crate) fn overdev_dir(root: &Path) -> PathBuf {
-    schematize::paths::overdev_dir_at(root)
-}
-
-/// Caminho de um arquivo do editor (`PLAN.md`/`CHECKLIST.md`) no dir de overdev resolvido.
-/// Sanitiza `target` a um basename simples pra a GUI nunca escrever fora do dir de overdev.
-pub(crate) fn overdev_file_path(root: &Path, target: &str) -> PathBuf {
-    let name = Path::new(target).file_name().and_then(|s| s.to_str()).unwrap_or("PLAN.md");
-    overdev_dir(root).join(name)
-}
-
-/// Os itens do CHECKLIST 2-níveis do app como `OverItem`s (kind + origem + índice).
-///
-/// **Quem classifica é o app** (`schematize-overdev checklist --json`, lido em
-/// [`crate::overdevcli::checklist`]): `- [H ]` casado antes de `- [ ]`, vínculo
-/// `<!-- ovf:q:… -->` removido do texto, `humano_n` 1-based só nos humanos abertos (é o arg de
-/// `od-mark-human`). O hub não tem segunda cópia da lei dos marcadores — a que divergisse
-/// contaria diferente do gate.
-/// **O quê:** o documento do app → as linhas da UI. PURA. **Onde:** `odload::load_overdev_into`.
-pub(crate) fn itens_de(c: &crate::overdevcli::Checklist) -> Vec<OverItem> {
-    c.itens
-        .iter()
-        .map(|i| OverItem {
-            kind: i.tipo.as_str().into(),
-            text: i.texto.as_str().into(),
-            machine: i.maquina,
-            hindex: if i.humano_n > 0 { i.humano_n } else { -1 },
-            sub: i.sub,
-        })
-        .collect()
-}
-
 /// Re-sonda dev_dirs + pins + projetos e reconstrói os modelos do seletor, da lista
 /// de dev_dirs e da lista de pastas FIXADAS. O scan agora inclui os pins (pastas
 /// fixadas pelo usuário) — elas aparecem no seletor mesmo sem marcador git.
@@ -108,8 +72,6 @@ pub(crate) fn refresh_proj_models(
     pin_model.set_vec(pins.into_iter().map(SharedString::from).collect::<Vec<SharedString>>());
 }
 
-/// Carrega o estado do overdev do `proj` (ou limpa se None) nas propriedades do app.
-/// Espelha o overdev_view do egui: objetivo, mode, progresso, checklist e seções.
 /// Ações de skills instaladas (gui.json) → linhas do modelo Slint. Cada uma vira um botão na aba do
 /// projeto; Q.A./Pentest aparecem quando as skills schematize-engineering/pentest estão instaladas.
 pub(crate) fn skill_action_rows() -> Vec<SkillAction> {
@@ -127,24 +89,48 @@ pub(crate) fn skill_action_rows() -> Vec<SkillAction> {
         .collect()
 }
 
-/// Recomputa o orçamento do governador de concorrência (`agents --json`, que também persiste
-/// `~/.schematize/agents.json`) e joga nos props da GUI (linha "máquina: teto/livre/load/rodando"
-/// e clampa o K do split ao teto). Sem o app, ou com falha dele, a linha NÃO é zerada: o motivo
-/// vai para o status da execução (zero seria afirmar «a máquina não tem teto»).
-pub(crate) fn apply_agent_budget(app: &AppWindow, projeto: Option<&Path>) {
-    let dir = projeto.map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
-    let b = match crate::overdevcli::orcamento(&dir) {
-        Ok(b) => b,
-        Err(e) => {
-            app.global::<Od>().set_run_status(e.into());
-            return;
-        }
-    };
-    app.global::<Od>().set_agent_cap(b.teto as i32);
-    app.global::<Od>().set_agent_avail(b.livres as i32);
-    app.global::<Od>().set_agent_running(b.rodando as i32);
-    app.global::<Od>().set_agent_load(format!("{:.2}", b.load1).into());
-    let cap = (b.teto as i32).max(2);
-    let k = app.global::<Od>().get_split_k().clamp(2, cap);
-    app.global::<Od>().set_split_k(k);
+/// **O quê:** faz a tela passar a mostrar `proj` (ou nenhum): `has-project`, o nome e o aviso de
+/// skills atrasadas.
+///
+/// **Onde:** [`select_project`], a reabertura do projeto recente no arranque (`main`) e o botão
+/// Recarregar. É a função ÚNICA que significa «a tela passou a mostrar este projeto» — ligar a
+/// recontagem em cada chamador garantiria esquecer um.
+///
+/// O estado do overdev (checklist, objetivo, contadores) NÃO é lido aqui: é da janela dele, que
+/// lê o projeto por conta própria. **Efeitos:** muda globais da UI; roda `schematize-skills`.
+pub(crate) fn load_projeto(app: &AppWindow, proj: Option<&Path>) {
+    let od = app.global::<Od>();
+    od.set_has_project(proj.is_some());
+    od.set_current(proj.map(basename_of).unwrap_or_default().into());
+    crate::wire::projeto::atualiza_skills(app, proj);
+}
+
+/// **O quê:** zera o que pertencia ao projeto anterior (status das ações, linha de upstream).
+///
+/// **Onde:** [`select_project`], antes de `load_projeto`. Trocar de projeto tem que apagar o
+/// anterior da tela, não sobrepor.
+pub(crate) fn reset_projeto(app: &AppWindow) {
+    let od = app.global::<Od>();
+    od.set_run_status(SharedString::new());
+    od.set_upstream_line(SharedString::new());
+}
+
+/// **O quê:** escolhe um projeto: canoniza, persiste como recente e o mostra.
+///
+/// **Onde:** o seletor de projeto e «abrir pasta avulsa».
+pub(crate) fn select_project(
+    app: &AppWindow,
+    proj_model: &VecModel<ProjItem>,
+    dev_model: &VecModel<SharedString>,
+    pin_model: &VecModel<SharedString>,
+    cur: &RefCell<Option<PathBuf>>,
+    path: PathBuf,
+) {
+    let abs = std::fs::canonicalize(&path).unwrap_or(path);
+    config::add_recent_project(&abs.to_string_lossy());
+    *cur.borrow_mut() = Some(abs.clone());
+    reset_projeto(app);
+    load_projeto(app, Some(&abs));
+    // reflete o novo recente no seletor.
+    refresh_proj_models(proj_model, dev_model, pin_model);
 }

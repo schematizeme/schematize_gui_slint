@@ -70,50 +70,15 @@ export global L {
     in-out property <string> pinned-projects;     // título "Projetos fixados"
     in-out property <string> pin-folder;          // botão "Fixar pasta…"
     in-out property <string> pin-hint;            // texto de ajuda do pin
-    in-out property <string> no-overdev;          // empty-state: sem run de overdev
-    in-out property <string> od-decisions;        // "Decisões"
-    in-out property <string> od-plan;             // "Plano"
-    in-out property <string> od-questions;        // "Perguntas parkeadas"
     in-out property <string> open-browser;
     in-out property <string> od-open-terminal;        // "abrir no navegador"
     // ---- aba Overdev — Fase 3 (editor + tasks + checklist 2-níveis) ----
-    in-out property <string> od-human;             // etiqueta "humano"
-    in-out property <string> od-machine;           // etiqueta "máquina"
-    in-out property <string> od-mark-human;        // botão "marcar como feito"
-    in-out property <string> od-editor;            // título "Editor"
-    in-out property <string> od-save-plan;         // botão "Salvar"
-    in-out property <string> od-tasks;             // título "Tarefas e notas"
-    in-out property <string> od-add-note;          // botão "Adicionar nota"
-    in-out property <string> od-note;              // rótulo/hint "Nota para esta tarefa…"
-    in-out property <string> od-correction;        // título/hint "Prompt de correção…"
     in-out property <string> od-notes-title;       // título "Notas e correções"
     // ---- checklist FATIADO (filtro + paginação) ----
-    in-out property <string> od-cl-all;            // filtro "Todos"
-    in-out property <string> od-cl-open;           // filtro "Abertos"
-    in-out property <string> od-cl-done;           // filtro "Feitos"
-    in-out property <string> od-cl-hold;           // filtro "On-hold"
-    in-out property <string> od-cl-human;          // filtro "Humanos"
-    in-out property <string> od-cl-of;             // conector "de" ("1–100 de 700")
-    in-out property <string> od-cl-empty;          // "Nenhum item neste filtro"
     // ---- editor acoplado sob demanda ----
-    in-out property <string> od-editor-show;       // botão "Abrir editor"
-    in-out property <string> od-editor-hide;       // botão "Fechar editor"
-    in-out property <string> od-editor-big;        // aviso "arquivo grande demais…"
-    in-out property <string> od-editor-external;   // botão "Abrir no editor externo"
     // ---- aba Overdev — Fase 4 (terminal externo + monitor leve) ----
     in-out property <string> od-run;               // botão "Executar overdev"
     in-out property <string> od-gen-archive;       // botão "Gerar afazeres do archive"
-    in-out property <string> od-stop;              // botão "Parar"
-    in-out property <string> od-running;           // pill de estado (monitor ligado)
-    in-out property <string> od-mon-active;        // pill quando o run está "active"
-    in-out property <string> od-confirm-run;       // texto do guardrail (aviso do disparo)
-    in-out property <string> od-agent-cmd;         // rótulo "Comando do agente"
-    in-out property <string> od-ext-terminal;      // rótulo "claude rodando em terminal externo…"
-    in-out property <string> od-mon-iters;         // rótulo "iterações"
-    in-out property <string> od-mon-open-title;    // título "Itens abertos"
-    in-out property <string> od-attach;            // botão "Reload / Acompanhar" (anexa a run externo)
-    in-out property <string> od-refresh-tokens;    // botão "Atualizar tokens"
-    in-out property <string> od-completions-title; // título "Conclusões" (log com data/hora)
     // aba Grafo
     in-out property <string> g-search-hint;        // hint da busca ("procurar")
     in-out property <string> g-nodes-suffix;       // sufixo "nós"
@@ -221,20 +186,7 @@ export global L {
     in-out property <string> home-git-desc;
 
     // ---- Resolver item humano + caixa de entrada + skills do projeto ----
-    in-out property <string> od-answer;             // "Responder"
-    in-out property <string> od-refuse;             // "Recusar"
-    in-out property <string> od-answer-title;       // "Responder — libera a máquina"
-    in-out property <string> od-refuse-title;       // "Recusar — cancela o item"
-    in-out property <string> od-answer-hint;
-    in-out property <string> od-refuse-hint;
     in-out property <string> od-caixa-title;        // "Acrescentar ao projeto"
-    in-out property <string> od-caixa-hint;
-    in-out property <string> od-caixa-placeholder;
-    in-out property <string> od-caixa-add;          // "Capturar"
-    in-out property <string> od-caixa-agent;        // "Organizar com agente"
-    in-out property <string> od-caixa-merge;        // "Fundir no checklist"
-    in-out property <string> od-caixa-pending;      // "a organizar"
-    in-out property <string> od-caixa-ready;        // "a fundir"
     in-out property <string> od-skills-outdated;    // "evoluíram desde que moldaram este projeto"
     in-out property <string> od-skills-rerun;       // "Rerodar skills"
     // ---- Portal (Home) ----
@@ -250,5 +202,4 @@ export global L {
     in-out property <string> home-vps;
     in-out property <string> home-vps-desc;
 
-    // ---- QUIZ do overdev (a fila de perguntas clicáveis) ----
 }

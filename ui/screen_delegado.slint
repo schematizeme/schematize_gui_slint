@@ -152,7 +152,8 @@ export component TelaDelegada inherits VerticalLayout {
 }
 
 // FAIXA DELEGADA — a versão COMPACTA da [`TelaDelegada`], para quando a aba ainda tem conteúdo
-// próprio e a janela do app dono cobre só PARTE dele (aba Overdev, E6 M5).
+// próprio (aba Overdev, E6 M5): o trabalho do overdev mora na janela, e o hub guarda só o que é
+// dele (ações de skills de terceiro, skills atrasadas, commits).
 //
 // Existe separada porque a `TelaDelegada` ocupa a tela inteira e centraliza: serve a quem saiu
 // por completo. Aqui o estado é o mesmo — janela presente abre (com atalhos para as abas dela);
@@ -163,6 +164,9 @@ export component FaixaDelegada inherits Rectangle {
     in property <string> rotulo-instalar;
     in property <string> rotulo-perguntas;
     in property <string> rotulo-checklist;
+    in property <string> rotulo-execucao;
+    in property <string> rotulo-caixa;
+    in property <string> rotulo-notas;
     in property <string> rotulo-historico;
     in property <bool> presente: false;
     in property <string> cmd;
@@ -184,6 +188,9 @@ export component FaixaDelegada inherits Rectangle {
             Btn { label: root.rotulo-abrir; primary: true; small: true; clicked => { root.abrir(); } }
             Btn { label: root.rotulo-perguntas; small: true; clicked => { root.abrir-aba("perguntas"); } }
             Btn { label: root.rotulo-checklist; small: true; clicked => { root.abrir-aba("checklist"); } }
+            Btn { label: root.rotulo-execucao; small: true; clicked => { root.abrir-aba("execucao"); } }
+            Btn { label: root.rotulo-caixa; small: true; clicked => { root.abrir-aba("caixa"); } }
+            Btn { label: root.rotulo-notas; small: true; clicked => { root.abrir-aba("notas"); } }
             Btn { label: root.rotulo-historico; small: true; clicked => { root.abrir-aba("historico"); } }
         }
         if !root.presente: VerticalLayout {

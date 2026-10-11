@@ -1,5 +1,8 @@
-//! Fiação da aba Overdev: seletor de projeto, checklist fatiado, editor acoplado,
-//! notas/correções e o disparo/monitoramento do overdev em terminal externo.
+//! Fiação da aba Overdev (o hub): seletor de projeto, dev_dirs/pins, ações de skills e atalhos
+//! do projeto (terminal, painel HTML, afazeres do archive).
+//!
+//! O trabalho do overdev em si (checklist, execução, caixa, notas, split) é da janela
+//! `schematize-overdev-gui` — ver [`crate::wire::envs`] (a faixa que a abre).
 //!
 //! "Fiação" = registrar os callbacks do `.slint` neste recorte da UI. Cada função
 //! recebe o `AppWindow` e o [`Ctx`] (estado compartilhado) e só liga os callbacks —
@@ -18,35 +21,22 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     let od_proj_model = cx.od_proj_model.clone();
     let od_dev_model = cx.od_dev_model.clone();
     let od_pin_model = cx.od_pin_model.clone();
-    let od_cl = cx.od_cl.clone();
     let od_current = cx.od_current.clone();
-    let od_stop_flag = cx.od_stop_flag.clone();
 
     // escolher um projeto do seletor.
     {
         let weak = app.as_weak();
-        let cl = od_cl.clone();
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gl = graph_loaded.clone();
-        let sf = od_stop_flag.clone();
         app.global::<Od>().on_pick_project(move |path| {
             if path.is_empty() {
                 return;
             }
             if let Some(app) = weak.upgrade() {
-                select_project(
-                    &app,
-                    &cl,
-                    &pm,
-                    &dm,
-                    &pnm,
-                    &cur,
-                    &sf,
-                    PathBuf::from(path.to_string()),
-                );
+                select_project(&app, &pm, &dm, &pnm, &cur, PathBuf::from(path.to_string()));
                 graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
                 app.global::<Od>().invoke_refresh_history();
             }
@@ -55,18 +45,16 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // abrir uma pasta avulsa (picker NATIVO do sistema).
     {
         let weak = app.as_weak();
-        let cl = od_cl.clone();
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
         let cur = od_current.clone();
         let gl = graph_loaded.clone();
-        let sf = od_stop_flag.clone();
         app.global::<Od>().on_open_folder(move || {
             if let Some(dir) = rfd::FileDialog::new().set_title(t("gui.open_folder")).pick_folder()
             {
                 if let Some(app) = weak.upgrade() {
-                    select_project(&app, &cl, &pm, &dm, &pnm, &cur, &sf, dir);
+                    select_project(&app, &pm, &dm, &pnm, &cur, dir);
                     graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
                     app.global::<Od>().invoke_refresh_history();
                 }
@@ -111,7 +99,6 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
     // recarregar: re-sonda dev_dirs/projetos e recarrega o projeto atual.
     {
         let weak = app.as_weak();
-        let cl = od_cl.clone();
         let pm = od_proj_model.clone();
         let dm = od_dev_model.clone();
         let pnm = od_pin_model.clone();
@@ -121,19 +108,9 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
             refresh_proj_models(&pm, &dm, &pnm);
             if let Some(app) = weak.upgrade() {
                 let p = cur.borrow().clone();
-                load_overdev_into(&app, &cl, p.as_deref());
+                load_projeto(&app, p.as_deref());
                 graph_mark_dirty(&gl); // grafo carrega só quando a aba Grafo abrir
                 app.global::<Od>().invoke_refresh_history();
-            }
-        });
-    }
-    // Governador de concorrência: "Rechecar" recomputa o teto (CPU/RAM/load − claudes-da-máquina).
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        app.global::<Od>().on_refresh_agents(move || {
-            if let Some(app) = weak.upgrade() {
-                apply_agent_budget(&app, cur.borrow().as_deref());
             }
         });
     }
@@ -186,28 +163,6 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     .global::<Od>()
                     .set_run_status(format!("não consegui abrir o terminal: {e}").into()),
             }
-        });
-    }
-    // Split multiagent: divide o checklist em K parts (checklist/part-NN.md) respeitando o teto do
-    // governador; com dispatch, lança K claudes (um por fatia), cada um limitado a subagents_each.
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        app.global::<Od>().on_split(move |k, dispatch| {
-            let Some(app) = weak.upgrade() else { return };
-            let Some(project) = cur.borrow().clone() else {
-                app.global::<Od>().set_split_status("Selecione um projeto primeiro.".into());
-                return;
-            };
-            // O teto do governador, o slot livre e o lançamento dos K claudes são do APP: ele
-            // recusa passar do teto com o número, e o resumo (✓/✗) volta para a tela.
-            let k = (k.max(2)) as usize;
-            let msg = match crate::overdevcli::dividir(&project, k, dispatch) {
-                Ok(resumo) => resumo,
-                Err(e) => format!("split falhou: {e}"),
-            };
-            app.global::<Od>().set_split_status(msg.into());
-            apply_agent_budget(&app, Some(&project)); // atualiza o "rodando/livre" após lançar
         });
     }
     // "Gerar afazeres do archive" — dispara a skill schematize-archive (/archive-todos) num terminal
@@ -313,338 +268,6 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                     if let Some(app) = weak.upgrade() {
                         app.global::<Od>().set_run_status(e.into());
                     }
-                }
-            }
-        });
-    }
-    // ---- Fase 3: marcar item HUMANO aberto como feito (- [H ]→- [H x]) ----
-    // Edita o CHECKLIST.md do projeto e recarrega a view (contagem + itens).
-    {
-        let weak = app.as_weak();
-        let cl = od_cl.clone();
-        let cur = od_current.clone();
-        app.global::<Od>().on_mark_human(move |idx| {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                if let Err(e) = crate::overdevcli::marcar_humano(&p, idx) {
-                    app.global::<Od>().set_run_status(e.into());
-                }
-                load_overdev_into(&app, &cl, Some(&p));
-            }
-        });
-    }
-    // ---- Checklist fatiado: trocar de PÁGINA ----
-    // A UI nunca segura o checklist inteiro; aqui só movemos a janela e
-    // republicamos <= checklist::PER_PAGE itens. Custo de render constante.
-    {
-        let weak = app.as_weak();
-        let cl = od_cl.clone();
-        app.global::<Od>().on_cl_set_page(move |page| {
-            if let Some(app) = weak.upgrade() {
-                app.global::<Od>().set_cl_page(page);
-                cl.apply(&app);
-            }
-        });
-    }
-    // ---- Checklist fatiado: trocar de FILTRO (todos/abertos/feitos/on-hold/humanos) ----
-    // Trocar o filtro volta pra 1ª página — a posição no conjunto antigo não
-    // corresponde a nada no novo.
-    {
-        let weak = app.as_weak();
-        let cl = od_cl.clone();
-        app.global::<Od>().on_cl_set_filter(move |filter| {
-            if let Some(app) = weak.upgrade() {
-                app.global::<Od>().set_cl_filter(filter);
-                app.global::<Od>().set_cl_page(0);
-                cl.apply(&app);
-            }
-        });
-    }
-    // ---- Editor acoplado: abrir/fechar SOB DEMANDA ----
-    // Fechado, o `TextEdit` nem existe na árvore do Slint (o `if` no .slint) e o
-    // conteúdo nem é lido do disco. Só ao abrir é que pagamos o layout do texto.
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        app.global::<Od>().on_editor_toggle(move || {
-            let root = cur.borrow().clone();
-            if let Some(app) = weak.upgrade() {
-                app.global::<Od>().set_editor_open(!app.global::<Od>().get_editor_open());
-                if let Some(p) = root {
-                    load_editor_content(&app, &p);
-                }
-            }
-        });
-    }
-    // ---- Editor acoplado: arquivo grande demais → abre no editor externo ----
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        app.global::<Od>().on_editor_open_external(move || {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                let target = app.global::<Od>().get_editor_target().to_string();
-                open_in_vscode(&overdev_file_path(&p, &target));
-            }
-        });
-    }
-    // ---- Fase 3: trocar o arquivo do editor (PLAN.md/CHECKLIST.md) ----
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        app.global::<Od>().on_editor_pick(move |target| {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                app.global::<Od>().set_editor_target(target);
-                load_editor_content(&app, &p);
-            }
-        });
-    }
-    // ---- Fase 3: salvar o arquivo do editor (regrava no .overdev/) ----
-    // Reflete no checklist/itens se o arquivo salvo for o CHECKLIST.md.
-    {
-        let weak = app.as_weak();
-        let cl = od_cl.clone();
-        let cur = od_current.clone();
-        app.global::<Od>().on_editor_save(move || {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                // Guarda-corpo: com o editor FECHADO ou com o arquivo acima de
-                // EDITOR_MAX_BYTES o `od-editor-content` está VAZIO de propósito.
-                // Gravar aqui truncaria o PLAN/CHECKLIST do projeto — recusa.
-                if !app.global::<Od>().get_editor_open() || app.global::<Od>().get_editor_too_big()
-                {
-                    app.global::<Od>().set_editor_error(true);
-                    app.global::<Od>().set_editor_status(
-                        tor(
-                            "gui.od_editor_readonly",
-                            "Arquivo grande demais para editar aqui — abra no editor externo.",
-                        )
-                        .into(),
-                    );
-                    return;
-                }
-                let target = app.global::<Od>().get_editor_target().to_string();
-                let content = app.global::<Od>().get_editor_content().to_string();
-                let path = overdev_file_path(&p, &target);
-                match std::fs::write(&path, content) {
-                    Ok(()) => {
-                        app.global::<Od>().set_editor_error(false);
-                        app.global::<Od>().set_editor_status(tor("gui.saved", "Salvo").into());
-                        // salvar o CHECKLIST.md muda o estado 2-níveis: recarrega.
-                        if target == "CHECKLIST.md" {
-                            load_overdev_into(&app, &cl, Some(&p));
-                            app.global::<Od>().set_editor_error(false);
-                            app.global::<Od>().set_editor_status(tor("gui.saved", "Salvo").into());
-                        }
-                    }
-                    Err(e) => {
-                        app.global::<Od>().set_editor_error(true);
-                        app.global::<Od>().set_editor_status(e.to_string().into());
-                    }
-                }
-            }
-        });
-    }
-    // ---- Fase 3: adicionar ponto/nota por task (add_note kind="task") ----
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        app.global::<Od>().on_add_note(move |texto| {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                if !texto.trim().is_empty() {
-                    if let Err(e) = crate::overdevcli::adicionar_nota(&p, "task", &texto) {
-                        app.global::<Od>().set_run_status(e.into());
-                    }
-                    atualiza_notas(&app, &p);
-                }
-            }
-        });
-    }
-    // ---- Fase 3: prompt de correção do overdev (add_note kind="correcao") ----
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        app.global::<Od>().on_add_correction(move |texto| {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                if !texto.trim().is_empty() {
-                    if let Err(e) = crate::overdevcli::adicionar_nota(&p, "correcao", &texto) {
-                        app.global::<Od>().set_run_status(e.into());
-                    }
-                    atualiza_notas(&app, &p);
-                }
-            }
-        });
-    }
-    // ---- Fase 4: "Executar overdev" — passo 1: GUARDRAIL (mostra o comando) ----
-    // Não dispara nada; só mostra o comando que abrirá no TERMINAL EXTERNO e abre o
-    // mini-modal de confirmação. O disparo real (launch_in_terminal) é no `od-run-confirm`.
-    {
-        let weak = app.as_weak();
-        app.global::<Od>().on_run_request(move || {
-            if let Some(app) = weak.upgrade() {
-                app.global::<Od>().set_agent_cmdline(
-                    tor(
-                        "gui.od_agent_cmdline",
-                        "claude --dangerously-skip-permissions \"<prompt do overdev>\"  (terminal externo, processo próprio)",
-                    )
-                    .into(),
-                );
-                app.global::<Od>().set_confirm_open(true);
-            }
-        });
-    }
-    // ---- Fase 4: guardrail — CANCELAR (fecha sem disparar) ----
-    {
-        let weak = app.as_weak();
-        app.global::<Od>().on_run_cancel(move || {
-            if let Some(app) = weak.upgrade() {
-                app.global::<Od>().set_confirm_open(false);
-            }
-        });
-    }
-    // ---- Fase 4: guardrail — CONFIRMAR: abre o `claude` num TERMINAL EXTERNO ----
-    // Chama `terminal --receita overdev` numa thread (processo próprio, RAM dele,
-    // fora do app). Sucesso → mensagem "claude aberto no terminal <nome>…" + liga o
-    // MONITOR leve. Erro (claude/terminal ausente) → mostra a msg e não monitora.
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        let stop = od_stop_flag.clone();
-        app.global::<Od>().on_run_confirm(move || {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                if app.global::<Od>().get_session_running() {
-                    return; // já monitorando — não dispara outro
-                }
-                app.global::<Od>().set_confirm_open(false);
-                app.global::<Od>().set_run_status(SharedString::new());
-                // Os CONTADORES não são zerados: agora são a fonte única, compartilhada
-                // com o bloco de progresso do projeto. Zerá-los pintaria 0 na tela até o
-                // 1º tick do monitor (~3s) — mentir pra baixo em vez de pra cima. Eles já
-                // carregam a verdade lida do disco; o monitor só os atualiza.
-                app.global::<Od>().set_mon_iter(0);
-                app.global::<Od>().set_mon_max(0);
-                app.global::<Od>().set_mon_mode(SharedString::new());
-                app.global::<Od>().set_mon_items(ModelRc::from(Rc::new(
-                    VecModel::<SharedString>::from(Vec::new()),
-                )));
-                stop.store(false, Ordering::SeqCst);
-                let w = weak.clone();
-                let stop2 = stop.clone();
-                // A receita `overdev` monta o prompt com o objetivo do run e sobe o supervisor.
-                std::thread::spawn(move || {
-                    match crate::overdevcli::terminal(
-                        &p,
-                        crate::overdevcli::Terminal::Receita("overdev"),
-                    ) {
-                        Ok(term) => {
-                            let wu = w.clone();
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(app) = wu.upgrade() {
-                                    app.global::<Od>().set_session_running(true);
-                                    let msg = format!(
-                                        "{}{}{}",
-                                        tor("gui.od_launched_pre", "claude aberto no terminal "),
-                                        term,
-                                        tor(
-                                            "gui.od_launched_post",
-                                            " — o overdev roda fora do app; acompanhe abaixo.",
-                                        ),
-                                    );
-                                    app.global::<Od>().set_run_status(msg.into());
-                                }
-                            });
-                            run_monitor(w, p, stop2, false);
-                        }
-                        Err(e) => {
-                            let _ = slint::invoke_from_event_loop(move || {
-                                if let Some(app) = w.upgrade() {
-                                    app.global::<Od>().set_session_running(false);
-                                    app.global::<Od>().set_run_status(e.into());
-                                }
-                            });
-                        }
-                    }
-                });
-            }
-        });
-    }
-    // ---- Fase 4: "Parar" — levanta a flag; o MONITOR encerra (não mata o claude) ----
-    {
-        let weak = app.as_weak();
-        let stop = od_stop_flag.clone();
-        app.global::<Od>().on_stop(move || {
-            stop.store(true, Ordering::SeqCst);
-            if let Some(app) = weak.upgrade() {
-                app.global::<Od>().set_run_status(tor("gui.od_stop", "Parar").into());
-            }
-        });
-    }
-    // ---- Reload / Acompanhar: ANEXA o monitor a um overdev que já roda POR FORA ----
-    // (terminal/processo próprio). Sem depender de ter clicado "Executar overdev":
-    // (re)liga a `run_monitor` no projeto atual lendo o `.overdev/` do disco e passa
-    // a espelhar ao vivo. Sem `.overdev/` → avisa e não liga. Se um monitor já está
-    // vivo, só reforça os tokens (o loop já reflete o resto). `attach=true` faz o
-    // monitor seguir um run já em curso (ou postar 1x e encerrar se já finalizou).
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        let stop = od_stop_flag.clone();
-        app.global::<Od>().on_attach(move || {
-            let root = cur.borrow().clone();
-            let Some(app) = weak.upgrade() else { return };
-            let Some(p) = root else {
-                app.global::<Od>().set_run_status(
-                    tor("gui.od_pick_first", "Selecione um projeto primeiro.").into(),
-                );
-                return;
-            };
-            if !overdev_dir(&p).is_dir() {
-                app.global::<Od>().set_run_status(
-                    tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into(),
-                );
-                return;
-            }
-            // Já monitorando: não dispara outra thread (evita duplicata na mesma
-            // `stop`); só reforça os tokens agora.
-            if app.global::<Od>().get_session_running() {
-                spawn_usage(weak.clone(), p.clone());
-                app.global::<Od>().set_run_status(
-                    tor("gui.od_attached", "acompanhando o overdev deste projeto…").into(),
-                );
-                return;
-            }
-            // Zera o painel e liga o monitor anexado ao run externo.
-            app.global::<Od>().set_run_status(
-                tor("gui.od_attached", "acompanhando o overdev deste projeto…").into(),
-            );
-            // Idem: contadores preservados (fonte única — ver a nota no `on_run`).
-            app.global::<Od>().set_mon_iter(0);
-            app.global::<Od>().set_mon_max(0);
-            app.global::<Od>().set_mon_mode(SharedString::new());
-            app.global::<Od>()
-                .set_mon_items(ModelRc::from(Rc::new(VecModel::<SharedString>::from(Vec::new()))));
-            app.global::<Od>().set_session_running(true);
-            stop.store(false, Ordering::SeqCst);
-            run_monitor(weak.clone(), p, stop.clone(), true);
-        });
-    }
-    // ---- "Atualizar tokens": relê `agent_usage` (PESADO) sob demanda, em thread ----
-    {
-        let weak = app.as_weak();
-        let cur = od_current.clone();
-        app.global::<Od>().on_refresh_tokens(move || {
-            let root = cur.borrow().clone();
-            if let (Some(app), Some(p)) = (weak.upgrade(), root) {
-                if overdev_dir(&p).is_dir() {
-                    spawn_usage(weak.clone(), p);
-                } else {
-                    app.global::<Od>().set_run_status(
-                        tor("gui.od_no_overdev_here", "nenhum overdev neste projeto").into(),
-                    );
                 }
             }
         });

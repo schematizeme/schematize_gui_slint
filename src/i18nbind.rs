@@ -95,63 +95,12 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         )
         .into(),
     );
-    l.set_no_overdev(t("gui.no_overdev").into());
-    l.set_od_decisions(t("gui.od_decisions").into());
-    l.set_od_plan(t("gui.od_plan").into());
-    l.set_od_questions(t("gui.od_questions").into());
     l.set_open_browser(t("gui.open_browser").into());
     l.set_od_open_terminal(tor("gui.od_open_terminal", "abrir no terminal").into());
-    // aba Overdev — Fase 3 (editor + tasks + checklist 2-níveis). Chaves NOVAS com
-    // fallback embutido via `tor` até serem adicionadas ao lib (ver relatório).
-    l.set_od_human(tor("gui.od_human", "humano").into());
-    l.set_od_machine(tor("gui.od_machine", "máquina").into());
-    l.set_od_mark_human(tor("gui.od_mark_human", "marcar como feito").into());
-    l.set_od_editor(tor("gui.od_editor", "Editor").into());
-    l.set_od_save_plan(tor("gui.od_save_plan", "Salvar").into());
-    l.set_od_tasks(tor("gui.od_tasks", "Tarefas e notas").into());
-    l.set_od_add_note(tor("gui.od_add_note", "Adicionar nota").into());
-    l.set_od_note(tor("gui.od_note", "Nota para esta tarefa…").into());
-    l.set_od_correction(tor("gui.od_correction", "Prompt de correção do overdev").into());
-    // checklist FATIADO: filtros + rodapé de paginação (a UI nunca recebe a lista toda)
-    l.set_od_cl_all(tor("gui.od_cl_all", "Todos").into());
-    l.set_od_cl_open(tor("gui.od_cl_open", "Abertos").into());
-    l.set_od_cl_done(tor("gui.od_cl_done", "Feitos").into());
-    l.set_od_cl_hold(tor("gui.od_cl_hold", "On-hold").into());
-    l.set_od_cl_human(tor("gui.od_cl_human", "Humanos").into());
-    l.set_od_cl_of(tor("gui.od_cl_of", "de").into());
-    l.set_od_cl_empty(tor("gui.od_cl_empty", "Nenhum item neste filtro.").into());
-    // editor acoplado sob demanda (o TextEdit só existe enquanto aberto)
-    l.set_od_editor_show(tor("gui.od_editor_show", "Abrir editor").into());
-    l.set_od_editor_hide(tor("gui.od_editor_hide", "Fechar editor").into());
-    l.set_od_editor_big(tor("gui.od_editor_big", "Arquivo grande demais para editar aqui").into());
-    l.set_od_editor_external(tor("gui.od_editor_external", "Abrir no editor externo").into());
+    // Rótulos dos atalhos da faixa para as abas «Notas» e «Execução» da janela do overdev.
     l.set_od_notes_title(tor("gui.od_notes", "Notas e correções").into());
-    // aba Overdev — Fase 4 (terminal externo + monitor leve). Chaves NOVAS via `tor`.
     l.set_od_run(tor("gui.od_run", "Executar overdev").into());
     l.set_od_gen_archive(tor("gui.od_gen_archive", "Gerar afazeres do archive").into());
-    l.set_od_stop(tor("gui.od_stop", "Parar").into());
-    l.set_od_running(tor("gui.od_running", "monitorando…").into());
-    l.set_od_mon_active(tor("gui.od_mon_active", "rodando").into());
-    l.set_od_confirm_run(tor(
-        "gui.od_confirm_run",
-        "Isto abre o `claude` num TERMINAL EXTERNO (processo próprio, fora do app) e roda o overdev \
-         neste projeto com acesso ao seu ambiente — ele pode editar arquivos. O app apenas MONITORA o \
-         progresso. Confira o comando abaixo antes de confirmar.",
-    ).into());
-    l.set_od_agent_cmd(tor("gui.od_agent_cmd", "Comando do agente").into());
-    l.set_od_ext_terminal(
-        tor(
-            "gui.od_ext_terminal",
-            "claude rodando em terminal externo (processo próprio) — o load dele fica fora do app.",
-        )
-        .into(),
-    );
-    l.set_od_mon_iters(tor("gui.od_mon_iters", "iterações").into());
-    l.set_od_mon_open_title(tor("gui.od_mon_open_title", "Itens abertos (máquina)").into());
-    // Reload/Acompanhar + log de conclusões + tokens (anexar monitor a run externo).
-    l.set_od_attach(tor("gui.od_attach", "Reload / Acompanhar").into());
-    l.set_od_refresh_tokens(tor("gui.od_refresh_tokens", "Atualizar tokens").into());
-    l.set_od_completions_title(tor("gui.od_completions_title", "Conclusões").into());
     // aba Grafo — reusa as chaves do egui (todas já nos 11 locales do lib).
     l.set_g_search_hint(t("gui.search").into());
     l.set_g_nodes_suffix(t("gui.graph_nodes").into());
@@ -304,32 +253,8 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         tor("gui.home_git_desc", "Contas, o que ainda não saiu daqui, e seus repositórios.").into(),
     );
 
-    // ---- Resolver item humano · caixa de entrada · skills do projeto ----
-    l.set_od_answer(tor("gui.od_answer", "Responder").into());
-    l.set_od_refuse(tor("gui.od_refuse", "Recusar").into());
-    l.set_od_answer_title(tor("gui.od_answer_title", "Responder").into());
-    l.set_od_refuse_title(tor("gui.od_refuse_title", "Recusar").into());
-    l.set_od_answer_hint(tor(
-        "gui.od_answer_hint",
-        "Sua resposta LIBERA o item de máquina que estava travado por isto. Você não precisa ter feito nada — decidir já basta.",
-    ).into());
-    l.set_od_refuse_hint(tor(
-        "gui.od_refuse_hint",
-        "Recusar CANCELA o item de máquina vinculado — o agente não vai retomá-lo. Diga por quê: fica registrado nas decisões do projeto.",
-    ).into());
+    // ---- Atalho para a aba «Caixa» da janela · skills do projeto ----
     l.set_od_caixa_title(tor("gui.od_caixa_title", "Acrescentar ao projeto").into());
-    l.set_od_caixa_hint(tor(
-        "gui.od_caixa_hint",
-        "Escreva o que mais precisa ser feito. Isto NÃO toca o checklist agora — nenhum agente é interrompido. Um agente organiza depois, e só então entra.",
-    ).into());
-    l.set_od_caixa_placeholder(
-        tor("gui.od_caixa_placeholder", "ex.: precisa exportar em CSV e mandar por e-mail…").into(),
-    );
-    l.set_od_caixa_add(tor("gui.od_caixa_add", "Capturar").into());
-    l.set_od_caixa_agent(tor("gui.od_caixa_agent", "Organizar com agente").into());
-    l.set_od_caixa_merge(tor("gui.od_caixa_merge", "Fundir no checklist").into());
-    l.set_od_caixa_pending(tor("gui.od_caixa_pending", "a organizar").into());
-    l.set_od_caixa_ready(tor("gui.od_caixa_ready", "a fundir").into());
     l.set_od_skills_outdated(
         tor("gui.od_skills_outdated", "evoluíram desde que moldaram este projeto").into(),
     );
@@ -356,8 +281,6 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         "gui.home_vps_desc",
         "Servidores registrados, deploy auditado e o que cada host aceita — sem chave no contexto.",
     ).into());
-    // O QUIZ do overdev. `tor` e não `t` porque as chaves são novas: se um lib antigo
-    // estiver linkado, a UI mostra o fallback em vez do nome da chave cru na tela.
 }
 
 #[cfg(test)]

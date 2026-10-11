@@ -1,18 +1,5 @@
-//! Formatação de valores pra UI (data, tamanho, milhar, upstream, tokens).
+//! Formatação de valores pra UI (hoje: a linha de upstream dos commits).
 //! Funções puras — sem I/O e sem tocar em propriedade. Testáveis em unidade.
-
-use crate::prelude::*;
-
-/// Tamanho legível (B / KB / MB).
-pub(crate) fn fmt_size(bytes: i64) -> String {
-    if bytes < 1024 {
-        format!("{bytes} B")
-    } else if bytes < 1024 * 1024 {
-        format!("{:.1} KB", bytes as f64 / 1024.0)
-    } else {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
-    }
-}
 
 /// Linha de upstream (branch → remote · ↑ahead ↓behind); vazia se sem tracking.
 pub(crate) fn fmt_upstream(up: Option<crate::gitlog::Upstream>) -> String {
@@ -23,74 +10,4 @@ pub(crate) fn fmt_upstream(up: Option<crate::gitlog::Upstream>) -> String {
         }
         None => String::new(),
     }
-}
-
-/// Agrupa milhares com `.` (separador pt-BR): 1234567 → "1.234.567". PURO.
-pub(crate) fn sep_thousands(n: u64) -> String {
-    let s = n.to_string();
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len() + s.len() / 3);
-    let len = bytes.len();
-    for (i, b) in bytes.iter().enumerate() {
-        if i > 0 && (len - i).is_multiple_of(3) {
-            out.push('.');
-        }
-        out.push(*b as char);
-    }
-    out
-}
-
-/// Converte um epoch (segundos) pra `HH:MM:SS` na hora LOCAL via `chrono::Local`.
-/// Fallback improvável (timestamp fora de faixa) → string vazia.
-pub(crate) fn fmt_ts_local(ts: i64) -> String {
-    use chrono::TimeZone;
-    chrono::Local
-        .timestamp_opt(ts, 0)
-        .single()
-        .map(|dt| dt.format("%H:%M:%S").to_string())
-        .unwrap_or_default()
-}
-
-/// Teto de linhas do log de conclusões que a UI segura. O painel é um repeater
-/// NÃO virtualizado dentro do ScrollView do overdev: um run longo acumula
-/// centenas de conclusões e o monitor as reconstruía TODAS a cada 3 s. Mantemos
-/// as mais RECENTES (é o que interessa acompanhar); o histórico completo continua
-/// no `.schematize/overdev/completions.json`.
-pub(crate) const OD_COMPLETIONS_MAX: usize = 120;
-
-/// Materializa as conclusões (`monitor --json`) em linhas prontas pra UI:
-/// `HH:MM:SS  <texto>` (hora local). Mantém a ordem do lib (ts asc → recentes
-/// embaixo) e corta nas últimas [`OD_COMPLETIONS_MAX`].
-pub(crate) fn fmt_completions(cs: Vec<crate::overdevcli::Conclusao>) -> Vec<String> {
-    let cs = if cs.len() > OD_COMPLETIONS_MAX {
-        cs[cs.len() - OD_COMPLETIONS_MAX..].to_vec()
-    } else {
-        cs
-    };
-    cs.into_iter()
-        .map(|c| {
-            let hhmmss = fmt_ts_local(c.ts);
-            if hhmmss.is_empty() {
-                c.text
-            } else {
-                format!("{hhmmss}  {}", c.text)
-            }
-        })
-        .collect()
-}
-
-/// Monta a linha de tokens do painel do monitor a partir dos [`crate::overdevcli::Tokens`].
-/// "Tokens: <total> (in <in> / out <out> · cache-read <cr>) · Modelo: <main>".
-pub(crate) fn fmt_usage(u: &crate::overdevcli::Tokens) -> String {
-    let model = u.modelo.as_deref().unwrap_or("—");
-    format!(
-        "{}: {} (in {} / out {} · cache-read {}) · {}: {}",
-        tor("gui.od_tokens", "Tokens"),
-        sep_thousands(u.total),
-        sep_thousands(u.entrada),
-        sep_thousands(u.saida),
-        sep_thousands(u.cache_leitura),
-        tor("gui.od_model", "Modelo"),
-        model,
-    )
 }

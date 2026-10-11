@@ -4,8 +4,7 @@
 //! vez por `main()`, depois de criar a janela e antes do `run()`.
 //!
 //! Por quê existe o [`Ctx`]: os callbacks compartilham estado que vive no Rust
-//! (modelos do Slint, estado do grafo, o checklist completo, timers, flags de
-//! parada). Antes tudo isso eram locais de um `fn main` de 3.000 linhas — o que
+//! (modelos do Slint, estado do grafo, timers). Antes tudo isso eram locais de um `fn main` de 3.000 linhas — o que
 //! fere o piso da casa (<=750 linhas por arquivo, uma unidade lógica por arquivo)
 //! e tornava impossível ler um recorte sem carregar o resto na cabeça. O `Ctx`
 //! junta esse estado num lugar só e cada `wire` clona (Rc/Arc, barato) o que usa.
@@ -14,12 +13,12 @@ use crate::prelude::*;
 
 pub(crate) mod account;
 pub(crate) mod appversion;
-pub(crate) mod caixa;
 pub(crate) mod envs;
 pub(crate) mod graph;
 pub(crate) mod notificacoes;
 pub(crate) mod odhistory;
 pub(crate) mod overdev;
+pub(crate) mod projeto;
 pub(crate) mod settings;
 
 /// Estado compartilhado pelos callbacks da janela.
@@ -35,9 +34,7 @@ pub(crate) struct Ctx {
     pub(crate) od_proj_model: Rc<VecModel<ProjItem>>,
     pub(crate) od_dev_model: Rc<VecModel<SharedString>>,
     pub(crate) od_pin_model: Rc<VecModel<SharedString>>,
-    pub(crate) od_cl: Rc<ChecklistView>,
     pub(crate) od_current: Rc<RefCell<Option<PathBuf>>>,
-    pub(crate) od_stop_flag: Arc<AtomicBool>,
     pub(crate) od_commits_all: Rc<RefCell<Vec<crate::gitlog::Commit>>>,
     pub(crate) od_commits_model: Rc<VecModel<CommitRow>>,
 }

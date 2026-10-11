@@ -400,9 +400,10 @@ fn abrir_deployer(app: &AppWindow, aba: &str) {
 ///
 /// **Onde:** [`wire`], uma vez ao subir.
 ///
-/// **A janela `schematize-overdev-gui` cobre PARTE da aba (E6 M5, ADR-0018):** progresso,
-/// checklist, fila de perguntas e histórico de snapshots. O resto (run/stop, split, editor,
-/// notas, caixa, commits) segue no hub até a janela portá-lo. Este recorte é só o caminho até
+/// **A janela `schematize-overdev-gui` é a casa do trabalho do overdev (E6 M5, ADR-0018):**
+/// perguntas, checklist (com as ações por item), execução (executar/parar/acompanhar/tokens,
+/// split, governador), editor, notas, caixa e histórico. No hub ficam só as ações que as skills
+/// declaram, o aviso de skills atrasadas e os commits. Este recorte é só o caminho até
 /// lá, e o que fazer quando ela não está instalada.
 ///
 /// **Independência (piso 10):** o hub SOBE sem o overdev. Ausência vira `presente=false` e uma
@@ -456,6 +457,27 @@ fn wire_overdev(app: &AppWindow, cx: &Ctx) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Os atalhos da faixa só pedem abas que a janela ACEITA.**
+    ///
+    /// A janela cai nas Perguntas quando o `--aba` é desconhecido, em silêncio — um atalho com o
+    /// nome errado abriria a aba errada e ninguém saberia por quê. Esta lista é a de
+    /// `aba_dos_args` da `schematize-overdev-gui`; o teste lê o `.slint` e cobra que cada
+    /// `abrir-aba("…")` esteja nela, e que nenhuma aba da janela fique sem atalho.
+    #[test]
+    fn os_atalhos_da_faixa_pedem_abas_que_a_janela_aceita() {
+        let ui = include_str!("../../ui/screen_delegado.slint");
+        let aceitas = ["perguntas", "checklist", "execucao", "caixa", "notas", "historico"];
+        let pedidas: Vec<&str> =
+            ui.split("abrir-aba(\"").skip(1).filter_map(|t| t.split('"').next()).collect();
+        assert_eq!(pedidas.len(), aceitas.len(), "um atalho por aba da janela: {pedidas:?}");
+        for a in aceitas {
+            assert!(pedidas.contains(&a), "a aba `{a}` ficou sem atalho na faixa");
+        }
+        for p in &pedidas {
+            assert!(aceitas.contains(p), "o atalho `{p}` pede uma aba que a janela não conhece");
+        }
+    }
 
     /// O comando e a nota espelham a dica do CLI para o overdev (`instalardica.rs`): repo
     /// `schematizeme/schematize_overdev_rs`, `--locked`, e a nota de que o repo é privado. Se

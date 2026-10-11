@@ -4,8 +4,10 @@
 //! corrente e devolve o texto ou o MOTIVO da falha; e traduz cada documento `--json` num tipo
 //! próprio desta GUI.
 //!
-//! **Onde:** a aba Overdev (carga, monitor, caixa, itens humanos, split, terminal), a aba Grafo e
-//! a chave dos hooks nas Configurações. Nada fora daqui chama o app.
+//! **Onde:** a aba Overdev (terminal e painel HTML), a aba Grafo e a chave dos hooks nas
+//! Configurações. Nada fora daqui chama o app. O checklist, a execução, a caixa, as notas e o
+//! split moraram aqui até a janela `schematize-overdev-gui` portá-los (E6 M5): o hub não os lê
+//! mais.
 //!
 //! ## Por que existe
 //!
@@ -69,12 +71,6 @@ fn doc(texto: &str) -> Result<Value, String> {
     serde_json::from_str(texto).map_err(|e| format!("resposta ilegível do schematize-overdev: {e}"))
 }
 
-/// **O quê:** um campo numérico não negativo (ausente ou de outro tipo vale 0).
-/// **Onde:** contagens dos documentos — zero é verdade para «ainda não há».
-fn num(v: &Value, k: &str) -> u64 {
-    v.get(k).and_then(Value::as_u64).unwrap_or(0)
-}
-
 /// **O quê:** um campo de texto (ausente, `null` ou de outro tipo vale `""`). **Onde:** idem.
 fn txt(v: &Value, k: &str) -> String {
     v.get(k).and_then(Value::as_str).unwrap_or_default().to_string()
@@ -86,272 +82,8 @@ fn txt_opt(v: &Value, k: &str) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Progresso e monitor
+// Hooks
 // ---------------------------------------------------------------------------------------------
-
-/// Em que pé está o run (`progresso --json`).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Progresso {
-    /// `active` | `stopped` | `done` | `blocked`; vazio se não há run.
-    pub(crate) modo: String,
-    /// Itens de máquina abertos.
-    pub(crate) abertos: u64,
-    /// Feitos (máquina + humano).
-    pub(crate) feitos: u64,
-    /// On-hold (pergunta parkeada).
-    pub(crate) on_hold: u64,
-    /// Humanos abertos.
-    pub(crate) humanos: u64,
-    /// Ciclos já gastos.
-    pub(crate) iteracoes: u64,
-    /// Teto de ciclos (0 se não há run).
-    pub(crate) teto: u64,
-}
-
-impl Progresso {
-    /// **O quê:** o run terminou? Parado, ou ativo sem item de máquina aberto.
-    /// **Onde:** o laço do monitor — a mesma regra do gate do app.
-    pub(crate) fn terminou(&self) -> bool {
-        self.modo == "stopped" || (self.modo == "active" && self.abertos == 0)
-    }
-}
-
-/// **O quê:** `progresso --json` → [`Progresso`]. PURA. **Onde:** [`progresso`].
-pub(crate) fn interpretar_progresso(texto: &str) -> Result<Progresso, String> {
-    let v = doc(texto)?;
-    Ok(Progresso {
-        modo: txt(&v, "modo"),
-        abertos: num(&v, "abertos"),
-        feitos: num(&v, "feitos"),
-        on_hold: num(&v, "on_hold"),
-        humanos: num(&v, "humanos"),
-        iteracoes: num(&v, "iteracoes"),
-        teto: num(&v, "teto"),
-    })
-}
-
-/// **O quê:** o progresso do run em `dir`. **Onde:** o monitor (a cada ~3 s: é barato).
-pub(crate) fn progresso(dir: &Path) -> Result<Progresso, String> {
-    interpretar_progresso(&rodar(dir, &["progresso", "--json"])?)
-}
-
-/// Uma conclusão do log do run.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Conclusao {
-    /// Epoch em segundos.
-    pub(crate) ts: i64,
-    /// O item concluído.
-    pub(crate) text: String,
-}
-
-/// O que o monitor mostra: itens de máquina abertos e as conclusões recentes.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Monitor {
-    /// Texto dos itens abertos (sem marcador).
-    pub(crate) abertos: Vec<String>,
-    /// Conclusões, da mais antiga para a mais nova.
-    pub(crate) conclusoes: Vec<Conclusao>,
-}
-
-/// **O quê:** `monitor --json` → [`Monitor`]. PURA. **Onde:** [`monitor`].
-pub(crate) fn interpretar_monitor(texto: &str) -> Result<Monitor, String> {
-    let v = doc(texto)?;
-    let abertos = v
-        .get("abertos")
-        .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
-        .unwrap_or_default();
-    let conclusoes = v
-        .get("conclusoes")
-        .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .map(|c| Conclusao {
-                    ts: c.get("em").and_then(Value::as_i64).unwrap_or(0),
-                    text: txt(c, "texto"),
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    Ok(Monitor { abertos, conclusoes })
-}
-
-/// **O quê:** o monitor do run em `dir`. **Onde:** o laço do monitor (a cada ~3 s: é barato).
-pub(crate) fn monitor(dir: &Path) -> Result<Monitor, String> {
-    interpretar_monitor(&rodar(dir, &["monitor", "--json"])?)
-}
-
-/// Tokens e modelo do projeto, lidos dos transcripts do Claude.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Tokens {
-    /// Tokens de entrada.
-    pub(crate) entrada: u64,
-    /// Tokens de saída.
-    pub(crate) saida: u64,
-    /// Leitura de cache.
-    pub(crate) cache_leitura: u64,
-    /// Total.
-    pub(crate) total: u64,
-    /// O modelo principal, se houve transcript.
-    pub(crate) modelo: Option<String>,
-}
-
-/// **O quê:** `tokens --json` → [`Tokens`]. PURA. **Onde:** [`tokens`].
-pub(crate) fn interpretar_tokens(texto: &str) -> Result<Tokens, String> {
-    let v = doc(texto)?;
-    Ok(Tokens {
-        entrada: num(&v, "entrada"),
-        saida: num(&v, "saida"),
-        cache_leitura: num(&v, "cache_leitura"),
-        total: num(&v, "total"),
-        modelo: txt_opt(&v, "modelo"),
-    })
-}
-
-/// **O quê:** os tokens do projeto em `dir`. **Onde:** a thread de uso do monitor.
-///
-/// **PESADO** (o app varre transcripts de 100 MB+): nunca no laço de 3 s, nunca no event loop.
-pub(crate) fn tokens(dir: &Path) -> Result<Tokens, String> {
-    interpretar_tokens(&rodar(dir, &["tokens", "--json"])?)
-}
-
-// ---------------------------------------------------------------------------------------------
-// Checklist, documentos, notas, caixa
-// ---------------------------------------------------------------------------------------------
-
-/// Um item do checklist já classificado pelo app.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ItemChecklist {
-    /// `open|done|hold|cancel|hopen|hdone|hresp|hrec|nota`.
-    pub(crate) tipo: String,
-    /// Texto sem marcador.
-    pub(crate) texto: String,
-    /// Item de máquina?
-    pub(crate) maquina: bool,
-    /// Posição 1-based entre os humanos abertos (0 nos demais).
-    pub(crate) humano_n: i32,
-    /// Linha indentada (subtarefa/nota de resposta).
-    pub(crate) sub: bool,
-}
-
-/// O checklist do run: cabeçalho e itens.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Checklist {
-    /// Modo do run (`None` sem run).
-    pub(crate) modo: Option<String>,
-    /// Objetivo (vazio sem run).
-    pub(crate) objetivo: String,
-    /// Itens na ordem do arquivo.
-    pub(crate) itens: Vec<ItemChecklist>,
-}
-
-/// **O quê:** `checklist --json` → [`Checklist`]. PURA. **Onde:** [`checklist`].
-pub(crate) fn interpretar_checklist(texto: &str) -> Result<Checklist, String> {
-    let v = doc(texto)?;
-    let itens = v
-        .get("itens")
-        .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .map(|i| ItemChecklist {
-                    tipo: txt(i, "tipo"),
-                    texto: txt(i, "texto"),
-                    maquina: i.get("maquina").and_then(Value::as_bool).unwrap_or(false),
-                    humano_n: i.get("humano_n").and_then(Value::as_i64).unwrap_or(0) as i32,
-                    sub: i.get("sub").and_then(Value::as_bool).unwrap_or(false),
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    Ok(Checklist { modo: txt_opt(&v, "modo"), objetivo: txt(&v, "objetivo"), itens })
-}
-
-/// **O quê:** o checklist do run em `dir`. **Onde:** a carga da aba Overdev.
-pub(crate) fn checklist(dir: &Path) -> Result<Checklist, String> {
-    interpretar_checklist(&rodar(dir, &["checklist", "--json"])?)
-}
-
-/// Decisões, plano e perguntas parkeadas do run (texto cru, mostrado dobrado).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Documentos {
-    /// `DECISOES.md`.
-    pub(crate) decisoes: String,
-    /// `PLAN.md`.
-    pub(crate) plano: String,
-    /// `PERGUNTAS-OVERDEV.txt`.
-    pub(crate) perguntas: String,
-}
-
-/// **O quê:** `documentos --json` → [`Documentos`]. PURA. **Onde:** [`documentos`].
-pub(crate) fn interpretar_documentos(texto: &str) -> Result<Documentos, String> {
-    let v = doc(texto)?;
-    Ok(Documentos {
-        decisoes: txt(&v, "decisoes"),
-        plano: txt(&v, "plano"),
-        perguntas: txt(&v, "perguntas"),
-    })
-}
-
-/// **O quê:** os documentos do run em `dir`. **Onde:** a carga da aba Overdev.
-pub(crate) fn documentos(dir: &Path) -> Result<Documentos, String> {
-    interpretar_documentos(&rodar(dir, &["documentos", "--json"])?)
-}
-
-/// **O quê:** as notas do humano (`notas --json`) → texto. PURA. **Onde:** [`notas`].
-pub(crate) fn interpretar_notas(texto: &str) -> Result<String, String> {
-    Ok(txt(&doc(texto)?, "texto"))
-}
-
-/// **O quê:** as notas do humano em `dir`. **Onde:** a carga e depois de adicionar nota.
-pub(crate) fn notas(dir: &Path) -> Result<String, String> {
-    interpretar_notas(&rodar(dir, &["notas", "--json"])?)
-}
-
-/// **O quê:** `caixa list --json` → `(a organizar, a fundir)`. PURA. **Onde:** [`caixa`].
-pub(crate) fn interpretar_caixa(texto: &str) -> Result<(usize, usize), String> {
-    let v = doc(texto)?;
-    let n = |k: &str| v.get(k).and_then(Value::as_array).map_or(0, Vec::len);
-    Ok((n("pendentes"), n("processadas")))
-}
-
-/// **O quê:** quantas demandas há na caixa de `dir`. **Onde:** o contador da aba Overdev.
-pub(crate) fn caixa(dir: &Path) -> Result<(usize, usize), String> {
-    interpretar_caixa(&rodar(dir, &["caixa", "list", "--json"])?)
-}
-
-// ---------------------------------------------------------------------------------------------
-// Governador, hooks
-// ---------------------------------------------------------------------------------------------
-
-/// O teto de concorrência da máquina (`agents --json`).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub(crate) struct Orcamento {
-    /// Teto seguro de claudes.
-    pub(crate) teto: usize,
-    /// Slots livres agora.
-    pub(crate) livres: usize,
-    /// Claudes rodando agora.
-    pub(crate) rodando: usize,
-    /// Load médio de 1 min.
-    pub(crate) load1: f64,
-}
-
-/// **O quê:** `agents --json` → [`Orcamento`]. PURA. **Onde:** [`orcamento`].
-pub(crate) fn interpretar_orcamento(texto: &str) -> Result<Orcamento, String> {
-    let v = doc(texto)?;
-    Ok(Orcamento {
-        teto: num(&v, "total_cap") as usize,
-        livres: num(&v, "available") as usize,
-        rodando: num(&v, "running_claudes") as usize,
-        load1: v.get("load1").and_then(Value::as_f64).unwrap_or(0.0),
-    })
-}
-
-/// **O quê:** o orçamento de concorrência. **Onde:** a linha «máquina» da aba Overdev.
-/// O orçamento é da MÁQUINA; o cwd é só o projeto atual, por não haver um neutro.
-pub(crate) fn orcamento(dir: &Path) -> Result<Orcamento, String> {
-    interpretar_orcamento(&rodar(dir, &["agents", "--json"])?)
-}
 
 /// **O quê:** `hooks --json` → os hooks do Claude Code estão ligados? PURA. **Onde:** [`hooks_ligados`].
 pub(crate) fn interpretar_hooks(texto: &str) -> Result<bool, String> {
@@ -517,196 +249,29 @@ pub(crate) fn terminal(dir: &Path, como: Terminal<'_>) -> Result<String, String>
     interpretar_terminal(&rodar(dir, &args)?)
 }
 
-/// **O quê:** argumentos de `note` — o texto vai DEPOIS de `--`, senão uma nota que começa com
-/// `-` viraria flag. PURA. **Onde:** [`adicionar_nota`].
-pub(crate) fn args_nota<'a>(tipo: &'a str, texto: &'a str) -> Vec<&'a str> {
-    vec!["note", "--kind", tipo, "--", texto]
-}
-
-/// **O quê:** anexa uma nota do humano (`task` ou `correcao`). **Onde:** os campos de nota.
-pub(crate) fn adicionar_nota(dir: &Path, tipo: &str, texto: &str) -> Result<(), String> {
-    rodar(dir, &args_nota(tipo, texto.trim())).map(|_| ())
-}
-
-/// **O quê:** captura uma demanda na caixa SEM tocar o checklist. **Onde:** «Capturar».
-pub(crate) fn capturar_demanda(dir: &Path, texto: &str) -> Result<(), String> {
-    rodar(dir, &["add", "--", texto.trim()]).map(|_| ())
-}
-
-/// **O quê:** fecha o `n`-ésimo (1-based) item humano aberto. **Onde:** «Marcar feito».
-pub(crate) fn marcar_humano(dir: &Path, n: i32) -> Result<(), String> {
-    if n < 1 {
-        return Err("índice humano inválido".into());
-    }
-    let n = n.to_string();
-    rodar(dir, &["human", "--done", &n]).map(|_| ())
-}
-
-/// **O quê:** responde (`true`) ou recusa (`false`) o `n`-ésimo item humano aberto e devolve a
-/// frase do app («liberado pra máquina: …» / «cancelado: …»). **Onde:** o modal de resolver.
-pub(crate) fn resolver_humano(
-    dir: &Path,
-    n: i32,
-    responder: bool,
-    texto: &str,
-) -> Result<String, String> {
-    let n = n.max(1).to_string();
-    rodar(dir, &[if responder { "answer" } else { "refuse" }, &n, "--", texto.trim()])
-}
-
-/// **O quê:** funde as demandas organizadas no checklist; devolve a frase do app. **Onde:** «Fundir».
-pub(crate) fn fundir_caixa(dir: &Path) -> Result<String, String> {
-    rodar(dir, &["caixa", "merge"])
-}
-
-/// **O quê:** abre o agente que organiza a caixa num terminal. **Onde:** «Organizar».
-pub(crate) fn organizar_caixa(dir: &Path) -> Result<String, String> {
-    rodar(dir, &["caixa", "agente"])
-}
-
 /// **O quê:** abre o painel HTML do projeto no navegador. **Onde:** «Painel» (Overdev e Grafo).
 pub(crate) fn abrir_painel(dir: &Path) -> Result<(), String> {
     rodar(dir, &["panel"]).map(|_| ())
-}
-
-/// **O quê:** divide o checklist em `k` partes (e lança `k` claudes se `lancar`); devolve o
-/// resumo. **Onde:** o painel de split. O teto do governador é conferido PELO APP — a recusa
-/// volta como erro com o número.
-pub(crate) fn dividir(dir: &Path, k: usize, lancar: bool) -> Result<String, String> {
-    let k = k.to_string();
-    let mut args = vec!["split", k.as_str()];
-    if lancar {
-        args.push("--dispatch");
-    }
-    rodar(dir, &args).map(|saida| resumo_split(&saida))
-}
-
-/// **O quê:** das dezenas de linhas do `split`, só as que dizem o que aconteceu (`✓`/`✗`).
-/// PURA. **Onde:** [`dividir`]. Sem nenhuma, devolve a última linha — nunca vazio.
-pub(crate) fn resumo_split(saida: &str) -> String {
-    let marcadas: Vec<&str> =
-        saida.lines().map(str::trim).filter(|l| l.starts_with('✓') || l.starts_with('✗')).collect();
-    if marcadas.is_empty() {
-        saida.lines().map(str::trim).rfind(|l| !l.is_empty()).unwrap_or("split concluído").into()
-    } else {
-        marcadas.join(" · ")
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// O progresso lê os nomes do contrato; sem run, `modo` e `teto` nulos viram vazio/0.
-    #[test]
-    fn progresso_le_o_contrato_e_o_sem_run() {
-        let p = interpretar_progresso(
-            r#"{"raiz":"/p","modo":"active","feitos":3,"abertos":2,"on_hold":1,"humanos":4,
-                "recusados":0,"iteracoes":5,"teto":40}"#,
-        )
-        .expect("documento válido");
-        assert_eq!(
-            p,
-            Progresso {
-                modo: "active".into(),
-                abertos: 2,
-                feitos: 3,
-                on_hold: 1,
-                humanos: 4,
-                iteracoes: 5,
-                teto: 40
-            }
-        );
-        assert!(!p.terminou());
-        let vazio = interpretar_progresso(r#"{"modo":null,"feitos":0,"teto":null}"#).unwrap();
-        assert_eq!((vazio.modo.as_str(), vazio.teto), ("", 0));
-        assert!(Progresso { modo: "active".into(), ..Default::default() }.terminou());
-        assert!(Progresso { modo: "stopped".into(), abertos: 3, ..Default::default() }.terminou());
-    }
-
-    /// Documento truncado ou que não é JSON é ERRO com motivo — nunca um progresso zerado.
+    /// Documento truncado ou que não é JSON é ERRO com motivo — nunca um valor zerado.
     #[test]
     fn documento_ilegivel_e_erro_e_nao_zero() {
         for ruim in ["", "{", "não é json", "[1,2"] {
-            let e = interpretar_progresso(ruim).expect_err("deve recusar");
+            let e = interpretar_hooks(ruim).expect_err("deve recusar");
             assert!(e.contains("ilegível"), "{ruim:?} -> {e}");
         }
-        assert!(interpretar_monitor("{").is_err());
-        assert!(interpretar_tokens("").is_err());
-        assert!(interpretar_checklist("x").is_err());
         assert!(interpretar_grafo("x").is_err());
         assert!(interpretar_hooks(r#"{"settings":"valido"}"#).is_err(), "sem `ligados` não chuta");
     }
 
-    /// Monitor: texto dos abertos e `em`/`texto` das conclusões; tipo errado não derruba.
+    /// Hooks: `ligados` é o que decide; `false` é verdade, não ausência.
     #[test]
-    fn monitor_le_abertos_e_conclusoes() {
-        let m = interpretar_monitor(
-            r#"{"abertos":["a","b",3],"conclusoes":[{"em":10,"texto":"x"},{"em":"quebrado"}]}"#,
-        )
-        .unwrap();
-        assert_eq!(m.abertos, ["a", "b"], "o que não é texto é ignorado");
-        assert_eq!(m.conclusoes[0], Conclusao { ts: 10, text: "x".into() });
-        assert_eq!(m.conclusoes[1], Conclusao { ts: 0, text: String::new() });
-    }
-
-    /// Tokens: zero é verdade, o modelo nulo é `None`.
-    #[test]
-    fn tokens_modelo_nulo_e_none() {
-        let t = interpretar_tokens(
-            r#"{"entrada":1,"saida":2,"cache_leitura":3,"cache_escrita":4,"total":10,
-                "mensagens":5,"modelo":null}"#,
-        )
-        .unwrap();
-        assert_eq!((t.entrada, t.saida, t.cache_leitura, t.total, t.modelo), (1, 2, 3, 10, None));
-        let m = interpretar_tokens(r#"{"modelo":"claude-x"}"#).unwrap();
-        assert_eq!(m.modelo.as_deref(), Some("claude-x"));
-    }
-
-    /// Checklist: o item humano carrega o número que `human --done` espera.
-    #[test]
-    fn checklist_traz_o_numero_humano() {
-        let c = interpretar_checklist(
-            r#"{"raiz":"/p","modo":"active","objetivo":"meta","itens":[
-                {"tipo":"open","texto":"a","maquina":true,"humano_n":0,"sub":false},
-                {"tipo":"hopen","texto":"b","maquina":false,"humano_n":1,"sub":false},
-                {"tipo":"nota","texto":"resposta: x","maquina":false,"humano_n":0,"sub":true}]}"#,
-        )
-        .unwrap();
-        assert_eq!((c.modo.as_deref(), c.objetivo.as_str()), (Some("active"), "meta"));
-        assert_eq!(c.itens.len(), 3);
-        assert_eq!((c.itens[1].tipo.as_str(), c.itens[1].humano_n), ("hopen", 1));
-        assert!(c.itens[2].sub && !c.itens[2].maquina);
-        assert!(interpretar_checklist(r#"{"modo":null,"objetivo":null,"itens":[]}"#)
-            .unwrap()
-            .modo
-            .is_none());
-    }
-
-    /// Documentos, notas e caixa.
-    #[test]
-    fn documentos_notas_e_caixa() {
-        let d = interpretar_documentos(r#"{"decisoes":"d","plano":"p","perguntas":"q"}"#).unwrap();
-        assert_eq!((d.decisoes.as_str(), d.plano.as_str(), d.perguntas.as_str()), ("d", "p", "q"));
-        assert_eq!(interpretar_notas(r#"{"texto":"oi\nlinha"}"#).unwrap(), "oi\nlinha");
-        assert_eq!(
-            interpretar_caixa(
-                r#"{"pendentes":[{"id":"1"},{"id":"2"}],"processadas":[{"id":"3"}]}"#
-            )
-            .unwrap(),
-            (2, 1)
-        );
-        assert_eq!(interpretar_caixa(r#"{"pendentes":[],"processadas":[]}"#).unwrap(), (0, 0));
-    }
-
-    /// Orçamento e hooks.
-    #[test]
-    fn orcamento_e_hooks() {
-        let o = interpretar_orcamento(
-            r#"{"total_cap":8,"available":5,"running_claudes":3,"load1":1.5,"ram_tight":false}"#,
-        )
-        .unwrap();
-        assert_eq!((o.teto, o.livres, o.rodando, o.load1), (8, 5, 3, 1.5));
+    fn hooks_le_ligados() {
         assert!(interpretar_hooks(r#"{"settings":"valido","ligados":true,"em_dia":true}"#).unwrap());
         assert!(
             !interpretar_hooks(r#"{"settings":"ausente","ligados":false,"em_dia":false}"#).unwrap()
@@ -752,31 +317,18 @@ mod tests {
         assert!(interpretar_terminal("{}").is_err());
     }
 
-    /// Texto que começa com `-` fica depois do `--` e não vira flag; o split resume o que importa.
-    #[test]
-    fn argumentos_e_resumo_do_split() {
-        assert_eq!(args_nota("task", "-rf"), ["note", "--kind", "task", "--", "-rf"]);
-        let saida = "Governador…\n  teto: 8\n\n✓ dividido: 6 itens em 2 parte(s):\n  part 1\n  ✓ claude 1 lançado (a)\n  ✗ claude 2 falhou: x";
-        assert_eq!(
-            resumo_split(saida),
-            "✓ dividido: 6 itens em 2 parte(s): · ✓ claude 1 lançado (a) · ✗ claude 2 falhou: x"
-        );
-        assert_eq!(resumo_split("a\nfim\n\n"), "fim");
-        assert_eq!(resumo_split(""), "split concluído");
-    }
-
     /// Sem o app instalado, rodar dá o motivo acionável (e não pânico nem vazio).
     #[test]
     fn rodar_sem_o_app_diz_o_motivo() {
         if presente() {
             return; // a máquina de quem roda tem o app; o caminho é coberto pelo teste de contrato.
         }
-        let e = rodar(Path::new("/"), &["progresso", "--json"]).expect_err("sem app");
+        let e = rodar(Path::new("/"), &["hooks", "--json"]).expect_err("sem app");
         assert_eq!(e, AUSENTE);
     }
 
     /// **Contra o BINÁRIO de verdade:** o que o app instalado devolve é o que os `interpretar_*`
-    /// leem (grafo global e de serviço, checklist, monitor, documentos, caixa e hooks). Sem o app
+    /// leem (grafo global e de serviço e hooks). Sem o app
     /// na máquina de quem roda a suíte não há contra o que provar, e o teste diz isso em voz
     /// alta em vez de passar calado.
     #[test]
@@ -788,22 +340,13 @@ mod tests {
         let d = std::env::temp_dir().join(format!("gui-overdevcli-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         let g = d.join(".schematize/grafos");
-        let od = d.join(".schematize/overdev");
         std::fs::create_dir_all(&g).expect("dir de grafos");
-        std::fs::create_dir_all(&od).expect("dir do overdev");
         std::fs::write(g.join("GRAFO_GLOBAL.md"), "front -> api (login)\napi -> auth\n").unwrap();
         std::fs::write(
             g.join("api.md"),
             "- `handler` — recebe · api/src/h.rs:7\nhandler -> repo\n",
         )
         .unwrap();
-        std::fs::write(
-            od.join("state.json"),
-            r#"{"mode":"active","max_iters":40,"objetivo":"meta","started":1}"#,
-        )
-        .unwrap();
-        std::fs::write(od.join("CHECKLIST.md"), "- [x] a\n- [ ] b\n- [H ] c\n").unwrap();
-        std::fs::write(od.join("PLAN.md"), "# plano\n").unwrap();
 
         let global = grafo(&d, None).expect("grafo global");
         assert!(global.nos.iter().any(|n| n.id == "front") && !global.agregado, "{global:?}");
@@ -813,13 +356,6 @@ mod tests {
         assert_eq!(h.loc.as_deref(), Some("api/src/h.rs:7"));
         assert!(grafo(&d, Some("nada")).expect("serviço sem grafo").nos.is_empty());
 
-        let c = checklist(&d).expect("checklist");
-        assert_eq!(c.objetivo, "meta");
-        assert_eq!(c.itens.iter().filter(|i| i.tipo == "hopen").count(), 1);
-        assert_eq!(documentos(&d).expect("documentos").plano, "# plano\n");
-        assert_eq!(caixa(&d).expect("caixa"), (0, 0));
-        assert!(monitor(&d).expect("monitor").abertos.iter().any(|t| t == "b"));
-        assert_eq!(progresso(&d).expect("progresso").abertos, 1);
         assert!(hooks_ligados(&d).is_ok(), "hooks --json responde");
         let _ = std::fs::remove_dir_all(&d);
     }

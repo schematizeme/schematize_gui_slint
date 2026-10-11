@@ -16,8 +16,6 @@
 
 slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/app.slint
 
-// Fatiamento do checklist do overdev (paginação pura + a ligação com a UI). Vive fora deste
-// arquivo porque é a peça que segura o custo de render CONSTANTE por página — ver checklist.rs.
 // Módulos da GUI. O piso da casa é <=750 linhas e uma unidade lógica por arquivo:
 // este `main.rs` guarda só o arranque e a FIAÇÃO das telas; toda a lógica mora nos
 // módulos abaixo. `prelude` centraliza os imports comuns (inclusive os tipos que o
@@ -26,8 +24,6 @@ mod lockpin; // guarda: o Cargo.lock tem que pinar um commit do CLI, não um cam
 mod prelude;
 mod procedencia; // de qual commit (e se árvore suja) este binário saiu — o `--version`
 
-mod checklist; // paginação PURA do checklist (o que segura o custo de render)
-mod checklistview; // ligação do checklist fatiado com as propriedades da UI
 mod envrows; // linhas de Environments/SSH/idiomas + ações em terminal
 mod fmt; // formatação de valores pra UI (puro)
 mod gitlog; // histórico de commits, lido do BINÁRIO do git (E2 da extradição)
@@ -36,9 +32,7 @@ mod graphview; // ponte do grafo com a UI (modelos, carga preguiçosa, timer)
 mod i18nbind; // catálogo i18n -> propriedades do `global L`
 mod marketstatus; // versões, lidas do `market status --json` (E4 M5 da extradição)
 mod odhistory; // histórico do overdev (snapshots + commits), paginado
-mod odload; // carga do estado do overdev + editor acoplado
-mod odmonitor; // monitor leve do .schematize/overdev/ (thread -> UI)
-mod odproj; // projetos, caminhos do overdev e itens do checklist
+mod odproj; // projetos do hub: seletor, troca de projeto, ações de skills
 mod overdevcli; // a porta única para o `schematize-overdev` (leituras --json e ações)
 mod repulsion; // repulsão do grafo em grade espacial (era O(n²)/quadro)
 mod skillactions; // os botões que as skills declaram, lidos do BINÁRIO (E5)
@@ -48,15 +42,12 @@ mod sysenv; // integração com o sistema (processo, PATH, terminal, editor)
 mod wire; // FIAÇÃO da janela: um módulo por recorte da UI (ver wire/mod.rs)
 
 use crate::prelude::*;
-use checklistview::ChecklistView;
 use envrows::*;
 use fmt::*;
 use graphstate::*;
 use graphview::*;
 use i18nbind::*;
 use odhistory::*;
-use odload::*;
-use odmonitor::*;
 use odproj::*;
 use sysenv::*;
 
@@ -136,26 +127,18 @@ fn main() -> Result<(), slint::PlatformError> {
     app.global::<G>().set_edges(ModelRc::from(graph_edges.clone()));
 
     // ==================== aba Overdev ====================
-    // Modelos: seletor de projeto (detectados + recentes), dev_dirs, e checklist.
+    // Modelos: seletor de projeto (detectados + recentes), dev_dirs e pins.
     let od_proj_model = Rc::new(VecModel::<ProjItem>::from(Vec::new()));
     let od_dev_model = Rc::new(VecModel::<SharedString>::from(Vec::new()));
     let od_pin_model = Rc::new(VecModel::<SharedString>::from(Vec::new()));
-    let od_items_model = Rc::new(VecModel::<OverItem>::from(Vec::new()));
     app.global::<Od>().set_projects(ModelRc::from(od_proj_model.clone()));
     app.global::<Od>().set_dev_dirs(ModelRc::from(od_dev_model.clone()));
     app.global::<Od>().set_pinned(ModelRc::from(od_pin_model.clone()));
-    app.global::<Od>().set_items(ModelRc::from(od_items_model.clone()));
-    // Dona do checklist COMPLETO (Rust) — o modelo acima só recebe a PÁGINA visível.
-    let od_cl = Rc::new(ChecklistView::new(od_items_model.clone()));
     refresh_proj_models(&od_proj_model, &od_dev_model, &od_pin_model);
     // Projeto atual (lado Rust) — persiste entre execuções via recent_projects.
     let od_current: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
-    // Fase 4: flag de parada do MONITOR (o botão Parar a levanta; o monitor a checa
-    // a cada fatia e encerra). `Arc` porque cruza pra a thread do monitor. NÃO mata o
-    // `claude` — ele roda no terminal externo (processo próprio); só para o espelho.
-    let od_stop_flag = Arc::new(AtomicBool::new(false));
-    // Histórico do DB do overdev + commits (aditivos): estado completo no Rust +
-    // modelos com a PÁGINA atual (paginação Rust-side).
+    // Commits do projeto (e a linha de upstream): estado completo no Rust + modelo com a
+    // PÁGINA atual (paginação Rust-side).
     let od_commits_all: Rc<RefCell<Vec<crate::gitlog::Commit>>> = Rc::new(RefCell::new(Vec::new()));
     let od_commits_model = Rc::new(VecModel::<CommitRow>::from(Vec::new()));
     app.global::<Od>().set_commits(ModelRc::from(od_commits_model.clone()));
@@ -193,7 +176,7 @@ fn main() -> Result<(), slint::PlatformError> {
         Some(p) => {
             let abs = std::fs::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(&p));
             *od_current.borrow_mut() = Some(abs.clone());
-            load_overdev_into(&app, &od_cl, Some(&abs));
+            load_projeto(&app, Some(&abs));
             refresh_od_history(&app, &od_commits_all, &od_commits_model, Some(&abs));
             // grafo compartilha o projeto restaurado.
             graph_mark_dirty(&graph_loaded); // grafo carrega só quando a aba Grafo abrir
@@ -203,7 +186,7 @@ fn main() -> Result<(), slint::PlatformError> {
             }
         }
         None => {
-            load_overdev_into(&app, &od_cl, None);
+            load_projeto(&app, None);
         }
     }
     // DEPOIS do bloco acima, e de propósito: quem escreveu `--tela` disse o que quer com mais
@@ -214,7 +197,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ---- FIAÇÃO: registra os callbacks de cada recorte da UI ----
-    // O estado compartilhado (modelos, grafo, checklist, flags) vai num `Ctx`; cada
+    // O estado compartilhado (modelos, grafo, commits) vai num `Ctx`; cada
     // módulo clona (Rc/Arc, barato) só o que usa. Fiação DEPOIS do estado inicial,
     // pra nenhum callback disparar antes de a janela estar consistente.
     let cx = wire::Ctx {
@@ -226,9 +209,7 @@ fn main() -> Result<(), slint::PlatformError> {
         od_proj_model,
         od_dev_model,
         od_pin_model,
-        od_cl,
         od_current,
-        od_stop_flag,
         od_commits_all,
         od_commits_model,
     };
@@ -236,7 +217,7 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::overdev::wire(&app, &cx);
     wire::odhistory::wire(&app, &cx);
     wire::graph::wire(&app, &cx);
-    wire::caixa::wire(&app, &cx);
+    wire::projeto::wire(&app, &cx);
     wire::settings::wire(&app, &cx);
     wire::appversion::wire(&app, &cx);
     wire::notificacoes::wire(&app, &cx);
@@ -248,51 +229,6 @@ fn main() -> Result<(), slint::PlatformError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// O documento `checklist --json` que o app devolve para o checklist de exemplo: 2 de máquina
-    /// abertos (um indentado), 1 feito, 1 on-hold, 2 humanos abertos, 1 humano feito.
-    const DOC: &str = r#"{"raiz":"/p","modo":"active","objetivo":"meta","itens":[
-        {"tipo":"open","texto":"item máquina aberto A","maquina":true,"humano_n":0,"sub":false},
-        {"tipo":"done","texto":"item máquina feito B","maquina":true,"humano_n":0,"sub":false},
-        {"tipo":"hold","texto":"item on-hold C","maquina":true,"humano_n":0,"sub":false},
-        {"tipo":"hopen","texto":"item humano aberto D","maquina":false,"humano_n":1,"sub":false},
-        {"tipo":"hdone","texto":"item humano feito E","maquina":false,"humano_n":0,"sub":false},
-        {"tipo":"hopen","texto":"item humano aberto F","maquina":false,"humano_n":2,"sub":false},
-        {"tipo":"open","texto":"item indentado aberto G","maquina":true,"humano_n":0,"sub":true}]}"#;
-
-    /// A classificação mora no APP; o hub só a leva para a linha da UI e preserva o índice humano
-    /// (é o argumento de `human --done`). Item de máquina vira `hindex = -1`.
-    #[test]
-    fn itens_do_app_viram_linhas_da_ui_com_o_indice_humano() {
-        let c = crate::overdevcli::interpretar_checklist(DOC).expect("documento válido");
-        let its = itens_de(&c);
-        assert_eq!(its.len(), 7);
-        let by_kind = |k: &str| its.iter().filter(|i| i.kind == k).count();
-        assert_eq!(by_kind("open"), 2, "máquina abertos (inclui indentado)");
-        assert_eq!(by_kind("done"), 1, "máquina feito");
-        assert_eq!(by_kind("hold"), 1, "on-hold");
-        assert_eq!(by_kind("hopen"), 2, "humanos abertos");
-        assert_eq!(by_kind("hdone"), 1, "humano feito");
-        let hopen: Vec<i32> = its.iter().filter(|i| i.kind == "hopen").map(|i| i.hindex).collect();
-        assert_eq!(hopen, vec![1, 2]);
-        let mo = its.iter().find(|i| i.kind == "open").unwrap();
-        assert!(mo.machine && mo.hindex == -1);
-        assert!(its[6].sub, "o indentado é subtarefa");
-    }
-
-    #[test]
-    fn editor_path_nunca_escapa_do_overdev() {
-        // Sem dir nenhum no disco, o resolvedor "ler ambos" devolve o default CANÔNICO
-        // (`.schematize/overdev`). O que o teste garante é a
-        // sanitização a basename (anti-traversal); o nome do dir é do `paths`, e mudá-lo
-        // aqui junto é o sinal de que a ordem de resolução mudou de propósito.
-        let root = std::path::Path::new("/proj");
-        let od = root.join(".schematize").join("overdev");
-        assert_eq!(overdev_file_path(root, "PLAN.md"), od.join("PLAN.md"));
-        assert_eq!(overdev_file_path(root, "CHECKLIST.md"), od.join("CHECKLIST.md"));
-        // tentativa de path traversal é reduzida ao basename.
-        assert_eq!(overdev_file_path(root, "../../etc/passwd"), od.join("passwd"));
-    }
 
     fn v(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()

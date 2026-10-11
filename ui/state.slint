@@ -1,5 +1,5 @@
 import {
-    SkillRow, EnvRow, LangItem, ProjItem, OverItem, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction,
+    SkillRow, EnvRow, LangItem, ProjItem, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction,
     } from "types.slint";
 
 // Estado de TELA da GUI, agrupado por área — um `global` por recorte.
@@ -103,15 +103,15 @@ export global Cfg {
     callback skills-abrir();
     callback skills-instalar();
 
-    // OVERDEV (E6 M5): a janela `schematize-overdev-gui` cobre parte da aba (progresso,
-    // checklist, perguntas, histórico de snapshots) — o resto segue no hub. `nota` carrega o
+    // OVERDEV (E6 M5): a janela `schematize-overdev-gui` é a casa do trabalho do overdev
+    // (perguntas, checklist, execução, caixa, notas, histórico). `nota` carrega o
     // aviso honesto de que o repositório ainda não é público (o mesmo da dica do CLI,
     // `instalardica.rs`), para a tela não prometer um `cargo install` que falha sem acesso.
     in-out property <bool> overdev-presente: false;
     in-out property <string> overdev-cmd;
     in-out property <string> overdev-nota;
     in-out property <string> overdev-msg;
-    callback overdev-abrir(string);   // "" = janela inicial; "perguntas"|"checklist"|"historico"
+    callback overdev-abrir(string);   // "" = janela inicial; "perguntas"|"checklist"|"execucao"|"caixa"|"notas"|"historico"
     callback overdev-instalar();
     in-out property <[EnvRow]> rows;
     in-out property <[LangItem]> langs;
@@ -171,8 +171,8 @@ export global Mg {
     in-out property <bool> sel-forked: false;       // já virou fork editável?
 }
 
-// Aba OVERDEV — projeto selecionado, checklist fatiado, editor acoplado, notas,
-// monitor do run e o histórico (snapshots + commits).
+// Aba OVERDEV (hub) — projeto selecionado, ações de skills, skills atrasadas e commits. O
+// checklist, a execução, a caixa, as notas e os snapshots são da janela `schematize-overdev-gui`.
 export global Od {
     in-out property <[SkillAction]> skill-actions;
     callback run-skill-action(string);  // dispara o `command` da ação no claude de um terminal
@@ -181,50 +181,7 @@ export global Od {
     in-out property <[string]> pinned;           // pastas FIXADAS como projeto (pins)
     in-out property <string> current;         // nome do projeto atual ("" = nenhum)
     in-out property <bool> has-project: false;
-    in-out property <bool> has-overdev: false;
-    in-out property <string> objetivo;
-    in-out property <string> mode;
-    in-out property <int> done;
-    in-out property <int> open;
-    in-out property <int> hold;
-    in-out property <int> human-open;         // humanos abertos (- [H ])
-    in-out property <[OverItem]> items;           // SÓ a página corrente (o resto vive no Rust)
-    in-out property <int> cl-filter: 0;   // 0 todos · 1 abertos · 2 feitos · 3 on-hold · 4 humanos
-    in-out property <int> cl-page: 0;     // página corrente (0-based)
-    in-out property <int> cl-pages: 1;    // total de páginas sob o filtro
-    in-out property <int> cl-total: 0;    // itens sob o filtro
-    in-out property <int> cl-from: 0;     // 1-based do 1º item da página
-    in-out property <int> cl-to: 0;       // 1-based do último item da página
-    in-out property <string> decisoes;
-    in-out property <string> plano;
-    in-out property <string> perguntas;
-    in-out property <string> editor-target: "PLAN.md";  // arquivo em edição
-    in-out property <string> editor-content;             // conteúdo editável
-    in-out property <string> editor-status;              // feedback salvo/erro
-    in-out property <bool> editor-error: false;          // o status é erro?
-    in-out property <bool> editor-open: false;           // editor ABERTO (só aí o TextEdit existe)
-    in-out property <bool> editor-too-big: false;        // arquivo acima do teto → só editor externo
-    in-out property <string> editor-size;                // tamanho legível do arquivo grande
-    in-out property <string> notes;                      // read_notes(root)
-    in-out property <string> note-input;                 // input de nota por task
-    in-out property <string> correction-input;           // input do prompt de correção
-    in-out property <bool> session-running: false;       // MONITOR ativo (claude roda fora do app)
-    in-out property <bool> confirm-open: false;          // guardrail (mini-modal de confirmação) aberto
-    in-out property <string> agent-cmdline;              // comando que abre no terminal externo (guardrail)
-    in-out property <string> run-status;                 // msg do launch/monitor (vazio = ocioso)
-    // Os contadores do monitor FORAM REMOVIDOS de propósito: eram um segundo par de
-    // olhos sobre o MESMO checklist (`done`/`open`/`hold`/`human-open`, acima), e o de
-    // cima só era reescrito no load/reload — durante um run ele congelava na contagem
-    // de quando o projeto foi aberto, enquanto o de baixo andava. Dois números para o
-    // mesmo fato, discordando na tela. Agora há UMA fonte: tanto o load quanto o
-    // monitor escrevem os mesmos globais (mesma lição da v0.50.0 do CLI, quando o
-    // badge de notificações dizia "3" e o painel abria vazio).
-    in-out property <int> mon-iter: 0;                   // monitor: iterações gastas
-    in-out property <int> mon-max: 0;                    // monitor: teto de iterações
-    in-out property <string> mon-mode;                   // monitor: estado do run (active/stopped/…)
-    in-out property <[string]> mon-items;                // monitor: itens abertos (máquina)
-    in-out property <[string]> completions;              // monitor: log de conclusões ("HH:MM:SS  texto")
-    in-out property <string> usage-line;                 // monitor: tokens+modelo já formatado (vazio = sem dado)
+    in-out property <string> run-status;                 // msg das ações disparadas daqui (vazio = ocioso)
     callback refresh-history();       // recarrega histórico do DB + commits do projeto atual
     in-out property <[CommitRow]> commits;
     in-out property <int> commit-page: 0;
@@ -239,60 +196,13 @@ export global Od {
     callback reload();               // re-sonda dev_dirs + recarrega o projeto
     callback new-window();           // abre o projeto atual em nova janela (overdev em paralelo)
     callback gen-from-archive();     // GERA afazeres pro overdev do histórico recuperável do archive
-    in-out property <int> agent-cap: 0;        // teto seguro de claudes na máquina
-    in-out property <int> agent-avail: 0;      // disponível p/ lançar (teto − rodando)
-    in-out property <int> agent-running: 0;    // claudes rodando na máquina agora
-    in-out property <string> agent-load: "—";  // load average 1min (formatado)
-    in-out property <int> split-k: 2;          // K do split (claudes principais)
-    in-out property <string> split-status: ""; // feedback do último split
-    callback split(int, bool);       // divide o checklist em K parts; bool = também lançar (dispatch)
-    callback refresh-agents();       // recomputa o orçamento do governador
     callback add-dev-dir();          // cadastra um diretório de desenvolvimento (picker)
     callback remove-dev-dir(string); // remove um diretório de desenvolvimento
     callback pin-folder();           // fixa uma pasta como projeto (picker nativo → pin_project)
     callback unpin(string);          // desafixa uma pasta fixada (unpin_project)
-    callback open-browser();
+    callback open-browser();          // abre o painel HTML do projeto no navegador
     // Abre um terminal interativo NA PASTA do projeto, com o claude pronto (bypass ligado).
-    callback open-terminal();         // abre o painel HTML do projeto no navegador
-    callback mark-human(int);        // fecha o i-ésimo humano aberto (- [H ]→- [H x])
-    callback cl-set-page(int);       // checklist fatiado: vai pra página N (0-based)
-    callback cl-set-filter(int);     // checklist fatiado: troca o filtro (volta pra página 0)
-    callback editor-toggle();        // abre/fecha o editor acoplado (e lê/descarta o conteúdo)
-    callback editor-open-external(); // arquivo grande demais → abre no editor do sistema
-    callback editor-pick(string);    // troca o arquivo do editor (PLAN.md/CHECKLIST.md)
-    callback editor-save();          // regrava o arquivo do editor no .overdev/
-
-    callback add-note(string);       // add_note(root,"task",texto) — ponto por task
-    callback add-correction(string); // add_note(root,"correcao",texto) — prompt de correção
-    callback run-request();          // clique "Executar overdev" → abre o guardrail (mostra o comando)
-    callback run-confirm();          // clique "Confirmar" no guardrail → dispara o agente acoplado
-    callback run-cancel();           // fecha o guardrail sem disparar
-    callback stop();                 // "Parar" → session.kill() + encerra a thread
-    callback attach();               // "Reload / Acompanhar" → anexa o monitor a um overdev externo
-    callback refresh-tokens();       // "Atualizar tokens" → relê agent_usage sob demanda
-    // ---- RESOLVER item humano: responder (libera a máquina) ou recusar (cancela) ----
-    // Um item humano tem três destinos reais, não dois: fiz, decidi, não cabe. Os dois
-    // últimos precisam de TEXTO — a decisão é o conteúdo, não o clique.
-    in-out property <bool> resolve-open: false;
-    in-out property <int> resolve-index: -1;      // índice entre os humanos ABERTOS
-    in-out property <string> resolve-item;         // texto do item (cabeçalho do modal)
-    in-out property <bool> resolve-answer: true;   // true = responder · false = recusar
-    in-out property <string> resolve-text;         // a resposta/motivo digitado
-    in-out property <string> resolve-status;
-    in-out property <bool> resolve-error: false;
-    callback resolve-request(int, string, bool);
-    callback resolve-confirm();
-    callback resolve-cancel();
-
-    // ---- CAIXA DE ENTRADA: injetar demanda com o agente rodando ----
-    in-out property <string> caixa-text;
-    in-out property <int> caixa-pending: 0;   // capturadas, a organizar
-    in-out property <int> caixa-ready: 0;     // organizadas, a fundir
-    in-out property <string> caixa-status;
-    in-out property <bool> caixa-error: false;
-    callback caixa-add();     // captura (instantâneo, não toca o checklist)
-    callback caixa-agent();   // abre o agente organizador num terminal
-    callback caixa-merge();   // funde no checklist (sob trava)
+    callback open-terminal();
 
     // ---- SKILLS aplicadas neste projeto ----
     in-out property <int> skills-outdated: 0;

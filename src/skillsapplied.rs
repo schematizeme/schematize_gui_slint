@@ -3,7 +3,7 @@
 //! **O quê:** roda `schematize-skills applied --json` com o cwd no projeto observado e devolve
 //! as skills que ficaram para trás, junto com o prompt que as reaplica.
 //!
-//! **Onde:** a caixa de entrada do overdev (`wire::caixa`) — o contador «N skills evoluíram» e
+//! **Onde:** a aba Overdev do hub (`wire::projeto`) — o contador «N skills evoluíram» e
 //! o botão que abre o agente para reaplicá-las.
 //!
 //! ## Por que subprocesso, e não mais `schematize::skillsproj`
@@ -33,7 +33,7 @@ pub(crate) struct Aplicadas {
 
 /// **O quê:** as skills atrasadas em `root`. VAZIO sem o app, com erro ou com documento ruim.
 ///
-/// **Onde:** `wire::caixa::atualiza_caixa` (contagem) e o callback `skills_rerun` (prompt).
+/// **Onde:** `wire::projeto::atualiza_skills` (contagem) e o callback `skills_rerun` (prompt).
 ///
 /// **O `current_dir` é o `root`**, não o cwd da janela: a GUI observa um projeto que não é o
 /// diretório de onde ela foi aberta, e o `applied --json` responde sobre o cwd dele.

@@ -1,0 +1,55 @@
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { Btn } from "widgets.slint";
+import { Od } from "state.slint";
+
+// Aviso da tela do projeto: SKILLS desatualizadas neste projeto.
+//
+// A CAIXA DE ENTRADA que dividia este painel é a aba «Caixa» da janela do overdev (E6 M5);
+// o aviso de skills fica porque o dado vem do `schematize-skills`, outro app.
+export component SkillsAviso inherits VerticalLayout {
+    spacing: 12px;
+    // ---- SKILLS deste projeto: aviso quando a skill evoluiu depois ----
+    // Skill instalada e skill APLICADA aqui são coisas diferentes, e a
+    // segunda é a que define os preceitos do projeto. Sem este aviso, a
+    // divergência só aparece como dois projetos da casa com padrões
+    // diferentes — e ninguém liga o sintoma à causa.
+    if Od.skills-outdated > 0: Rectangle {
+        height: skcard.preferred-height;
+        border-radius: 10px;
+        background: Theme.warn.transparentize(0.9);
+        border-width: 1px;
+        border-color: Theme.warn.transparentize(0.6);
+        skcard := HorizontalLayout {
+            padding: 12px;
+            spacing: 12px;
+            VerticalLayout {
+                alignment: center;
+                spacing: 3px;
+                horizontal-stretch: 1;
+                Text {
+                    text: "\{Od.skills-outdated} \{L.od-skills-outdated}";
+                    font-size: 12.5px;
+                    font-weight: 700;
+                    color: Theme.warn;
+                    wrap: word-wrap;
+                }
+                Text {
+                    text: Od.skills-summary;
+                    font-size: 11.5px;
+                    color: Theme.text-dim;
+                    wrap: word-wrap;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                Btn {
+                    label: L.od-skills-rerun;
+                    small: true;
+                    primary: true;
+                    clicked => { Od.skills-rerun(); }
+                }
+            }
+        }
+    }
+}
