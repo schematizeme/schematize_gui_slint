@@ -4277,15 +4277,20 @@ dependencies = [
 
 [[package]]
 name = "schematize-gui-slint"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "i-slint-backend-winit",
  "rfd",
  "schematize",
+ "schematize_plataforma",
  "serde_json",
  "slint",
  "slint-build",
 ]
+
+[[package]]
+name = "schematize_plataforma"
+version = "0.2.0"
 
 [[package]]
 name = "scoped-tls"

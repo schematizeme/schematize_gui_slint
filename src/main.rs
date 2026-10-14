@@ -21,8 +21,6 @@ slint::include_modules!(); // gera AppWindow, SkillRow, Theme, L a partir de ui/
 // módulos abaixo. `prelude` centraliza os imports comuns (inclusive os tipos que o
 // `include_modules!()` acima gera).
 mod lockpin; // guarda: o Cargo.lock tem que pinar um commit do CLI, não um caminho local
-#[cfg_attr(test, allow(dead_code))]
-mod market_parasita; // garante o schematize-market na máquina (cópia do módulo do contrato)
 mod prelude;
 mod procedencia; // de qual commit (e se árvore suja) este binário saiu — o `--version`
 
@@ -91,7 +89,9 @@ fn main() -> Result<(), slint::PlatformError> {
         return Ok(());
     }
     // Parasita do market: antes de abrir a janela (bloqueante só quando falta, uma vez por máquina).
-    market_parasita::garantir();
+    schematize_plataforma::parasita::garantir(&schematize_plataforma::parasita::Config::new(
+        "schematize",
+    ));
     detect_display_env();
     set_window_app_id();
 

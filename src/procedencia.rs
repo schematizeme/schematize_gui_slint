@@ -1,144 +1,27 @@
-//! De qual commit este binário foi construído — e a decisão de como dizer isso.
+//! De qual commit este binário foi construído — só a COLA com o `build.rs` desta janela.
 //!
-//! ## Onde
+//! **O quê:** a decisão (rótulo, SHA válido, sujo) mora em `schematize_plataforma::procedencia`;
+//! aqui ficam só os NOMES das variáveis que o `build.rs` deste repo emite.
 //!
-//! [`rotulo_versao`] alimenta o `--version` desta janela (`main.rs`). O `build.rs` colhe o SHA;
-//! aqui está a única decisão, e ela é pura para poder ser vista falhando.
-//!
-//! **O número sozinho não distingue dois binários com o mesmo `Cargo.toml`** e comportamento
-//! diferente — e neste ecossistema isso não é hipótese: um binário de 15 dias atrás passou por novo
-//! e gravou o `.desktop` errado. Copiada da janela do optimizer (`e0ea6bd`), com o `-sujo`.
+//! **Onde:** [`rotulo_versao`] alimenta o `--version` desta janela (`main.rs`).
 
-/// O SHA colhido no build. Vazio quando não havia git (tarball, export, sem `git`).
-const SHA: &str = env!("SCHEMATIZE_GUI_SHA");
-
-/// `"1"` quando o build saiu de árvore com mudança rastreada NÃO commitada (ver `build.rs`).
-const SUJO: &str = env!("SCHEMATIZE_GUI_DIRTY");
-
-/// **O quê:** `"0.2.1 (b9fcc65abcde)"`; `"0.2.1 (b9fcc65abcde-sujo)"` se o build tinha mudança
-/// não commitada (o SHA sozinho mentiria); `"0.2.1 (fonte sem git)"` quando o SHA não veio
-/// (sem SHA, `sujo` é irrelevante).
-///
-/// **Onde:** [`rotulo_versao`], e os testes — que afirmam as duas formas sem depender de o
-/// repo de quem roda a suíte ter git.
-///
-/// **Por que nunca esconder o caso vazio:** um `--version` que mostra só o número quando não
-/// sabe o commit é indistinguível de um binário antigo que nunca soube. Dizer "fonte sem git"
-/// informa o que aconteceu, e quem lê sabe que não pode comparar SHA com o repo.
-///
-/// **Por que SHA malformado conta como ausente:** se um dia o `build.rs` emitir lixo (um erro
-/// de git em stdout, por exemplo), mostrar o lixo como se fosse procedência é pior que dizer
-/// que não sabe — alguém compararia com o HEAD e concluiria "defasado" sobre um build novo.
-pub fn rotulo(versao: &str, sha: &str, sujo: bool) -> String {
-    let limpo = sha.trim();
-    let valido = (7..=40).contains(&limpo.len()) && limpo.chars().all(|c| c.is_ascii_hexdigit());
-    if valido {
-        let marca = if sujo { "-sujo" } else { "" };
-        format!("{versao} ({limpo}{marca})")
-    } else {
-        format!("{versao} (fonte sem git)")
-    }
-}
-
-/// **O quê:** se este binário foi construído de árvore suja (mudança rastreada não commitada).
-///
-/// **Onde:** [`rotulo_versao`] e o teste do build real.
-fn sujo_no_build() -> bool {
-    SUJO.trim() == "1"
-}
-
-/// **O quê:** o rótulo de versão deste binário, pronto para o `--version`.
+/// **O quê:** o rótulo de versão deste binário (`"0.9.2 (b9fcc65abcde)"`, `-sujo` ou
+/// `fonte sem git`), `&'static str`.
 ///
 /// **Onde:** o `--version` do `main.rs`.
-///
-/// **Devolve `&'static str` com `OnceLock`:** a decisão não pode ser `const`, porque escolher
-/// entre o SHA e "fonte sem git" exige olhar o conteúdo da string, e o `OnceLock` dá o `'static`
-/// sem vazar memória a cada chamada.
 pub fn rotulo_versao() -> &'static str {
-    static R: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    R.get_or_init(|| rotulo(env!("CARGO_PKG_VERSION"), SHA, sujo_no_build())).as_str()
-}
-
-/// **O quê:** o SHA cru, ou `None` quando ele não veio (ou veio malformado).
-///
-/// **Onde:** só o teste `o_build_de_verdade_produz_um_dos_dois_estados`, e por isso ele é
-/// `#[cfg(test)]`.
-///
-/// Aqui é um **binário**: o `-D warnings` marcaria como morto o que só o teste usa. O teste
-/// precisa dele para saber QUAL dos dois estados afirmar — sem isso só poderia checar que há
-/// parênteses, o que passaria também sobre lixo.
-#[cfg(test)]
-fn sha() -> Option<&'static str> {
-    let limpo = SHA.trim();
-    let valido = (7..=40).contains(&limpo.len()) && limpo.chars().all(|c| c.is_ascii_hexdigit());
-    valido.then_some(limpo)
+    schematize_plataforma::rotulo_versao!("SCHEMATIZE_GUI_SHA", "SCHEMATIZE_GUI_DIRTY")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// SHA de verdade entra no rótulo como veio.
+    /// O valor real deste build começa pela versão e traz a procedência entre parênteses.
     #[test]
-    fn sha_valido_aparece_no_rotulo() {
-        assert_eq!(rotulo("0.2.1", "b9fcc65abcde", false), "0.2.1 (b9fcc65abcde)");
-        assert_eq!(
-            rotulo("1.0.0", "abcdef0", false),
-            "1.0.0 (abcdef0)",
-            "7 dígitos é o mínimo aceito"
-        );
-    }
-
-    /// **O caso do tarball:** sem git, o build NÃO falha e a versão diz o que houve.
-    #[test]
-    fn sem_git_o_rotulo_diz_que_nao_sabe_em_vez_de_omitir() {
-        assert_eq!(rotulo("0.2.1", "", false), "0.2.1 (fonte sem git)");
-        assert_eq!(rotulo("0.2.1", "   ", false), "0.2.1 (fonte sem git)");
-    }
-
-    /// Lixo NÃO passa por procedência — senão alguém compara com o HEAD e tira conclusão.
-    #[test]
-    fn sha_malformado_conta_como_ausente() {
-        for ruim in ["fatal:", "nao-hex-aqui", "abc", "zzzzzzzzz", "b9fcc65 extra"] {
-            assert_eq!(
-                rotulo("0.2.1", ruim, false),
-                "0.2.1 (fonte sem git)",
-                "{ruim:?} não é SHA e não pode virar procedência"
-            );
-        }
-    }
-
-    /// O valor real deste build é um dos dois estados — nunca uma terceira coisa.
-    #[test]
-    fn o_build_de_verdade_produz_um_dos_dois_estados() {
+    fn o_build_de_verdade_traz_versao_e_procedencia() {
         let r = rotulo_versao();
         assert!(r.starts_with(env!("CARGO_PKG_VERSION")), "{r}");
-        assert!(
-            r.ends_with(')') && r.contains(" ("),
-            "o rótulo sempre traz a procedência entre parênteses: {r}"
-        );
-        assert_eq!(
-            r.contains("-sujo)"),
-            sujo_no_build(),
-            "a marca `-sujo` tem de refletir o build: {r}"
-        );
-        match sha() {
-            Some(s) => assert!(r.contains(s), "o SHA de {s} tem de aparecer em {r}"),
-            None => assert!(r.contains("fonte sem git"), "{r}"),
-        }
-    }
-
-    /// **Árvore suja é dita:** o SHA é o do HEAD, mas o binário tem mais que o HEAD.
-    #[test]
-    fn arvore_suja_marca_o_sha_e_limpa_nao() {
-        assert_eq!(rotulo("0.2.1", "b9fcc65abcde", true), "0.2.1 (b9fcc65abcde-sujo)");
-        assert_eq!(rotulo("0.2.1", "b9fcc65abcde", false), "0.2.1 (b9fcc65abcde)");
-    }
-
-    /// Sem SHA válido não há o que marcar: continua "fonte sem git", suja ou não.
-    #[test]
-    fn sujo_sem_sha_continua_fonte_sem_git() {
-        assert_eq!(rotulo("0.2.1", "", true), "0.2.1 (fonte sem git)");
-        assert_eq!(rotulo("0.2.1", "lixo", true), "0.2.1 (fonte sem git)");
+        assert!(r.ends_with(')') && r.contains(" ("), "{r}");
     }
 }
