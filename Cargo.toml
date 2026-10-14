@@ -11,8 +11,7 @@ name = "schematize-gui"
 path = "src/main.rs"
 
 [dependencies]
-# TEMP(ADR-0026): trocar por git = "https://github.com/schematizeme/schematize_plataforma_rs", tag = "v0.2.0" ao publicar
-schematize_plataforma = { path = "../schematize_plataforma_rs", default-features = false, features = ["parasita","base"] }
+schematize_plataforma = { git = "https://github.com/schematizeme/schematize_plataforma_rs", tag = "v0.2.2", default-features = false, features = ["parasita","base"] }
 # GUI toolkit. Backend padrão em desktop Linux = winit (cobre Wayland E X11);
 # renderer padrão = femtovg (OpenGL/GLES). NÃO ativamos renderer-skia porque
 # skia exige cmake (ausente neste host). fontconfig é carregada por dlopen em
