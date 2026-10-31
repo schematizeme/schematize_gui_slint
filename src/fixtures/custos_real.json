@@ -1,0 +1,1289 @@
+{
+ "aviso_estimativa": "estimativa API-equivalente; assinatura/plano pode cobrar diferente; confira o /usage",
+ "avisos": [
+  "preço não confirmado na fonte oficial: claude-haiku-5-5"
+ ],
+ "fuso": "-03:00",
+ "gerado_em": "2026-10-31T21:07:06.653Z",
+ "por_agente": [
+  {
+   "agente": "agente-01",
+   "respostas": 111,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 29779889,
+    "cache_w": 390936,
+    "in": 222,
+    "out": 155743,
+    "total": 30326790
+   },
+   "usd": 5.513203
+  },
+  {
+   "agente": "agente-02",
+   "respostas": 64,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 9048731,
+    "cache_w": 201122,
+    "in": 128,
+    "out": 108413,
+    "total": 9358394
+   },
+   "usd": 2.492064
+  },
+  {
+   "agente": "agente-03",
+   "respostas": 74,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 10627921,
+    "cache_w": 196531,
+    "in": 148,
+    "out": 70281,
+    "total": 10894881
+   },
+   "usd": 2.257226
+  },
+  {
+   "agente": "agente-04",
+   "respostas": 62,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 8740678,
+    "cache_w": 311212,
+    "in": 124,
+    "out": 51598,
+    "total": 9103612
+   },
+   "usd": 2.168326
+  },
+  {
+   "agente": "agente-05",
+   "respostas": 52,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 6892603,
+    "cache_w": 172903,
+    "in": 104,
+    "out": 76472,
+    "total": 7142082
+   },
+   "usd": 1.886446
+  },
+  {
+   "agente": "agente-06",
+   "respostas": 39,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 5064077,
+    "cache_w": 186103,
+    "in": 78,
+    "out": 79356,
+    "total": 5329614
+   },
+   "usd": 1.765381
+  },
+  {
+   "agente": "agente-07",
+   "respostas": 48,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 6528761,
+    "cache_w": 157583,
+    "in": 96,
+    "out": 61710,
+    "total": 6748150
+   },
+   "usd": 1.664126
+  },
+  {
+   "agente": "agente-08",
+   "respostas": 36,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 4817149,
+    "cache_w": 193910,
+    "in": 72,
+    "out": 69283,
+    "total": 5080414
+   },
+   "usd": 1.659464
+  },
+  {
+   "agente": "agente-09",
+   "respostas": 37,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 5168464,
+    "cache_w": 161916,
+    "in": 74,
+    "out": 69730,
+    "total": 5400184
+   },
+   "usd": 1.619084
+  },
+  {
+   "agente": "agente-10",
+   "respostas": 47,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 6116552,
+    "cache_w": 143977,
+    "in": 100,
+    "out": 52507,
+    "total": 6313136
+   },
+   "usd": 1.496868
+  },
+  {
+   "agente": "agente-11",
+   "respostas": 57,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 6392486,
+    "cache_w": 155731,
+    "in": 114,
+    "out": 44252,
+    "total": 6592583
+   },
+   "usd": 1.471324
+  },
+  {
+   "agente": "agente-12",
+   "respostas": 24,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2623026,
+    "cache_w": 147525,
+    "in": 48,
+    "out": 73726,
+    "total": 2844325
+   },
+   "usd": 1.368471
+  },
+  {
+   "agente": "agente-13",
+   "respostas": 32,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2668581,
+    "cache_w": 290732,
+    "in": 64,
+    "out": 25038,
+    "total": 2984415
+   },
+   "usd": 1.244196
+  },
+  {
+   "agente": "agente-14",
+   "respostas": 26,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2892401,
+    "cache_w": 137200,
+    "in": 52,
+    "out": 59474,
+    "total": 3089127
+   },
+   "usd": 1.227084
+  },
+  {
+   "agente": "agente-15",
+   "respostas": 33,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 3583227,
+    "cache_w": 148625,
+    "in": 66,
+    "out": 42510,
+    "total": 3774428
+   },
+   "usd": 1.155117
+  },
+  {
+   "agente": "agente-16",
+   "respostas": 25,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2392790,
+    "cache_w": 127442,
+    "in": 50,
+    "out": 58833,
+    "total": 2579115
+   },
+   "usd": 1.146314
+  },
+  {
+   "agente": "agente-17",
+   "respostas": 27,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 3834148,
+    "cache_w": 71500,
+    "in": 54,
+    "out": 58353,
+    "total": 3964055
+   },
+   "usd": 1.145803
+  },
+  {
+   "agente": "agente-18",
+   "respostas": 42,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 5053378,
+    "cache_w": 150991,
+    "in": 84,
+    "out": 24451,
+    "total": 5228904
+   },
+   "usd": 1.127493
+  },
+  {
+   "agente": "agente-19",
+   "respostas": 48,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 4637952,
+    "cache_w": 124968,
+    "in": 96,
+    "out": 30221,
+    "total": 4793237
+   },
+   "usd": 1.078617
+  },
+  {
+   "agente": "agente-20",
+   "respostas": 20,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2209046,
+    "cache_w": 144890,
+    "in": 40,
+    "out": 47816,
+    "total": 2401792
+   },
+   "usd": 1.06137
+  },
+  {
+   "agente": "agente-21",
+   "respostas": 24,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2275676,
+    "cache_w": 118572,
+    "in": 48,
+    "out": 52077,
+    "total": 2446373
+   },
+   "usd": 1.044864
+  },
+  {
+   "agente": "agente-22",
+   "respostas": 32,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 3639885,
+    "cache_w": 178444,
+    "in": 64,
+    "out": 22060,
+    "total": 3840453
+   },
+   "usd": 1.030826
+  },
+  {
+   "agente": "agente-23",
+   "respostas": 15,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1048422,
+    "cache_w": 106759,
+    "in": 30,
+    "out": 62166,
+    "total": 1217377
+   },
+   "usd": 0.99346
+  },
+  {
+   "agente": "agente-24",
+   "respostas": 21,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1935791,
+    "cache_w": 113251,
+    "in": 42,
+    "out": 46431,
+    "total": 2095515
+   },
+   "usd": 0.941101
+  },
+  {
+   "agente": "agente-25",
+   "respostas": 28,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2499741,
+    "cache_w": 103223,
+    "in": 56,
+    "out": 42122,
+    "total": 2645142
+   },
+   "usd": 0.929364
+  },
+  {
+   "agente": "agente-26",
+   "respostas": 27,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2403437,
+    "cache_w": 122962,
+    "in": 54,
+    "out": 37026,
+    "total": 2563479
+   },
+   "usd": 0.918117
+  },
+  {
+   "agente": "agente-27",
+   "respostas": 38,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 3712501,
+    "cache_w": 114069,
+    "in": 76,
+    "out": 25752,
+    "total": 3852398
+   },
+   "usd": 0.914095
+  },
+  {
+   "agente": "agente-28",
+   "respostas": 15,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1114475,
+    "cache_w": 108574,
+    "in": 30,
+    "out": 52532,
+    "total": 1275611
+   },
+   "usd": 0.908263
+  },
+  {
+   "agente": "agente-29",
+   "respostas": 29,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2187926,
+    "cache_w": 183697,
+    "in": 58,
+    "out": 22393,
+    "total": 2394074
+   },
+   "usd": 0.902081
+  },
+  {
+   "agente": "agente-30",
+   "respostas": 32,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2526313,
+    "cache_w": 172571,
+    "in": 66,
+    "out": 21005,
+    "total": 2719955
+   },
+   "usd": 0.894241
+  },
+  {
+   "agente": "agente-31",
+   "respostas": 38,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 3095400,
+    "cache_w": 104728,
+    "in": 76,
+    "out": 32028,
+    "total": 3232232
+   },
+   "usd": 0.891792
+  },
+  {
+   "agente": "agente-32",
+   "respostas": 33,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 3251024,
+    "cache_w": 115361,
+    "in": 68,
+    "out": 27549,
+    "total": 3394002
+   },
+   "usd": 0.889131
+  },
+  {
+   "agente": "agente-33",
+   "respostas": 24,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2387750,
+    "cache_w": 115271,
+    "in": 48,
+    "out": 34694,
+    "total": 2537763
+   },
+   "usd": 0.873989
+  },
+  {
+   "agente": "agente-34",
+   "respostas": 10,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 590379,
+    "cache_w": 104554,
+    "in": 20,
+    "out": 53189,
+    "total": 748142
+   },
+   "usd": 0.852353
+  },
+  {
+   "agente": "agente-35",
+   "respostas": 31,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2874327,
+    "cache_w": 113235,
+    "in": 62,
+    "out": 25544,
+    "total": 3013168
+   },
+   "usd": 0.826084
+  },
+  {
+   "agente": "agente-36",
+   "respostas": 19,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1616595,
+    "cache_w": 100669,
+    "in": 38,
+    "out": 39873,
+    "total": 1757175
+   },
+   "usd": 0.812138
+  },
+  {
+   "agente": "agente-37",
+   "respostas": 28,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2446419,
+    "cache_w": 113498,
+    "in": 56,
+    "out": 24245,
+    "total": 2584218
+   },
+   "usd": 0.770949
+  },
+  {
+   "agente": "agente-38",
+   "respostas": 34,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2880919,
+    "cache_w": 101263,
+    "in": 68,
+    "out": 18845,
+    "total": 3001095
+   },
+   "usd": 0.729835
+  },
+  {
+   "agente": "agente-39",
+   "respostas": 29,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2472324,
+    "cache_w": 99093,
+    "in": 58,
+    "out": 23070,
+    "total": 2594545
+   },
+   "usd": 0.725781
+  },
+  {
+   "agente": "agente-40",
+   "respostas": 17,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1030423,
+    "cache_w": 86942,
+    "in": 34,
+    "out": 39045,
+    "total": 1156444
+   },
+   "usd": 0.710915
+  },
+  {
+   "agente": "agente-41",
+   "respostas": 34,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2822180,
+    "cache_w": 94879,
+    "in": 68,
+    "out": 18625,
+    "total": 2935752
+   },
+   "usd": 0.705801
+  },
+  {
+   "agente": "agente-42",
+   "respostas": 16,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1277099,
+    "cache_w": 97881,
+    "in": 32,
+    "out": 32949,
+    "total": 1407961
+   },
+   "usd": 0.701966
+  },
+  {
+   "agente": "agente-43",
+   "respostas": 30,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2420558,
+    "cache_w": 101398,
+    "in": 60,
+    "out": 20100,
+    "total": 2542116
+   },
+   "usd": 0.696671
+  },
+  {
+   "agente": "agente-44",
+   "respostas": 32,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2462835,
+    "cache_w": 91646,
+    "in": 64,
+    "out": 21232,
+    "total": 2575777
+   },
+   "usd": 0.687846
+  },
+  {
+   "agente": "agente-45",
+   "respostas": 25,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2081562,
+    "cache_w": 96905,
+    "in": 50,
+    "out": 20445,
+    "total": 2198962
+   },
+   "usd": 0.654969
+  },
+  {
+   "agente": "agente-46",
+   "respostas": 24,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1800947,
+    "cache_w": 91987,
+    "in": 48,
+    "out": 24361,
+    "total": 1917343
+   },
+   "usd": 0.653768
+  },
+  {
+   "agente": "agente-47",
+   "respostas": 30,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 2332291,
+    "cache_w": 93158,
+    "in": 60,
+    "out": 18737,
+    "total": 2444246
+   },
+   "usd": 0.653614
+  },
+  {
+   "agente": "agente-48",
+   "respostas": 8,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 453622,
+    "cache_w": 72855,
+    "in": 16,
+    "out": 39025,
+    "total": 565518
+   },
+   "usd": 0.617782
+  },
+  {
+   "agente": "agente-49",
+   "respostas": 24,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1717435,
+    "cache_w": 73835,
+    "in": 48,
+    "out": 18320,
+    "total": 1809638
+   },
+   "usd": 0.539627
+  },
+  {
+   "agente": "agente-50",
+   "respostas": 18,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1242888,
+    "cache_w": 73890,
+    "in": 36,
+    "out": 15953,
+    "total": 1332767
+   },
+   "usd": 0.468616
+  },
+  {
+   "agente": "agente-51",
+   "respostas": 18,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 1230937,
+    "cache_w": 74049,
+    "in": 36,
+    "out": 14815,
+    "total": 1319837
+   },
+   "usd": 0.456438
+  },
+  {
+   "agente": "agente-52",
+   "respostas": 12,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 723563,
+    "cache_w": 64475,
+    "in": 24,
+    "out": 21177,
+    "total": 809239
+   },
+   "usd": 0.445362
+  },
+  {
+   "agente": "agente-53",
+   "respostas": 14,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 954752,
+    "cache_w": 82540,
+    "in": 28,
+    "out": 11464,
+    "total": 1048784
+   },
+   "usd": 0.416521
+  },
+  {
+   "agente": "agente-54",
+   "respostas": 13,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 903798,
+    "cache_w": 81161,
+    "in": 26,
+    "out": 12037,
+    "total": 997022
+   },
+   "usd": 0.413704
+  },
+  {
+   "agente": "agente-55",
+   "respostas": 13,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 851661,
+    "cache_w": 63360,
+    "in": 26,
+    "out": 13114,
+    "total": 928161
+   },
+   "usd": 0.374758
+  },
+  {
+   "agente": "agente-56",
+   "respostas": 16,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 870766,
+    "cache_w": 52763,
+    "in": 32,
+    "out": 14538,
+    "total": 938099
+   },
+   "usd": 0.364428
+  },
+  {
+   "agente": "agente-57",
+   "respostas": 13,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 728116,
+    "cache_w": 52063,
+    "in": 26,
+    "out": 10807,
+    "total": 791012
+   },
+   "usd": 0.311091
+  },
+  {
+   "agente": "agente-58",
+   "respostas": 12,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 621911,
+    "cache_w": 46483,
+    "in": 24,
+    "out": 12889,
+    "total": 681307
+   },
+   "usd": 0.307337
+  },
+  {
+   "agente": "agente-59",
+   "respostas": 13,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 885960,
+    "cache_w": 42602,
+    "in": 26,
+    "out": 10883,
+    "total": 939471
+   },
+   "usd": 0.303983
+  },
+  {
+   "agente": "agente-60",
+   "respostas": 6,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 288075,
+    "cache_w": 70068,
+    "in": 12,
+    "out": 9984,
+    "total": 368139
+   },
+   "usd": 0.303842
+  },
+  {
+   "agente": "agente-61",
+   "respostas": 6,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 665035,
+    "cache_w": 19866,
+    "in": 14,
+    "out": 17470,
+    "total": 702385
+   },
+   "usd": 0.290897
+  },
+  {
+   "agente": "agente-62",
+   "respostas": 17,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 883044,
+    "cache_w": 47665,
+    "in": 34,
+    "out": 7937,
+    "total": 938680
+   },
+   "usd": 0.286905
+  },
+  {
+   "agente": "agente-63",
+   "respostas": 7,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 363357,
+    "cache_w": 49875,
+    "in": 14,
+    "out": 12108,
+    "total": 425354
+   },
+   "usd": 0.282131
+  },
+  {
+   "agente": "agente-64",
+   "respostas": 10,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 526672,
+    "cache_w": 50854,
+    "in": 20,
+    "out": 9426,
+    "total": 586972
+   },
+   "usd": 0.274102
+  },
+  {
+   "agente": "agente-65",
+   "respostas": 8,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 441033,
+    "cache_w": 56845,
+    "in": 16,
+    "out": 6048,
+    "total": 503942
+   },
+   "usd": 0.246728
+  },
+  {
+   "agente": "agente-66",
+   "respostas": 7,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 361830,
+    "cache_w": 47616,
+    "in": 14,
+    "out": 8185,
+    "total": 417645
+   },
+   "usd": 0.237101
+  },
+  {
+   "agente": "agente-67",
+   "respostas": 9,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 444161,
+    "cache_w": 41757,
+    "in": 20,
+    "out": 6005,
+    "total": 491943
+   },
+   "usd": 0.208899
+  },
+  {
+   "agente": "agente-68",
+   "respostas": 8,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 380321,
+    "cache_w": 40146,
+    "in": 16,
+    "out": 6275,
+    "total": 426758
+   },
+   "usd": 0.201179
+  },
+  {
+   "agente": "agente-69",
+   "respostas": 10,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 469536,
+    "cache_w": 40774,
+    "in": 20,
+    "out": 5117,
+    "total": 515447
+   },
+   "usd": 0.200099
+  },
+  {
+   "agente": "agente-70",
+   "respostas": 50,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 8430014,
+    "cache_w": 491756,
+    "in": 100,
+    "out": 105002,
+    "total": 9026872
+   },
+   "usd": 0.198281
+  },
+  {
+   "agente": "agente-71",
+   "respostas": 8,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 389028,
+    "cache_w": 43412,
+    "in": 16,
+    "out": 5043,
+    "total": 437499
+   },
+   "usd": 0.197895
+  },
+  {
+   "agente": "agente-72",
+   "respostas": 5,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 196174,
+    "cache_w": 38497,
+    "in": 10,
+    "out": 6537,
+    "total": 241218
+   },
+   "usd": 0.18125
+  },
+  {
+   "agente": "agente-73",
+   "respostas": 4,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 146575,
+    "cache_w": 38369,
+    "in": 8,
+    "out": 6996,
+    "total": 191948
+   },
+   "usd": 0.180556
+  },
+  {
+   "agente": "agente-74",
+   "respostas": 10,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 581604,
+    "cache_w": 19925,
+    "in": 22,
+    "out": 7056,
+    "total": 608607
+   },
+   "usd": 0.178577
+  },
+  {
+   "agente": "agente-75",
+   "respostas": 4,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 147579,
+    "cache_w": 38744,
+    "in": 8,
+    "out": 6391,
+    "total": 192722
+   },
+   "usd": 0.175544
+  },
+  {
+   "agente": "agente-76",
+   "respostas": 5,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 194212,
+    "cache_w": 36744,
+    "in": 10,
+    "out": 6351,
+    "total": 237317
+   },
+   "usd": 0.174811
+  },
+  {
+   "agente": "agente-77",
+   "respostas": 4,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 147418,
+    "cache_w": 38528,
+    "in": 8,
+    "out": 6321,
+    "total": 192275
+   },
+   "usd": 0.174288
+  },
+  {
+   "agente": "agente-78",
+   "respostas": 8,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 461412,
+    "cache_w": 17936,
+    "in": 18,
+    "out": 6812,
+    "total": 486178
+   },
+   "usd": 0.159137
+  },
+  {
+   "agente": "agente-79",
+   "respostas": 4,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 145664,
+    "cache_w": 35918,
+    "in": 8,
+    "out": 5466,
+    "total": 187056
+   },
+   "usd": 0.159037
+  }
+ ],
+ "por_dia": [
+  {
+   "dia": "2026-10-13",
+   "respostas": 124,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 11876620,
+    "cache_w": 611510,
+    "in": 258,
+    "out": 89128,
+    "total": 12577516
+   },
+   "usd": 4.156378
+  },
+  {
+   "dia": "2026-10-14",
+   "respostas": 1641,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 192673799,
+    "cache_w": 7522138,
+    "in": 3370,
+    "out": 2131252,
+    "total": 202330559
+   },
+   "usd": 74.24867
+  },
+  {
+   "dia": "2026-10-15",
+   "respostas": 353,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 44030396,
+    "cache_w": 1793758,
+    "in": 730,
+    "out": 400138,
+    "total": 46225022
+   },
+   "usd": 12.348069
+  },
+  {
+   "dia": "2026-10-16",
+   "respostas": 70,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 5736885,
+    "cache_w": 645826,
+    "in": 146,
+    "out": 56924,
+    "total": 6439781
+   },
+   "usd": 4.304539
+  },
+  {
+   "dia": "2026-10-18",
+   "respostas": 63,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 7186805,
+    "cache_w": 197913,
+    "in": 140,
+    "out": 62628,
+    "total": 7447486
+   },
+   "usd": 2.344986
+  },
+  {
+   "dia": "2026-10-20",
+   "respostas": 93,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 7026220,
+    "cache_w": 383307,
+    "in": 200,
+    "out": 78654,
+    "total": 7488381
+   },
+   "usd": 2.626094
+  }
+ ],
+ "por_modelo": [
+  {
+   "modelo": "claude-sonnet-5-5",
+   "respostas": 1981,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 212608594,
+    "cache_w": 8332845,
+    "in": 3994,
+    "out": 2486344,
+    "total": 223431777
+   },
+   "usd": 67.142664
+  },
+  {
+   "modelo": "claude-opus-5-5",
+   "respostas": 313,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 47492117,
+    "cache_w": 2329851,
+    "in": 750,
+    "out": 227378,
+    "total": 50050096
+   },
+   "usd": 32.687791
+  },
+  {
+   "modelo": "claude-haiku-5-5",
+   "respostas": 50,
+   "sem_preco": 0,
+   "tokens": {
+    "cache_r": 8430014,
+    "cache_w": 491756,
+    "in": 100,
+    "out": 105002,
+    "total": 9026872
+   },
+   "usd": 0.198281
+  }
+ ],
+ "por_semana": [
+  {
+   "respostas": 2251,
+   "sem_preco": 0,
+   "semana": "2026-W42",
+   "tokens": {
+    "cache_r": 261504505,
+    "cache_w": 10771145,
+    "in": 4644,
+    "out": 2740070,
+    "total": 275020364
+   },
+   "usd": 97.402642
+  },
+  {
+   "respostas": 93,
+   "sem_preco": 0,
+   "semana": "2026-W43",
+   "tokens": {
+    "cache_r": 7026220,
+    "cache_w": 383307,
+    "in": 200,
+    "out": 78654,
+    "total": 7488381
+   },
+   "usd": 2.626094
+  }
+ ],
+ "por_sessao": [
+  {
+   "respostas": 1828,
+   "sem_preco": 0,
+   "sessao": "sessao-01",
+   "tokens": {
+    "cache_r": 216641695,
+    "cache_w": 8642384,
+    "in": 3756,
+    "out": 2334292,
+    "total": 227622127
+   },
+   "ultimo_ts": "2026-10-15T03:18:04.186Z",
+   "usd": 79.649733
+  },
+  {
+   "respostas": 360,
+   "sem_preco": 0,
+   "sessao": "sessao-02",
+   "tokens": {
+    "cache_r": 37676005,
+    "cache_w": 1930848,
+    "in": 748,
+    "out": 343150,
+    "total": 39950751
+   },
+   "ultimo_ts": "2026-10-16T21:28:25.750Z",
+   "usd": 15.407923
+  },
+  {
+   "respostas": 80,
+   "sem_preco": 0,
+   "sessao": "sessao-03",
+   "tokens": {
+    "cache_r": 6264235,
+    "cache_w": 346713,
+    "in": 172,
+    "out": 73528,
+    "total": 6684648
+   },
+   "ultimo_ts": "2026-10-20T10:54:02.647Z",
+   "usd": 2.352204
+  },
+  {
+   "respostas": 63,
+   "sem_preco": 0,
+   "sessao": "sessao-04",
+   "tokens": {
+    "cache_r": 7186805,
+    "cache_w": 197913,
+    "in": 140,
+    "out": 62628,
+    "total": 7447486
+   },
+   "ultimo_ts": "2026-10-18T17:56:24.759Z",
+   "usd": 2.344986
+  },
+  {
+   "respostas": 13,
+   "sem_preco": 0,
+   "sessao": "sessao-05",
+   "tokens": {
+    "cache_r": 761985,
+    "cache_w": 36594,
+    "in": 28,
+    "out": 5126,
+    "total": 803733
+   },
+   "ultimo_ts": "2026-10-20T05:51:13.164Z",
+   "usd": 0.273891
+  }
+ ],
+ "por_task": [
+  {
+   "nome": null,
+   "respostas": 2344,
+   "sem_preco": 0,
+   "task": "sem-task",
+   "tokens": {
+    "cache_r": 268530725,
+    "cache_w": 11154452,
+    "in": 4844,
+    "out": 2818724,
+    "total": 282508745
+   },
+   "usd": 100.028736
+  }
+ ],
+ "pricing_versao": "2026-10-31",
+ "projeto": "projeto-exemplo",
+ "total": {
+  "respostas": 2344,
+  "sem_preco": 0,
+  "tokens": {
+   "cache_r": 268530725,
+   "cache_w": 11154452,
+   "in": 4844,
+   "out": 2818724,
+   "total": 282508745
+  },
+  "usd": 100.028736
+ },
+ "versao": 1
+}

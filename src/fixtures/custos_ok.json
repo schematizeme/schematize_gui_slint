@@ -16,8 +16,8 @@
     {"sem_chave": true}
   ],
   "por_semana": [
-    {"semana_iso": "2026-W44", "tokens": {"in": 111, "out": 222, "cache_w": 8, "cache_r": 9, "total": 350}, "usd": 1.754},
-    {"semana_iso": "2026-W36", "tokens": {"in": 7, "out": 7, "cache_w": 0, "cache_r": 0, "total": 14}, "usd": 9.0}
+    {"semana": "2026-W44", "tokens": {"in": 111, "out": 222, "cache_w": 8, "cache_r": 9, "total": 350}, "usd": 1.754},
+    {"semana": "2026-W36", "tokens": {"in": 7, "out": 7, "cache_w": 0, "cache_r": 0, "total": 14}, "usd": 9.0}
   ],
   "por_task": [
     {"task": "T-1", "nome": "Aba Custos", "tokens": {"in": 5, "out": 5, "cache_w": 0, "cache_r": 0, "total": 10}, "usd": 0.5},

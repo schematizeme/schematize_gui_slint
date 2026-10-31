@@ -186,3 +186,105 @@ fn estilo_do_idioma() {
     assert_eq!(Estilo::do_idioma("en"), Estilo::Ponto);
     assert_eq!(Estilo::do_idioma(""), Estilo::Ponto);
 }
+
+// ---------------------------------------------------------------------------
+// Contrato com o CLI real: `custos.json` v1 gerado por `schematize cost report --json`
+// (fixture anonimizada: ids de sessão/agente trocados, valores reais).
+// ---------------------------------------------------------------------------
+
+const REAL: &str = include_str!("fixtures/custos_real.json");
+const LEDGER_REAL: &str = include_str!("fixtures/ledger_real.jsonl");
+
+fn soma_tok(ls: &[Linha]) -> Tokens {
+    soma_tokens(ls)
+}
+
+#[test]
+fn contrato_real_parseia_todas_as_tabelas_sem_pular_linha() {
+    let bruto: Value = serde_json::from_str(REAL).unwrap();
+    let n = |k: &str| bruto[k].as_array().unwrap().len();
+    let c = parse(REAL).unwrap();
+    assert_eq!(c.por_modelo.len(), n("por_modelo"));
+    assert_eq!(c.por_dia.len(), n("por_dia"));
+    assert_eq!(c.por_semana.len(), n("por_semana"));
+    assert_eq!(c.por_task.len(), n("por_task"));
+    assert_eq!(c.pricing_versao, bruto["pricing_versao"].as_str().unwrap());
+    assert_eq!(c.avisos.len(), n("avisos"));
+    assert!(c.por_semana[0].chave.starts_with("2026-W"), "{:?}", c.por_semana[0]);
+}
+
+#[test]
+fn contrato_real_totais_batem_com_o_json_e_entre_as_tabelas() {
+    let bruto: Value = serde_json::from_str(REAL).unwrap();
+    let c = parse(REAL).unwrap();
+    let t = &bruto["total"]["tokens"];
+    assert_eq!(c.total_tokens.entrada, t["in"].as_u64().unwrap());
+    assert_eq!(c.total_tokens.saida, t["out"].as_u64().unwrap());
+    assert_eq!(c.total_tokens.cache_w, t["cache_w"].as_u64().unwrap());
+    assert_eq!(c.total_tokens.cache_r, t["cache_r"].as_u64().unwrap());
+    assert_eq!(c.total_tokens.total, t["total"].as_u64().unwrap());
+    assert_eq!(c.total_usd, bruto["total"]["usd"].as_f64());
+    // Cada tabela particiona as mesmas respostas: tokens somam o total; USD bate (sem arredondar).
+    for tab in [&c.por_modelo, &c.por_dia, &c.por_semana, &c.por_task] {
+        assert_eq!(soma_tok(tab), c.total_tokens);
+        let d = soma_usd(tab).unwrap() - c.total_usd.unwrap();
+        assert!(d.abs() < 1e-3, "diferença de US$ {d}");
+    }
+}
+
+#[test]
+fn contrato_real_cards_e_tabelas_formatados() {
+    use crate::custosview::montar;
+    let c = parse(REAL).unwrap();
+    let hoje = d("2026-10-20");
+    let v = montar(&c, Periodo::Tudo, hoje, None, Estilo::Virgula);
+    assert_eq!(v.usd_total, fmt_usd(c.total_usd, Estilo::Virgula));
+    assert_eq!(v.tokens_total, fmt_tokens(c.total_tokens.total, Estilo::Virgula));
+    assert_eq!(v.modelos.total, 3);
+    assert!(v.modelos.linhas[0].usd != "—");
+    // Dia 2026-10-20 existe no real: o card «hoje» é ele, não zero.
+    let dia = c.por_dia.iter().find(|l| l.chave == "2026-10-20").unwrap();
+    assert_eq!(v.usd_hoje, fmt_usd(dia.usd, Estilo::Virgula));
+    assert_eq!(v.tokens_hoje, fmt_tokens(dia.tokens.total, Estilo::Virgula));
+    // Task única «sem-task»: o nome null do CLI não vira « · null».
+    assert_eq!(c.por_task[0].chave, "sem-task");
+    // Os 3 modelos do real têm preço (haiku sem confirmação só gera aviso).
+    assert!(c.por_modelo.iter().all(|l| l.usd.is_some()));
+    assert_eq!(v.avisos.len(), 1);
+    // O mesmo conteúdo em inglês só muda o estilo numérico.
+    let en = montar(&c, Periodo::Tudo, hoje, None, Estilo::Ponto);
+    assert_eq!(en.usd_total, fmt_usd(c.total_usd, Estilo::Ponto));
+}
+
+#[test]
+fn contrato_real_ledger_refiltra_modelo_e_task() {
+    let tudo = agrega_ledger(LEDGER_REAL, "modelo", None);
+    let linhas = LEDGER_REAL.lines().count() as u64;
+    assert!(tudo.len() >= 2);
+    // Toda resposta do ledger entra em exatamente um modelo.
+    let esperado: u64 = LEDGER_REAL
+        .lines()
+        .map(|l| {
+            let v: Value = serde_json::from_str(l).unwrap();
+            v["in"].as_u64().unwrap() + v["out"].as_u64().unwrap()
+        })
+        .sum();
+    assert!(linhas > 0);
+    let obtido: u64 = tudo.iter().map(|l| l.tokens.entrada + l.tokens.saida).sum();
+    assert_eq!(obtido, esperado);
+    let recorte = agrega_ledger(LEDGER_REAL, "task", Some(d("2026-10-15")));
+    assert_eq!(recorte[0].chave, "sem-task");
+}
+
+#[test]
+fn contrato_real_tolera_campo_novo_e_secao_ausente() {
+    let mut v: Value = serde_json::from_str(REAL).unwrap();
+    v["campo_do_futuro"] = serde_json::json!({"x": 1});
+    v["por_modelo"][0]["campo_novo"] = serde_json::json!("y");
+    v.as_object_mut().unwrap().remove("por_semana");
+    v.as_object_mut().unwrap().remove("por_sessao");
+    let c = parse(&v.to_string()).unwrap();
+    assert!(c.por_semana.is_empty());
+    assert_eq!(c.por_modelo.len(), 3);
+    assert_eq!(c.total_usd, parse(REAL).unwrap().total_usd);
+}

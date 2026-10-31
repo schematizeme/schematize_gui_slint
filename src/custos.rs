@@ -1,7 +1,7 @@
 //! Modelo de dados da aba Custos — DESACOPLADO da UI: structs, parse tolerante e formatação.
 //!
 //! **O quê:** lê o `custos.json` que o CLI (`schematize cost report`) grava no archive do projeto
-//! (contrato de custos §4) e o traduz num tipo próprio desta GUI. Também aplica o filtro de
+//! (contrato `custos-v1.md`) e o traduz num tipo próprio desta GUI. Também aplica o filtro de
 //! período e formata US$ e tokens. **Onde:** [`crate::wire::custos`] (fiação) — nada aqui toca
 //! em Slint.
 //!
@@ -148,10 +148,10 @@ fn tem(v: &Value, chaves: &[&str]) -> bool {
 /// Tokens a partir de um objeto `{in,out,cache_w,cache_r,total}`; `total` ausente é a soma.
 fn tokens_de(v: &Value) -> Tokens {
     let mut t = Tokens {
-        entrada: n_u64(v, &["in", "input", "input_tokens"]),
-        saida: n_u64(v, &["out", "output", "output_tokens"]),
-        cache_w: n_u64(v, &["cache_w", "cache_write", "cache_creation_input_tokens"]),
-        cache_r: n_u64(v, &["cache_r", "cache_read", "cache_read_input_tokens"]),
+        entrada: n_u64(v, &["in"]),
+        saida: n_u64(v, &["out"]),
+        cache_w: n_u64(v, &["cache_w"]),
+        cache_r: n_u64(v, &["cache_r"]),
         total: 0,
     };
     t.total = if tem(v, &["total"]) {
@@ -166,8 +166,8 @@ fn usd_de(v: &Value) -> Option<f64> {
     v.get("usd").and_then(Value::as_f64).filter(|f| f.is_finite())
 }
 
-const CHAVES_LINHA: [&str; 9] =
-    ["modelo", "dia", "semana_iso", "semana", "task_id", "task", "chave", "key", "id"];
+/// A chave de cada tabela no `custos.json` v1 (`custos-v1.md`): uma por `por_*`.
+const CHAVES_LINHA: [&str; 4] = ["modelo", "dia", "semana", "task"];
 
 /// Uma linha de tabela. `None` = sem chave legível (a linha é pulada, não derruba as outras).
 fn linha_de(v: &Value) -> Option<Linha> {
@@ -211,15 +211,7 @@ pub(crate) fn parse(texto: &str) -> Result<Custos, String> {
         avisos: v
             .get("avisos")
             .and_then(Value::as_array)
-            .map(|a| {
-                a.iter()
-                    .filter_map(|x| {
-                        x.as_str()
-                            .map(str::to_string)
-                            .or_else(|| x.get("msg").and_then(Value::as_str).map(str::to_string))
-                    })
-                    .collect()
-            })
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
             .unwrap_or_default(),
         total_tokens,
         total_usd: total.and_then(usd_de),
