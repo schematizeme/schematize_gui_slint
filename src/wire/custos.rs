@@ -194,7 +194,7 @@ pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
                         }
                         Err(e) => {
                             c.set_msg_erro(true);
-                            c.set_msg(format!("{}: {e}", tc("sync_fail")).into());
+                            c.set_msg(format!("{}. {}", tc("sync_fail"), e.texto()).into());
                         }
                     }
                 });
