@@ -1,0 +1,190 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { L } from "i18n.slint";
+import { CuRow } from "types.slint";
+import { Btn, TabBtn } from "widgets.slint";
+import { Cu, Od } from "state.slint";
+
+// Card de número (total, tokens, hoje, semana): rótulo pequeno, valor grande, detalhe discreto.
+component CuCard inherits Rectangle {
+    in property <string> rotulo;
+    in property <string> valor;
+    in property <string> detalhe;
+    preferred-width: 0px;
+    horizontal-stretch: 1;
+    min-width: 150px;
+    height: 92px;
+    border-radius: 12px;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: 14px;
+        spacing: 4px;
+        Text { text: root.rotulo; font-size: 11.5px; font-weight: 700; color: Theme.text-dim; overflow: elide; }
+        Text { text: root.valor; font-size: 22px; font-weight: 800; color: Theme.text; overflow: elide; }
+        Text { text: root.detalhe; font-size: 11.5px; color: Theme.text-dim; overflow: elide; }
+    }
+}
+
+// Tabela: título, cabeçalho de colunas e linhas. Valores numéricos alinhados à direita.
+component CuTabela inherits VerticalLayout {
+    in property <string> titulo;
+    in property <[CuRow]> linhas;
+    in property <string> trunc;
+    in property <string> nota;
+    spacing: 6px;
+    Text { text: root.titulo; font-size: 14px; font-weight: 800; color: Theme.text; }
+    if root.nota != "": Text { text: root.nota; font-size: 11.5px; color: Theme.warn; wrap: word-wrap; }
+    if root.linhas.length == 0: Text { text: Cu.l-no-rows; font-size: 12px; color: Theme.text-dim; }
+    if root.linhas.length > 0: Rectangle {
+        border-radius: 10px;
+        background: Theme.surface;
+        border-width: 1px;
+        border-color: Theme.border;
+        clip: true;
+        VerticalLayout {
+            // cabeçalho
+            Rectangle {
+                height: 28px;
+                background: Theme.surface-2;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 8px;
+                    Text { text: Cu.l-item; horizontal-stretch: 1; font-size: 11.5px; font-weight: 700; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: Cu.l-in; width: 70px; horizontal-alignment: right; font-size: 11.5px; font-weight: 700; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: Cu.l-out; width: 70px; horizontal-alignment: right; font-size: 11.5px; font-weight: 700; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: Cu.l-cache; width: 70px; horizontal-alignment: right; font-size: 11.5px; font-weight: 700; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: Cu.l-usd; width: 110px; horizontal-alignment: right; font-size: 11.5px; font-weight: 700; color: Theme.text-dim; vertical-alignment: center; }
+                }
+            }
+            for r[i] in root.linhas: Rectangle {
+                height: 28px;
+                background: mod(i, 2) == 1 ? Theme.stripe : transparent;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 8px;
+                    Text { text: r.chave; horizontal-stretch: 1; font-size: 12.5px; color: Theme.text; vertical-alignment: center; overflow: elide; }
+                    Text { text: r.entrada; width: 70px; horizontal-alignment: right; font-size: 12.5px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: r.saida; width: 70px; horizontal-alignment: right; font-size: 12.5px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: r.cache; width: 70px; horizontal-alignment: right; font-size: 12.5px; color: Theme.text-dim; vertical-alignment: center; }
+                    Text { text: r.usd; width: 110px; horizontal-alignment: right; font-size: 12.5px; font-weight: 700; color: Theme.text; vertical-alignment: center; }
+                }
+            }
+        }
+    }
+    if root.trunc != "": Text { text: root.trunc; font-size: 11.5px; color: Theme.text-dim; }
+}
+
+// Tela CUSTOS (10) — tokens e US$ do projeto atual. LÊ o `custos.json` do archive; quem calcula
+// é o CLI (`schematize cost`). O estado vazio/erro é uma frase acionável, nunca tela em branco.
+export component CustosScreen inherits VerticalLayout {
+    // Trocar de projeto com a aba aberta relê o arquivo do projeto novo.
+    property <string> projeto: Od.current;
+    changed projeto => { Cu.enter(); }
+
+    if Cu.estado == "sem-projeto": VerticalLayout {
+        alignment: center;
+        Text {
+            text: Cu.msg;
+            font-size: 13px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+        }
+    }
+    if Cu.estado != "sem-projeto": ScrollView {
+        VerticalLayout {
+            padding: 20px;
+            spacing: 14px;
+            // Título + período + sincronizar.
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: Cu.l-title; font-size: 18px; font-weight: 800; color: Theme.text; vertical-alignment: center; }
+                Rectangle {}
+                if Cu.estado == "ok": HorizontalLayout {
+                    spacing: 2px;
+                    for p[i] in Cu.l-periodos: TabBtn {
+                        label: p;
+                        active: Cu.periodo == i;
+                        clicked => { Cu.set-periodo(i); }
+                    }
+                }
+                Btn {
+                    label: Cu.busy ? Cu.l-syncing : Cu.l-sync;
+                    small: true;
+                    primary: true;
+                    enabled: !Cu.busy && Cu.estado != "sem-archive";
+                    clicked => { Cu.sincronizar(); }
+                }
+            }
+            // Aviso FIXO: o número é estimativa.
+            Rectangle {
+                height: aviso-l.preferred-height + 20px;
+                border-radius: 10px;
+                background: Theme.warn.transparentize(0.9);
+                border-width: 1px;
+                border-color: Theme.warn.transparentize(0.6);
+                aviso-l := Text {
+                    x: 12px;
+                    width: parent.width - 24px;
+                    y: 10px;
+                    text: Cu.l-disclaimer;
+                    font-size: 12px;
+                    color: Theme.text;
+                    wrap: word-wrap;
+                }
+            }
+            if Cu.msg != "" && Cu.estado != "ok": Text {
+                text: Cu.msg;
+                font-size: 12.5px;
+                color: Cu.msg-erro ? Theme.warn : Theme.text-dim;
+                wrap: word-wrap;
+            }
+            if Cu.msg != "" && Cu.estado == "ok": Text {
+                text: Cu.msg;
+                font-size: 12px;
+                font-weight: 600;
+                color: Cu.msg-erro ? Theme.warn : Theme.good;
+                wrap: word-wrap;
+            }
+            // Estado vazio: convida a sincronizar.
+            if Cu.estado == "sem-arquivo" || Cu.estado == "ilegivel": Rectangle {
+                height: 120px;
+                border-radius: 12px;
+                background: Theme.surface;
+                border-width: 1px;
+                border-color: Theme.border;
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 6px;
+                    padding: 16px;
+                    Text { text: Cu.l-empty-title; font-size: 14px; font-weight: 700; color: Theme.text; horizontal-alignment: center; wrap: word-wrap; }
+                    Text { text: Cu.l-empty-body; font-size: 12.5px; color: Theme.text-dim; horizontal-alignment: center; wrap: word-wrap; }
+                }
+            }
+            if Cu.estado == "ok": VerticalLayout {
+                spacing: 16px;
+                HorizontalLayout {
+                    spacing: 12px;
+                    CuCard { rotulo: Cu.filtrado ? Cu.l-period : Cu.l-total; valor: Cu.usd-total; detalhe: Cu.l-in + " · " + Cu.l-out + " · " + Cu.l-cache + ": " + Cu.tokens-detalhe; }
+                    CuCard { rotulo: Cu.l-tokens; valor: Cu.tokens-total; detalhe: "" ; }
+                    CuCard { rotulo: Cu.l-today; valor: Cu.usd-hoje; detalhe: Cu.tokens-hoje + " " + Cu.l-tokens; }
+                    CuCard { rotulo: Cu.l-week; valor: Cu.usd-semana; detalhe: Cu.tokens-semana + " " + Cu.l-tokens; }
+                }
+                CuTabela { titulo: Cu.l-t-model; linhas: Cu.modelos; trunc: Cu.trunc-modelos; nota: Cu.nota-sem-filtro ? Cu.l-note : ""; }
+                CuTabela { titulo: Cu.l-t-day; linhas: Cu.dias; trunc: Cu.trunc-dias; }
+                CuTabela { titulo: Cu.l-t-week; linhas: Cu.semanas; trunc: Cu.trunc-semanas; }
+                CuTabela { titulo: Cu.l-t-task; linhas: Cu.tasks; trunc: Cu.trunc-tasks; nota: Cu.nota-sem-filtro ? Cu.l-note : ""; }
+                if Cu.avisos.length > 0: VerticalLayout {
+                    spacing: 3px;
+                    for a in Cu.avisos: Text { text: "• " + a; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+                }
+                if Cu.rodape != "": Text { text: Cu.rodape; font-size: 11.5px; color: Theme.text-dim; wrap: word-wrap; }
+            }
+            Rectangle { height: 6px; }
+        }
+    }
+}

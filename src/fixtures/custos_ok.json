@@ -1,0 +1,26 @@
+{
+  "gerado_em": "2026-10-31T12:00:00-03:00",
+  "pricing_versao": "2026-10-01",
+  "avisos": ["modelo desconhecido-x sem preço"],
+  "campo_novo_do_futuro": {"qualquer": "coisa"},
+  "total": {"tokens": {"in": 1200, "out": 3400000, "cache_w": 50000, "cache_r": 2500000000, "total": 2503451200}, "usd": 1234.5},
+  "por_modelo": [
+    {"modelo": "claude-sonnet-5-5", "tokens": {"in": 1000, "out": 3000000, "cache_w": 40000, "cache_r": 2000000000, "total": 2003041000}, "usd": 1000.0},
+    {"modelo": "desconhecido-x", "tokens": {"in": 200, "out": 400000, "cache_w": 10000, "cache_r": 500000000, "total": 500410200}, "usd": null}
+  ],
+  "por_dia": [
+    {"dia": "2026-10-29", "tokens": {"in": 100, "out": 200, "cache_w": 0, "cache_r": 0}, "usd": 1.5},
+    {"dia": "2026-10-30", "tokens": {"in": 10, "out": 20, "cache_w": 5, "cache_r": 5, "total": 40}, "usd": 0.25},
+    {"dia": "2026-10-31", "tokens": {"in": 1, "out": 2, "cache_w": 3, "cache_r": 4, "total": 10}, "usd": 0.004},
+    {"dia": "2026-09-01", "tokens": {"in": 7, "out": 7, "cache_w": 0, "cache_r": 0, "total": 14}, "usd": 9.0},
+    {"sem_chave": true}
+  ],
+  "por_semana": [
+    {"semana_iso": "2026-W44", "tokens": {"in": 111, "out": 222, "cache_w": 8, "cache_r": 9, "total": 350}, "usd": 1.754},
+    {"semana_iso": "2026-W36", "tokens": {"in": 7, "out": 7, "cache_w": 0, "cache_r": 0, "total": 14}, "usd": 9.0}
+  ],
+  "por_task": [
+    {"task": "T-1", "nome": "Aba Custos", "tokens": {"in": 5, "out": 5, "cache_w": 0, "cache_r": 0, "total": 10}, "usd": 0.5},
+    {"task": "sem-task", "tokens": {"in": 1, "out": 1, "cache_w": 0, "cache_r": 0, "total": 2}, "usd": null}
+  ]
+}

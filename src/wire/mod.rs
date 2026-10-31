@@ -13,6 +13,7 @@ use crate::prelude::*;
 
 pub(crate) mod account;
 pub(crate) mod appversion;
+pub(crate) mod custos;
 pub(crate) mod envs;
 pub(crate) mod graph;
 pub(crate) mod notificacoes;

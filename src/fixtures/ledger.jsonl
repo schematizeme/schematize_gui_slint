@@ -1,0 +1,4 @@
+{"ts":"2026-10-31T10:00:00-03:00","dia":"2026-10-31","semana_iso":"2026-W44","sessao":"s1","agente":null,"modelo":"m-a","task":"T-1","in":10,"out":20,"cache_w":0,"cache_r":0,"usd":1.0}
+{"ts":"2026-10-31T11:00:00-03:00","dia":"2026-10-31","semana_iso":"2026-W44","sessao":"s1","agente":"a1","modelo":"m-a","task":"T-1","in":5,"out":5,"cache_w":0,"cache_r":0,"usd":0.5}
+{"ts":"2026-09-01T11:00:00-03:00","dia":"2026-09-01","semana_iso":"2026-W36","sessao":"s0","agente":null,"modelo":"m-b","task":"sem-task","in":1,"out":1,"cache_w":0,"cache_r":0,"usd":null}
+linha corrompida {{{

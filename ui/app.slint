@@ -24,6 +24,7 @@ import { HomeScreen } from "screen_home.slint";
 import { SettingsScreen } from "screen_settings.slint";
 import { GraphScreen } from "screen_graph.slint";
 import { OverdevScreen } from "screen_overdev.slint";
+import { CustosScreen } from "screen_custos.slint";
 import { TelaDelegada } from "screen_delegado.slint";
 import { DevDirsModal } from "modal_devdirs.slint";
 import { NotifModal } from "modal_notif.slint";
@@ -36,8 +37,8 @@ export { L } from "i18n.slint";
 export { Theme } from "theme.slint";
 // Estado de tela por área (globals). Reexportado porque o Rust acessa via
 // `app.global::<Od>()` — só o que sai do arquivo de entrada vira API gerada.
-import { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App } from "state.slint";
-export { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App } from "state.slint";
+import { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App, Cu } from "state.slint";
+export { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App, Cu } from "state.slint";
 
 export component AppWindow inherits Window {
     title: L.window-title;
@@ -136,6 +137,7 @@ export component AppWindow inherits Window {
         // índice e simular a 60 fps num projeto grande travava o app inteiro quando
         // isso acontecia junto com a escolha do projeto na aba Overdev.
         if (root.screen == 3) { G.enter(); }
+        if (root.screen == 10) { Cu.enter(); }
         // Git: o resumo é barato o bastante pra abrir já preenchido (walk + git por
         // repo, em thread). Disco NÃO: medir GB de árvore é caro e não pode disparar
         // sozinho — a tela abre pedindo "Varrer".
@@ -194,7 +196,7 @@ export component AppWindow inherits Window {
                     }
                 }
                 // Seletor de projeto + ícones INLINE no cabeçalho (Overdev/Grafo) — ao lado do Voltar.
-                if root.screen == 2 || root.screen == 3: VerticalLayout {
+                if root.screen == 2 || root.screen == 3 || root.screen == 10: VerticalLayout {
                     alignment: center;
                     ProjectBar {
                         projects: Od.projects;
@@ -439,6 +441,9 @@ export component AppWindow inherits Window {
         // dev_dirs, e renderiza o estado do overdev (objetivo, progresso, checklist
         // colorido, e as seções Decisões/Plano/Perguntas colapsáveis).
         if root.screen == 2: OverdevScreen {  }
+
+        // ---- aba CUSTOS (10) — tokens e US$ do projeto, lidos do custos.json do archive ----
+        if root.screen == 10: CustosScreen {  }
 
         // ---- aba MERCADO (2) — DELEGA a janela do market ---------------
         // A lista de linguagens/ferramentas/apps saiu daqui: ela é do market, que tem app e

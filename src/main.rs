@@ -24,6 +24,10 @@ mod lockpin; // guarda: o Cargo.lock tem que pinar um commit do CLI, não um cam
 mod prelude;
 mod procedencia; // de qual commit (e se árvore suja) este binário saiu — o `--version`
 
+mod custos; // modelo de dados da aba Custos (custos.json do archive): parse + formatação
+mod custoscli; // `schematize cost sync/report`, isolado atrás de uma função com erro tratado
+mod custosi18n; // textos da aba Custos (pt/en/es)
+mod custosview; // a visão (texto pronto) da aba Custos
 mod envrows; // linhas de Environments/SSH/idiomas + ações em terminal
 mod fmt; // formatação de valores pra UI (puro)
 mod gitlog; // histórico de commits, lido do BINÁRIO do git (E2 da extradição)
@@ -74,6 +78,7 @@ fn tela_pedida(args: &[String]) -> Option<i32> {
         "disco" => Some(7),
         "git" => Some(8),
         "hosts" => Some(9),
+        "custos" | "costs" => Some(10),
         _ => None,
     }
 }
@@ -221,6 +226,7 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::overdev::wire(&app, &cx);
     wire::odhistory::wire(&app, &cx);
     wire::graph::wire(&app, &cx);
+    wire::custos::wire(&app, &cx);
     wire::projeto::wire(&app, &cx);
     wire::settings::wire(&app, &cx);
     wire::appversion::wire(&app, &cx);
@@ -276,7 +282,7 @@ mod tests {
         let ui = include_str!("../ui/app.slint");
         for nome in [
             "home", "skills", "mercado", "overdev", "grafo", "config", "banco", "disco", "git",
-            "hosts",
+            "hosts", "custos", "costs",
         ] {
             let n =
                 tela_pedida(&v(&["--tela", nome])).unwrap_or_else(|| panic!("{nome} não mapeia"));

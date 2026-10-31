@@ -281,6 +281,8 @@ pub(crate) fn install_i18n(app: &AppWindow) {
         "gui.home_vps_desc",
         "Servidores registrados, deploy auditado e o que cada host aceita — sem chave no contexto.",
     ).into());
+    // Aba Custos (rótulos pt/en/es próprios; ver `custosi18n`).
+    crate::wire::custos::instala_rotulos(app);
 }
 
 #[cfg(test)]

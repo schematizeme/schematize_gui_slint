@@ -4280,6 +4280,7 @@ dependencies = [
 name = "schematize-gui-slint"
 version = "0.9.4"
 dependencies = [
+ "chrono",
  "i-slint-backend-winit",
  "rfd",
  "schematize",

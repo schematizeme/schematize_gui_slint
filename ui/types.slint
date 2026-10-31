@@ -188,3 +188,13 @@ export struct CmpFile {
 
 // A fila de perguntas (quiz) e o histórico de snapshots saíram com a E6 M5 (ADR-0018): os structs
 // `QuizOpcao`, `QuizItem` e `SnapRow` moram na janela `schematize-overdev-gui`.
+
+// ---- Custos (aba por projeto) ----------------------------------------------------------------
+// Uma linha de tabela já FORMATADA no Rust (tokens abreviados, US$ no estilo do idioma).
+export struct CuRow {
+    chave: string,
+    entrada: string,
+    saida: string,
+    cache: string,
+    usd: string,
+}

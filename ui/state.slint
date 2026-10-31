@@ -1,5 +1,5 @@
 import {
-    SkillRow, EnvRow, LangItem, ProjItem, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction,
+    SkillRow, EnvRow, LangItem, ProjItem, CommitRow, GraphNode, GraphEdge, NotifItem, CmpFile, SkillAction, CuRow,
     } from "types.slint";
 
 // Estado de TELA da GUI, agrupado por área — um `global` por recorte.
@@ -351,3 +351,61 @@ export global App {
 // pagou por isso quando as duas cópias de `environments/` divergiram.
 //
 // O que fica é o caminho até lá: `Cfg.git-*`, mais acima.
+
+// Aba CUSTOS (por projeto) — texto já formatado no Rust; a UI só desenha. Os rótulos vêm do
+// Rust também (`custosi18n`), então nada aqui é string de tradução.
+export global Cu {
+    // "ok" | "sem-projeto" | "sem-archive" | "sem-arquivo" | "ilegivel"
+    in-out property <string> estado: "sem-projeto";
+    in-out property <string> msg;          // motivo do estado ou resultado do «Sincronizar»
+    in-out property <bool> msg-erro: false;
+    in-out property <bool> busy: false;
+    in-out property <int> periodo: 0;      // 0 tudo | 1 7 dias | 2 30 dias | 3 mês atual
+    in-out property <bool> filtrado: false;
+    in-out property <bool> nota-sem-filtro: false;
+    in-out property <string> usd-total;
+    in-out property <string> tokens-total;
+    in-out property <string> tokens-detalhe;
+    in-out property <string> usd-hoje;
+    in-out property <string> tokens-hoje;
+    in-out property <string> usd-semana;
+    in-out property <string> tokens-semana;
+    in-out property <string> rodape;       // «Atualizado em … · tabela de preços … · N avisos»
+    in-out property <[string]> avisos;
+    in-out property <[CuRow]> modelos;
+    in-out property <[CuRow]> dias;
+    in-out property <[CuRow]> semanas;
+    in-out property <[CuRow]> tasks;
+    in-out property <string> trunc-dias;   // «Mostrando as primeiras N linhas.» ("" = sem corte)
+    in-out property <string> trunc-semanas;
+    in-out property <string> trunc-modelos;
+    in-out property <string> trunc-tasks;
+    // Rótulos (preenchidos pelo Rust no idioma atual).
+    in-out property <string> l-title;
+    in-out property <string> l-home-desc;
+    in-out property <string> l-sync;
+    in-out property <string> l-syncing;
+    in-out property <string> l-disclaimer;
+    in-out property <string> l-total;
+    in-out property <string> l-tokens;
+    in-out property <string> l-today;
+    in-out property <string> l-week;
+    in-out property <string> l-period;
+    in-out property <[string]> l-periodos;
+    in-out property <string> l-t-model;
+    in-out property <string> l-t-day;
+    in-out property <string> l-t-week;
+    in-out property <string> l-t-task;
+    in-out property <string> l-in;
+    in-out property <string> l-out;
+    in-out property <string> l-cache;
+    in-out property <string> l-usd;
+    in-out property <string> l-item;
+    in-out property <string> l-no-rows;
+    in-out property <string> l-note;
+    in-out property <string> l-empty-title;
+    in-out property <string> l-empty-body;
+    callback enter();                 // entrou na tela / trocou de projeto: relê o custos.json
+    callback sincronizar();           // roda `schematize cost sync && cost report --json`
+    callback set-periodo(int);
+}
