@@ -20,6 +20,7 @@ const TXT: &[(&str, &str, &str, &str)] = &[
     ),
     ("card_total", "Total", "Total", "Total"),
     ("card_tokens", "Tokens", "Tokens", "Tokens"),
+    ("unit_tokens", "tokens", "tokens", "tokens"),
     ("card_today", "Hoje", "Today", "Hoy"),
     ("card_week", "Semana corrente", "This week", "Semana actual"),
     ("card_period", "No período", "In period", "En el período"),

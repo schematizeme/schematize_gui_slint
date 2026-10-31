@@ -169,10 +169,10 @@ export component CustosScreen inherits VerticalLayout {
                 spacing: 16px;
                 HorizontalLayout {
                     spacing: 12px;
-                    CuCard { rotulo: Cu.filtrado ? Cu.l-period : Cu.l-total; valor: Cu.usd-total; detalhe: Cu.l-in + " · " + Cu.l-out + " · " + Cu.l-cache + ": " + Cu.tokens-detalhe; }
-                    CuCard { rotulo: Cu.l-tokens; valor: Cu.tokens-total; detalhe: "" ; }
-                    CuCard { rotulo: Cu.l-today; valor: Cu.usd-hoje; detalhe: Cu.tokens-hoje + " " + Cu.l-tokens; }
-                    CuCard { rotulo: Cu.l-week; valor: Cu.usd-semana; detalhe: Cu.tokens-semana + " " + Cu.l-tokens; }
+                    CuCard { rotulo: Cu.filtrado ? Cu.l-period : Cu.l-total; valor: Cu.usd-total; detalhe: ""; }
+                    CuCard { rotulo: Cu.l-tokens; valor: Cu.tokens-total; detalhe: Cu.tokens-detalhe; }
+                    CuCard { rotulo: Cu.l-today; valor: Cu.usd-hoje; detalhe: Cu.tokens-hoje + " " + Cu.l-unit; }
+                    CuCard { rotulo: Cu.l-week; valor: Cu.usd-semana; detalhe: Cu.tokens-semana + " " + Cu.l-unit; }
                 }
                 CuTabela { titulo: Cu.l-t-model; linhas: Cu.modelos; trunc: Cu.trunc-modelos; nota: Cu.nota-sem-filtro ? Cu.l-note : ""; }
                 CuTabela { titulo: Cu.l-t-day; linhas: Cu.dias; trunc: Cu.trunc-dias; }

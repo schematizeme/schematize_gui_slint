@@ -19,6 +19,7 @@ pub(crate) fn instala_rotulos(app: &AppWindow) {
     c.set_l_disclaimer(s("disclaimer"));
     c.set_l_total(s("card_total"));
     c.set_l_tokens(s("card_tokens"));
+    c.set_l_unit(s("unit_tokens"));
     c.set_l_today(s("card_today"));
     c.set_l_week(s("card_week"));
     c.set_l_period(s("card_period"));
@@ -87,7 +88,18 @@ pub(crate) fn recarregar(app: &AppWindow, root: Option<&Path>, manter_msg: bool)
             c.set_nota_sem_filtro(v.sem_filtro_modelo_task);
             c.set_usd_total(v.usd_total.as_str().into());
             c.set_tokens_total(v.tokens_total.as_str().into());
-            c.set_tokens_detalhe(v.tokens_detalhe.as_str().into());
+            c.set_tokens_detalhe(
+                format!(
+                    "{} {} · {} {} · {} {}",
+                    tc("c_in"),
+                    v.tokens_entrada,
+                    tc("c_out"),
+                    v.tokens_saida,
+                    tc("c_cache"),
+                    v.tokens_cache
+                )
+                .into(),
+            );
             c.set_usd_hoje(v.usd_hoje.as_str().into());
             c.set_tokens_hoje(v.tokens_hoje.as_str().into());
             c.set_usd_semana(v.usd_semana.as_str().into());
