@@ -145,6 +145,15 @@ pub(crate) fn recarregar(app: &AppWindow, root: Option<&Path>, manter_msg: bool)
 
 /// Liga os callbacks deste recorte da UI.
 pub(crate) fn wire(app: &AppWindow, cx: &Ctx) {
+    // `--tela custos` põe a tela ANTES da fiação: o `changed screen` já passou sem ouvinte.
+    if app.get_screen() == 10 {
+        let weak = app.as_weak();
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(app) = weak.upgrade() {
+                app.global::<Cu>().invoke_enter();
+            }
+        });
+    }
     // Entrou na tela (ou trocou de projeto): relê o arquivo.
     {
         let weak = app.as_weak();

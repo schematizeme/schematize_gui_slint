@@ -27,6 +27,8 @@ pub(crate) fn wire(app: &AppWindow, _cx: &Ctx) {
             let c = code.to_string();
             if i18n::set_lang(&c).is_ok() {
                 install_i18n(&app);
+                // Os números da aba Custos (US$/tokens) seguem o idioma: relê e repinta.
+                app.global::<Cu>().invoke_enter();
                 app.global::<Cfg>().set_lang_code(c.clone().into());
                 app.global::<Cfg>().set_lang_name(i18n::name_of(&c).unwrap_or("").into());
                 lm.set_vec(build_lang_items(&c));

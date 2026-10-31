@@ -160,6 +160,8 @@ fn main() -> Result<(), slint::PlatformError> {
             if a == "--project" || a == "-p" {
                 found = it.next();
                 break;
+            } else if a == "--tela" {
+                it.next(); // o valor de `--tela` não é um projeto posicional
             } else if !a.starts_with('-') {
                 found = Some(a);
                 break;
