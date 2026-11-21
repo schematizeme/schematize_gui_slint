@@ -4279,6 +4279,7 @@ dependencies = [
 [[package]]
 name = "schematize-connectors"
 version = "0.1.0"
+source = "git+https://github.com/schematizeme/schematize_connectors_rs?tag=v0.1.0#ee261750aa1cea84286cfb1399daa658ed92b0ea"
 dependencies = [
  "clap",
  "serde",

@@ -216,6 +216,4 @@ Home e estado vazio do Overdev mostram, no máximo, 1 anúncio por sessão (`src
 rede automática. Botão "Ocultar" grava `$XDG_CONFIG_HOME/schematize/connectors/sem-anuncios`;
 `SCHEMATIZE_SEM_ANUNCIOS=1` também desliga. Nunca anuncia conector cuja chave já está no ambiente.
 
-> **BLOQUEIO DE PORTABILIDADE:** a dependência `schematize_connectors` é por **caminho local**
-> (`../schematize_connectors_rs`) porque esse repo ainda **não tem remoto**. Um clone isolado desta
-> GUI não compila. Trocar por `git = "...", tag = "vX.Y.Z"` assim que o repo for publicado.
+> A dependência `schematize_connectors` vem do git (`schematizeme/schematize_connectors_rs`, tag `v0.1.0`); um clone isolado compila.

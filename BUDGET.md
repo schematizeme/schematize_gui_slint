@@ -17,5 +17,4 @@ Notas
 
 Anúncios (ADR-0028), medido 2026-11-21 (debug, Home): pico 128636 KiB (125,6 MiB) vs 124,6 MiB antes, teto 176 MiB. A faixa é texto puro (sem imagem, sem rede), no máximo 1 por sessão e some por
 completo com opt-out; não altera o teto da Home. Medição: ver `cargo test --test orcamento_rss`
-(o teste falha acima do teto). BLOQUEIO: a dep `schematize_connectors` é por path local até o
-repo `schematize_connectors_rs` ter remoto (ver README).
+(o teste falha acima do teto).
