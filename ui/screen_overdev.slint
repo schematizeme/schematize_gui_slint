@@ -4,6 +4,7 @@ import { L } from "i18n.slint";
 import { Btn } from "widgets.slint";
 import { Pager } from "chrome.slint";
 import { Cfg, Od } from "state.slint";
+import { Ad, AnuncioFaixa } from "anuncio.slint";
 import { SkillsAviso } from "panel_skills.slint";
 import { FaixaDelegada } from "screen_delegado.slint";
 
@@ -45,6 +46,12 @@ export component OverdevScreen inherits VerticalLayout {
                 wrap: word-wrap;
                 horizontal-alignment: center;
             }
+        }
+        // Estado vazio: anúncio da casa (some por inteiro sem anúncio/com opt-out).
+        if Ad.vazio.visible: HorizontalLayout {
+            alignment: center;
+            padding: 24px;
+            AnuncioFaixa { item: Ad.vazio; max-width: 520px; }
         }
     }
     if Od.has-project: ScrollView {

@@ -45,6 +45,12 @@ rfd = { version = "0.17", default-features = false, features = [
 # está no grafo de deps (transitivo via `schematize`) — declarar não puxa crate novo.
 serde_json = "1"
 
+# Anúncios da casa (ADR-0028). BLOQUEIO DE PORTABILIDADE: o repo `schematize_connectors_rs` ainda
+# NÃO tem remoto, então a dep é por CAMINHO LOCAL (irmão no workspace) — um clone isolado desta
+# GUI não compila. Quando o repo ganhar remoto, trocar por `git = "...", tag = "vX.Y.Z"`.
+# O pacote é `schematize-connectors` (lib `connectors`); a chave abaixo dá o nome do crate no código.
+schematize_connectors = { package = "schematize-connectors", path = "../schematize_connectors_rs", default-features = false }
+
 [build-dependencies]
 slint-build = "1.17"
 

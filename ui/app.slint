@@ -38,6 +38,8 @@ export { Theme } from "theme.slint";
 // `app.global::<Od>()` — só o que sai do arquivo de entrada vira API gerada.
 import { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App } from "state.slint";
 export { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App } from "state.slint";
+// Anúncios da casa (ADR-0028): global + struct acessados pelo Rust (`src/anuncios.rs`).
+export { Ad, AdItem } from "anuncio.slint";
 
 export component AppWindow inherits Window {
     title: L.window-title;

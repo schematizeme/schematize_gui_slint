@@ -9,6 +9,7 @@ import {
     SkillName, AuthorCell, HomeCard, ReloadIcon, IconBtn,
 } from "widgets.slint";
 import { ProjectBar, Pager, GraphCanvas } from "chrome.slint";
+import { Ad, AnuncioFaixa } from "anuncio.slint";
 import { Sk, Mp, Cfg, Mg, Od, G, Notif, Cmp, Acc, App } from "state.slint";
 
 // Tela HOME (0) — os cartões de entrada pras demais telas.
@@ -175,4 +176,5 @@ export component HomeScreen inherits VerticalLayout {
                 }
             }
             Rectangle {}  // empurra os cards pro topo
+            if Ad.home.visible: AnuncioFaixa { item: Ad.home; }
 }

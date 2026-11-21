@@ -206,3 +206,16 @@ Grafo é o item caro** de portar. Recomendação: **não** reescrever tudo de um
 formos adiante, migrar **incrementalmente** começando pela aba Skills (esta tela), medindo
 tamanho/atrito de empacotamento .deb/.rpm num alvo real antes de comprometer as abas
 Overdev/Grafo. Ver o relato do spike para o veredito detalhado.
+
+---
+
+## Anúncios da casa (ADR-0028)
+
+Home e estado vazio do Overdev mostram, no máximo, 1 anúncio por sessão (`src/anuncios.rs`,
+`ui/anuncio.slint`), sempre com o rótulo "Anúncio · da casa" / "Ad · from us", sem imagem e sem
+rede automática. Botão "Ocultar" grava `$XDG_CONFIG_HOME/schematize/connectors/sem-anuncios`;
+`SCHEMATIZE_SEM_ANUNCIOS=1` também desliga. Nunca anuncia conector cuja chave já está no ambiente.
+
+> **BLOQUEIO DE PORTABILIDADE:** a dependência `schematize_connectors` é por **caminho local**
+> (`../schematize_connectors_rs`) porque esse repo ainda **não tem remoto**. Um clone isolado desta
+> GUI não compila. Trocar por `git = "...", tag = "vX.Y.Z"` assim que o repo for publicado.

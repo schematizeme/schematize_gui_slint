@@ -14,3 +14,8 @@ Notas
 - Sem display ou sem `/proc`, o teste pula com `eprintln` explícito.
 - Causa do piso (~97 MiB): runtime GL + fontes + winit/accesskit (zbus). Não é dado nem código da app; reduzir exigiria trocar renderer/desligar a11y (mudança de comportamento, fora de escopo).
 - Plano se o teto for violado: medir por tela (`--tela`), checar `cargo tree -d`, e só então subdividir a operação; nunca subir o teto sem medição.
+
+Anúncios (ADR-0028), medido 2026-11-21 (debug, Home): pico 128636 KiB (125,6 MiB) vs 124,6 MiB antes, teto 176 MiB. A faixa é texto puro (sem imagem, sem rede), no máximo 1 por sessão e some por
+completo com opt-out; não altera o teto da Home. Medição: ver `cargo test --test orcamento_rss`
+(o teste falha acima do teto). BLOQUEIO: a dep `schematize_connectors` é por path local até o
+repo `schematize_connectors_rs` ter remoto (ver README).

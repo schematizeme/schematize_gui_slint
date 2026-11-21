@@ -24,6 +24,7 @@ mod lockpin; // guarda: o Cargo.lock tem que pinar um commit do CLI, não um cam
 mod prelude;
 mod procedencia; // de qual commit (e se árvore suja) este binário saiu — o `--version`
 
+mod anuncios; // slots de anúncio da casa (ADR-0028): escolha, opt-out, ponte com a UI
 mod envrows; // linhas de Environments/SSH/idiomas + ações em terminal
 mod fmt; // formatação de valores pra UI (puro)
 mod gitlog; // histórico de commits, lido do BINÁRIO do git (E2 da extradição)
@@ -226,6 +227,7 @@ fn main() -> Result<(), slint::PlatformError> {
     wire::appversion::wire(&app, &cx);
     wire::notificacoes::wire(&app, &cx);
     wire::account::wire(&app, &cx);
+    anuncios::wire(&app);
 
     app.run()
 }

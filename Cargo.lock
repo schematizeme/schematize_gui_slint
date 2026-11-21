@@ -4277,12 +4277,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "schematize-connectors"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "schematize-gui-slint"
 version = "0.9.4"
 dependencies = [
  "i-slint-backend-winit",
  "rfd",
  "schematize",
+ "schematize-connectors",
  "schematize_plataforma",
  "serde_json",
  "slint",

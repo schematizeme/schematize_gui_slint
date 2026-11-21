@@ -1,0 +1,73 @@
+import { Theme } from "theme.slint";
+
+// Anúncio da casa (ADR-0028). O TEXTO, o RÓTULO e o link vêm prontos do Rust
+// (`src/anuncios.rs` -> crate `schematize_connectors`); aqui só se desenha. Sem imagem.
+export struct AdItem {
+    visible: bool,
+    id: string,
+    label: string,   // rótulo obrigatório ("Anúncio · da casa" / "Ad · from us")
+    text: string,
+    link: string,
+    hide: string,    // texto do botão "não mostrar mais"
+}
+
+// Um item por slot: a tela inicial e o estado vazio (Overdev sem projeto).
+export global Ad {
+    in-out property <AdItem> home;
+    in-out property <AdItem> vazio;
+    callback abrir(string);  // id do anúncio; o Rust resolve e valida o link
+    callback ocultar();      // grava o opt-out de arquivo e some em todos os slots
+}
+
+// Faixa discreta e reutilizável. Quem a instancia deve guardar com `if item.visible:` para o
+// espaço colapsar a ZERO (sem elemento, sem `spacing`).
+export component AnuncioFaixa inherits Rectangle {
+    in property <AdItem> item;
+    height: col.preferred-height + 16px;
+    background: Theme.surface;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: Theme.border;
+    col := VerticalLayout {
+        padding: 8px;
+        spacing: 4px;
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: root.item.label;
+                font-size: 10.5px;
+                font-weight: 700;
+                color: Theme.warn;
+                vertical-alignment: center;
+            }
+            Rectangle {}
+            Rectangle {
+                width: hide-txt.preferred-width + 8px;
+                height: 20px;
+                hide-txt := Text {
+                    text: root.item.hide;
+                    font-size: 10.5px;
+                    color: Theme.text-dim;
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                }
+                TouchArea { clicked => { Ad.ocultar(); } }
+            }
+        }
+        Text {
+            text: root.item.text;
+            font-size: 11.5px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+        Text {
+            text: root.item.link;
+            font-size: 11.5px;
+            color: Theme.accent;
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { Ad.abrir(root.item.id); }
+            }
+        }
+    }
+}
